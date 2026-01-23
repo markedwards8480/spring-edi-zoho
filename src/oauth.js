@@ -29,7 +29,7 @@ function setupOAuthRoutes(app) {
       `);
     }
 
-    // Scopes needed for CRM access
+    // Scopes needed for CRM and Books access
     const scopes = [
       'ZohoCRM.modules.ALL',
       'ZohoCRM.settings.ALL',
@@ -37,7 +37,9 @@ function setupOAuthRoutes(app) {
       'ZohoCRM.users.READ',
       'ZohoCRM.coql.READ',
       'ZohoCRM.bulk.ALL',
-      'ZohoCRM.org.READ'
+      'ZohoCRM.org.READ',
+      'ZohoBooks.fullaccess.all',
+      'ZohoInventory.fullaccess.all'
     ].join(',');
 
     const authUrl = `${accountsUrl}/oauth/v2/auth?` +
