@@ -167,27 +167,56 @@ app.get('/zoho-test', async (req, res) => {
     const token = await zoho.ensureValidToken();
     const axios = require('axios');
     
-    // Get all modules to find correct API names
+    // Test Zoho Books API - get sales orders
     const response = await axios({
       method: 'GET',
-      url: 'https://www.zohoapis.com/crm/v2/settings/modules',
+      url: 'https://www.zohoapis.com/books/v3/salesorders',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${token}`
+      },
+      params: {
+        organization_id: process.env.ZOHO_ORG_ID || '',
+        status: 'draft',
+        per_page: 10
+      }
+    });
+    
+    res.json({
+      success: true,
+      count: response.data?.salesorders?.length || 0,
+      salesorders: response.data?.salesorders || [],
+      message: response.data?.message
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+  }
+});
+
+// Get Zoho Books organizations (to find org ID)
+app.get('/zoho-orgs', async (req, res) => {
+  try {
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
+    
+    const token = await zoho.ensureValidToken();
+    const axios = require('axios');
+    
+    const response = await axios({
+      method: 'GET',
+      url: 'https://www.zohoapis.com/books/v3/organizations',
       headers: {
         'Authorization': `Zoho-oauthtoken ${token}`
       }
     });
     
-    // Filter to show relevant modules
-    const modules = response.data?.modules?.map(m => ({
-      api_name: m.api_name,
-      module_name: m.module_name,
-      singular_label: m.singular_label,
-      id: m.id
-    })) || [];
-    
     res.json({
       success: true,
-      count: modules.length,
-      modules: modules
+      organizations: response.data?.organizations || []
     });
   } catch (error) {
     res.json({
