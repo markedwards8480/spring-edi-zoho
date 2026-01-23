@@ -73,6 +73,28 @@ app.get('/orders', async (req, res) => {
   }
 });
 
+// Get single order details
+app.get('/orders/:id', async (req, res) => {
+  const { pool } = require('./db');
+  try {
+    const result = await pool.query(`
+      SELECT id, filename, edi_order_number, status, zoho_so_id, error_message, created_at,
+             edi_customer_name, suggested_zoho_account_id, suggested_zoho_account_name, mapping_confirmed,
+             parsed_data, raw_edi
+      FROM edi_orders
+      WHERE id = $1
+    `, [req.params.id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get all Zoho accounts for dropdown
 app.get('/zoho-accounts', async (req, res) => {
   try {
