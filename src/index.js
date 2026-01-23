@@ -114,25 +114,21 @@ app.get('/zoho-test', async (req, res) => {
     const ZohoClient = require('./zoho');
     const zoho = new ZohoClient();
     
-    // Try to get accounts with full error details
     const token = await zoho.ensureValidToken();
     const axios = require('axios');
     
-    // Try COQL query with WHERE clause (required)
+    // Try standard REST API (not COQL)
     const response = await axios({
-      method: 'POST',
-      url: 'https://www.zohoapis.com/crm/v2/coql',
+      method: 'GET',
+      url: 'https://www.zohoapis.com/crm/v2/Accounts',
       headers: {
-        'Authorization': `Zoho-oauthtoken ${token}`,
-        'Content-Type': 'application/json'
-      },
-      data: {
-        select_query: "select id, Account_Name from Accounts where id is not null limit 10"
+        'Authorization': `Zoho-oauthtoken ${token}`
       }
     });
     
     res.json({
       success: true,
+      count: response.data?.data?.length || 0,
       data: response.data,
       status: response.status
     });
