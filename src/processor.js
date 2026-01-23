@@ -129,99 +129,71 @@ async function processOrderToZoho(zoho, order) {
   const parsedData = order.parsed_data;
   const poNumber = parsedData.header?.poNumber || order.edi_order_number;
 
-  logger.info('Creating Zoho order', { poNumber });
+  logger.info('Creating Zoho Books order', { poNumber });
 
-  // Check for duplicate
-  try {
-    const existing = await zoho.checkDuplicateOrder(poNumber);
-    if (existing) {
-      logger.warn('Duplicate order found', { poNumber, existingId: existing.id });
-      return {
-        success: true,
-        soId: existing.id,
-        soNumber: existing.Name,
-        duplicate: true
-      };
-    }
-  } catch (e) {
-    // Ignore duplicate check errors
+  // Find customer in Zoho Books
+  let customer = null;
+  const buyerName = parsedData.parties?.buyer?.name || order.edi_customer_name;
+
+  if (buyerName) {
+    customer = await zoho.findBooksCustomerByName(buyerName);
   }
 
-  // Find/match customer account
-  let account = null;
-  const buyerInfo = parsedData.parties?.buyer;
-
-  if (buyerInfo?.name) {
-    account = await zoho.findAccountByName(buyerInfo.name);
-  }
-  if (!account && buyerInfo?.id) {
-    account = await zoho.findAccountByClientId(buyerInfo.id);
+  if (!customer) {
+    logger.warn('Customer not found in Zoho Books', { buyerName });
+    return {
+      success: false,
+      error: `Customer not found: ${buyerName}. Please create the customer in Zoho Books first.`
+    };
   }
 
-  if (!account) {
-    logger.warn('Customer not found, creating order without account link', { 
-      buyerName: buyerInfo?.name 
-    });
-  }
-
-  // Find customer DC if we have ship-to info
-  let customerDC = null;
-  const shipToInfo = parsedData.parties?.shipTo;
-  if (shipToInfo?.code) {
-    customerDC = await zoho.findCustomerDC(account?.id, shipToInfo.code);
-  }
-
-  // Prepare line items
-  const lineItems = [];
-  for (const item of parsedData.items || []) {
-    // Try to find item in Zoho
-    let zohoItem = null;
-    if (item.productIds?.sku) {
-      zohoItem = await zoho.findItemBySKU(item.productIds.sku);
-    }
-    if (!zohoItem && item.productIds?.vendorItemNumber) {
-      zohoItem = await zoho.findItemBySKU(item.productIds.vendorItemNumber);
-    }
-
-    lineItems.push({
-      itemId: zohoItem?.id || null,
-      customerSKU: item.productIds?.buyerItemNumber || item.productIds?.sku || '',
-      customerStyle: item.productIds?.vendorItemNumber || '',
-      style: item.productIds?.vendorItemNumber || '',
-      color: item.color || '',
-      size: item.size || '',
+  // Prepare line items for Zoho Books
+  const lineItems = (parsedData.items || []).map((item, idx) => {
+    const sku = item.productIds?.vendorItemNumber || item.productIds?.buyerItemNumber || item.productIds?.sku || '';
+    const description = item.description || '';
+    const color = item.color || '';
+    const size = item.size || '';
+    
+    return {
+      style: sku,
+      description: `${sku} ${description} ${color} ${size}`.trim(),
+      color: color,
+      size: size,
       quantity: item.quantityOrdered || 0,
-      unitPrice: item.unitPrice || 0,
-      amount: item.amount || (item.quantityOrdered * item.unitPrice) || 0,
-      shipDate: parsedData.dates?.shipNotBefore,
-      description: item.description || '',
-      lineNumber: item.lineNumber
-    });
-  }
+      unitPrice: item.unitPrice || 0
+    };
+  });
 
-  // Create the Sales Order
+  // Build order data for Zoho Books
   const orderData = {
+    customerId: customer.contact_id,
     poNumber: poNumber,
     orderDate: parsedData.dates?.orderDate || new Date().toISOString().split('T')[0],
-    accountId: account?.id,
-    clientId: shipToInfo?.code || buyerInfo?.id || '',
-    customerDCId: customerDC?.id,
-    cancelDate: parsedData.dates?.cancelAfter,
-    shipDate: parsedData.dates?.shipNotBefore,
-    shipCloseDate: parsedData.dates?.shipNotAfter,
-    referenceNumber: parsedData.header?.poId || '',
-    notes: `EDI Import from ${order.filename} | ${parsedData.header?.retailerName || ''}`
+    shipDate: parsedData.dates?.shipNotBefore || '',
+    notes: `EDI Import from ${order.filename || 'unknown'} | Ship To: ${parsedData.parties?.shipTo?.name || ''} ${parsedData.parties?.shipTo?.city || ''}, ${parsedData.parties?.shipTo?.state || ''}`,
+    items: lineItems
   };
 
-  const result = await zoho.createSalesOrderWithItems(orderData, lineItems);
-
-  return {
-    success: true,
-    soId: result.header.id,
-    soNumber: result.header.Name || result.header.id,
-    itemsCreated: result.itemsCreated,
-    itemsFailed: result.itemsFailed
-  };
+  try {
+    const salesOrder = await zoho.createBooksSalesOrder(orderData);
+    
+    return {
+      success: true,
+      soId: salesOrder.salesorder_id,
+      soNumber: salesOrder.salesorder_number,
+      itemsCreated: lineItems.length,
+      itemsFailed: 0
+    };
+  } catch (error) {
+    logger.error('Failed to create Zoho Books order', { 
+      poNumber, 
+      error: error.response?.data || error.message 
+    });
+    return {
+      success: false,
+      error: error.response?.data?.message || error.message
+    };
+  }
 }
 
 module.exports = { processEDIOrders, processOrderToZoho };
