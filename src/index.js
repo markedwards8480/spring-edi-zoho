@@ -86,6 +86,40 @@ app.get('/zoho-accounts', async (req, res) => {
   }
 });
 
+// Debug endpoint to test Zoho API
+app.get('/zoho-test', async (req, res) => {
+  try {
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
+    
+    // Try to get accounts with full error details
+    const token = await zoho.ensureValidToken();
+    const axios = require('axios');
+    
+    const response = await axios({
+      method: 'GET',
+      url: 'https://www.zohoapis.com/crm/v2/Accounts?per_page=5',
+      headers: {
+        'Authorization': `Zoho-oauthtoken ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    res.json({
+      success: true,
+      data: response.data,
+      status: response.status
+    });
+  } catch (error) {
+    res.json({
+      success: false,
+      error: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
+  }
+});
+
 // Suggest customer mapping (fuzzy match)
 app.post('/suggest-mapping', async (req, res) => {
   const { ediCustomerName } = req.body;
