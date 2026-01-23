@@ -148,10 +148,8 @@ class ZohoClient {
 
   async getAllAccounts() {
     try {
-      // Use COQL with required WHERE clause
-      const result = await this.request('POST', '/crm/v2/coql', {
-        select_query: "select id, Account_Name, Client_ID from Accounts where id is not null limit 200"
-      });
+      // Use standard REST API
+      const result = await this.request('GET', '/crm/v2/Accounts?per_page=200');
       return result?.data || [];
     } catch (error) {
       logger.warn('Get all accounts failed', { error: error.message });
