@@ -13,32 +13,31 @@ class ZohoClient {
   }
 
   async ensureValidToken() {
-    // Check if we have a valid token in memory
     if (this.accessToken && this.tokenExpiry && new Date() < this.tokenExpiry) {
       return this.accessToken;
     }
 
-    // Try to get from database
-    const result = await pool.query(
-      'SELECT access_token, refresh_token, expires_at FROM zoho_tokens ORDER BY id DESC LIMIT 1'
-    );
+    try {
+      const result = await pool.query(
+        'SELECT access_token, refresh_token, expires_at FROM zoho_tokens ORDER BY id DESC LIMIT 1'
+      );
 
-    if (result.rows.length > 0) {
-      const token = result.rows[0];
-      const expiresAt = new Date(token.expires_at);
-      
-      // If token is still valid (with 5 min buffer)
-      if (expiresAt > new Date(Date.now() + 5 * 60 * 1000)) {
-        this.accessToken = token.access_token;
-        this.tokenExpiry = expiresAt;
-        return this.accessToken;
+      if (result.rows.length > 0) {
+        const token = result.rows[0];
+        const expiresAt = new Date(token.expires_at);
+        
+        if (expiresAt > new Date(Date.now() + 5 * 60 * 1000)) {
+          this.accessToken = token.access_token;
+          this.tokenExpiry = expiresAt;
+          return this.accessToken;
+        }
+
+        return await this.refreshAccessToken(token.refresh_token);
       }
-
-      // Token expired, refresh it
-      return await this.refreshAccessToken(token.refresh_token);
+    } catch (error) {
+      logger.error('Error getting token from database', { error: error.message });
     }
 
-    // No token in database - check environment
     if (process.env.ZOHO_REFRESH_TOKEN) {
       return await this.refreshAccessToken(process.env.ZOHO_REFRESH_TOKEN);
     }
@@ -60,7 +59,6 @@ class ZohoClient {
       const { access_token, expires_in } = response.data;
       const expiresAt = new Date(Date.now() + (expires_in * 1000));
 
-      // Save to database
       await pool.query(
         `INSERT INTO zoho_tokens (access_token, refresh_token, expires_at, updated_at)
          VALUES ($1, $2, $3, NOW())`,
@@ -95,7 +93,6 @@ class ZohoClient {
       });
       return response.data;
     } catch (error) {
-      // Handle token expiry
       if (error.response?.status === 401) {
         logger.warn('Token expired, clearing and retrying');
         this.accessToken = null;
@@ -122,81 +119,95 @@ class ZohoClient {
     }
   }
 
-  // ============ Account/Customer Lookup ============
-  
-  async findAccountByClientId(clientId) {
-    const result = await this.request('GET', 
-      `/crm/v2/Accounts/search?criteria=(Client_ID:equals:${encodeURIComponent(clientId)})`
-    );
-    return result?.data?.[0] || null;
-  }
-
   async findAccountByName(name) {
-    const result = await this.request('GET',
-      `/crm/v2/Accounts/search?criteria=(Account_Name:equals:${encodeURIComponent(name)})`
-    );
-    return result?.data?.[0] || null;
+    if (!name) return null;
+    try {
+      const result = await this.request('POST', '/crm/v2/coql', {
+        select_query: `select id, Account_Name, Client_ID from Accounts where Account_Name = '${name.replace(/'/g, "\\'")}'`
+      });
+      return result?.data?.[0] || null;
+    } catch (error) {
+      logger.warn('Account search failed', { name, error: error.message });
+      return null;
+    }
   }
 
-  // ============ Customer DC Lookup ============
-  
+  async findAccountByClientId(clientId) {
+    if (!clientId) return null;
+    try {
+      const result = await this.request('POST', '/crm/v2/coql', {
+        select_query: `select id, Account_Name, Client_ID from Accounts where Client_ID = '${clientId}'`
+      });
+      return result?.data?.[0] || null;
+    } catch (error) {
+      logger.warn('Account search by Client_ID failed', { clientId, error: error.message });
+      return null;
+    }
+  }
+
   async findCustomerDC(accountId, dcCode) {
-    // Try to find by DC code
-    const result = await this.request('GET',
-      `/crm/v2/Customer_DCs/search?criteria=((Account:equals:${accountId})and(Name:contains:${encodeURIComponent(dcCode)}))`
-    );
-    return result?.data?.[0] || null;
+    if (!dcCode) return null;
+    try {
+      const result = await this.request('POST', '/crm/v2/coql', {
+        select_query: `select id, Name from Customer_DCs where Name contains '${dcCode}'`
+      });
+      return result?.data?.[0] || null;
+    } catch (error) {
+      logger.warn('Customer DC search failed', { dcCode, error: error.message });
+      return null;
+    }
   }
 
-  // ============ Item/Product Lookup ============
-  
   async findItemBySKU(sku) {
-    const result = await this.request('GET',
-      `/crm/v2/Items/search?criteria=(Name:equals:${encodeURIComponent(sku)})`
-    );
-    return result?.data?.[0] || null;
+    if (!sku) return null;
+    try {
+      const result = await this.request('POST', '/crm/v2/coql', {
+        select_query: `select id, Name from Items where Name = '${sku.replace(/'/g, "\\'")}'`
+      });
+      return result?.data?.[0] || null;
+    } catch (error) {
+      logger.warn('Item search failed', { sku, error: error.message });
+      return null;
+    }
   }
 
-  async findItemByStyle(style) {
-    const result = await this.request('GET',
-      `/crm/v2/Items/search?criteria=(Style:equals:${encodeURIComponent(style)})`
-    );
-    return result?.data?.[0] || null;
+  async checkDuplicateOrder(poNumber) {
+    if (!poNumber) return null;
+    try {
+      const result = await this.request('POST', '/crm/v2/coql', {
+        select_query: `select id, Name, EDI_Order_Number from Sales_Order_Headers where EDI_Order_Number = '${poNumber.replace(/'/g, "\\'")}'`
+      });
+      return result?.data?.[0] || null;
+    } catch (error) {
+      logger.warn('Duplicate check failed, proceeding anyway', { poNumber, error: error.message });
+      return null;
+    }
   }
-
-  // ============ Sales Order Creation ============
 
   async createSalesOrderHeader(orderData) {
     const payload = {
       data: [{
-        // Required fields
         Name: orderData.salesOrderNumber || `EDI-${orderData.poNumber}`,
-        EDI_Order_Number: orderData.poNumber,
-        Sales_Order_Date: orderData.orderDate,
-        Status: process.env.DEFAULT_ORDER_STATUS || 'EDI Received',
+        EDI_Order_Number: orderData.poNumber || '',
+        Sales_Order_Date: orderData.orderDate || new Date().toISOString().split('T')[0],
+        Status: orderData.status || process.env.DEFAULT_ORDER_STATUS || 'EDI Received',
         
-        // Customer linkage
-        Account: orderData.accountId,
-        Client_ID: orderData.clientId,
+        ...(orderData.accountId && { Account: orderData.accountId }),
+        Client_ID: orderData.clientId || '',
         
-        // Ship-to
-        Customer_DC: orderData.customerDCId,
-        Customer_Ship_To: orderData.shipToId,
+        ...(orderData.customerDCId && { Customer_DC: orderData.customerDCId }),
         
-        // Dates
-        Cancel_Date: orderData.cancelDate,
-        Start_Ship_DATE_to_customer: orderData.shipDate,
-        Expected_Shipment_Date: orderData.expectedShipDate,
+        ...(orderData.cancelDate && { Cancel_Date: orderData.cancelDate }),
+        ...(orderData.shipDate && { Start_Ship_DATE_to_customer: orderData.shipDate }),
+        ...(orderData.shipCloseDate && { Expected_Shipment_Date: orderData.shipCloseDate }),
         
-        // Reference
-        Reference_Number: orderData.referenceNumber,
-        Customer_Notes: orderData.notes,
-        
-        // Other fields as needed
-        Import_Purchase_Order: orderData.poNumber
+        Reference_Number: orderData.referenceNumber || '',
+        Customer_Notes: orderData.notes || ''
       }],
-      trigger: ['workflow'] // Trigger any Zoho workflows
+      trigger: ['workflow']
     };
+
+    logger.info('Creating Sales Order Header', { poNumber: orderData.poNumber });
 
     const result = await this.request('POST', '/crm/v2/Sales_Order_Headers', payload);
     
@@ -205,37 +216,33 @@ class ZohoClient {
       logger.info('Created Sales Order Header', { id: created.id, poNumber: orderData.poNumber });
       return created;
     } else {
-      const error = result?.data?.[0]?.message || 'Unknown error';
-      throw new Error(`Failed to create Sales Order Header: ${error}`);
+      const errorMsg = result?.data?.[0]?.message || JSON.stringify(result);
+      logger.error('Failed to create Sales Order Header', { error: errorMsg, poNumber: orderData.poNumber });
+      throw new Error(`Failed to create Sales Order Header: ${errorMsg}`);
     }
   }
 
   async createSalesOrderItem(itemData) {
     const payload = {
       data: [{
-        // Link to header
         Sales_Order_Header: itemData.salesOrderHeaderId,
         
-        // Product identification
-        Item: itemData.itemId, // Lookup to Items module
-        Customer_SKU: itemData.customerSKU,
-        Customer_Style: itemData.customerStyle,
-        Style: itemData.style,
-        Color: itemData.color,
-        Size: itemData.size,
+        ...(itemData.itemId && { Item: itemData.itemId }),
+        Customer_SKU: itemData.customerSKU || '',
+        Customer_Style: itemData.customerStyle || '',
+        Style: itemData.style || '',
+        Color: itemData.color || '',
+        Size: itemData.size || '',
         
-        // Quantities and pricing
-        Quantity: itemData.quantity,
-        Rate: itemData.unitPrice,
-        Amount: itemData.amount || (itemData.quantity * itemData.unitPrice),
+        Quantity: itemData.quantity || 0,
+        Rate: itemData.unitPrice || 0,
+        Amount: itemData.amount || (itemData.quantity * itemData.unitPrice) || 0,
         
-        // Dates
-        Ship_Date: itemData.shipDate,
+        ...(itemData.shipDate && { Ship_Date: itemData.shipDate }),
         
-        // Additional fields
-        Description: itemData.description,
-        Customer_PO: itemData.customerPO,
-        Ordinal: itemData.lineNumber
+        Description: itemData.description || '',
+        Customer_PO: itemData.customerPO || '',
+        Ordinal: parseInt(itemData.lineNumber) || 1
       }],
       trigger: ['workflow']
     };
@@ -247,16 +254,15 @@ class ZohoClient {
       logger.info('Created Sales Order Item', { id: created.id, sku: itemData.customerSKU });
       return created;
     } else {
-      const error = result?.data?.[0]?.message || 'Unknown error';
-      throw new Error(`Failed to create Sales Order Item: ${error}`);
+      const errorMsg = result?.data?.[0]?.message || JSON.stringify(result);
+      logger.error('Failed to create Sales Order Item', { error: errorMsg });
+      throw new Error(`Failed to create Sales Order Item: ${errorMsg}`);
     }
   }
 
   async createSalesOrderWithItems(orderData, items) {
-    // First create the header
     const header = await this.createSalesOrderHeader(orderData);
     
-    // Then create all line items
     const createdItems = [];
     for (const item of items) {
       try {
@@ -271,7 +277,6 @@ class ZohoClient {
           item: item.customerSKU,
           error: error.message 
         });
-        // Continue with other items
       }
     }
 
@@ -281,15 +286,6 @@ class ZohoClient {
       itemsCreated: createdItems.length,
       itemsFailed: items.length - createdItems.length
     };
-  }
-
-  // ============ Check for Duplicate ============
-  
-  async checkDuplicateOrder(poNumber) {
-    const result = await this.request('GET',
-      `/crm/v2/Sales_Order_Headers/search?criteria=(EDI_Order_Number:equals:${encodeURIComponent(poNumber)})`
-    );
-    return result?.data?.[0] || null;
   }
 }
 
