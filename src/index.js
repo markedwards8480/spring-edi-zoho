@@ -95,11 +95,11 @@ app.get('/reset-orders', async (req, res) => {
     await pool.query('DELETE FROM edi_orders');
     await pool.query('DELETE FROM processed_files');
     logger.info('Reset all orders and processed files via GET');
-    res.send(\`
+    res.send(`
       <h1>✅ Reset Complete</h1>
-      <p>Deleted \${count} orders and cleared processed files.</p>
+      <p>Deleted ${count} orders and cleared processed files.</p>
       <p><a href="/">Go to Dashboard</a> and click "Process Orders" to re-import from SFTP.</p>
-    \`);
+    `);
   } catch (error) {
     res.status(500).send('Error: ' + error.message);
   }
