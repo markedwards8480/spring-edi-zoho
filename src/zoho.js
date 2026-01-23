@@ -119,7 +119,7 @@ class ZohoClient {
     }
   }
 
-  async function findAccountByName(name) {
+  async findAccountByName(name) {
     if (!name) return null;
     try {
       const result = await this.request('POST', '/crm/v2/coql', {
@@ -132,7 +132,7 @@ class ZohoClient {
     }
   }
 
-  async function fuzzySearchAccounts(searchTerm) {
+  async fuzzySearchAccounts(searchTerm) {
     if (!searchTerm) return [];
     try {
       // Search for accounts containing the search term
