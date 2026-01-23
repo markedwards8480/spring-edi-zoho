@@ -427,6 +427,9 @@ const dashboardHTML = `
             <option value="100">100 Orders</option>
             <option value="9999">All Orders</option>
           </select>
+          <button class="btn btn-primary" id="btn-process-selected" onclick="processSelected()">
+            Process Selected
+          </button>
           <button class="btn btn-secondary" id="btn-retry" onclick="retryFailed()">
             Retry Failed
           </button>
@@ -539,6 +542,7 @@ const dashboardHTML = `
         <table class="orders-table">
           <thead>
             <tr>
+              <th><input type="checkbox" id="select-all" onclick="toggleSelectAll(this)"></th>
               <th>EDI Order #</th>
               <th>Filename</th>
               <th>Status</th>
@@ -549,6 +553,7 @@ const dashboardHTML = `
           <tbody>
             \${orders.map(order => \`
               <tr>
+                <td><input type="checkbox" class="order-checkbox" value="\${order.id}" \${order.status !== 'pending' && order.status !== 'failed' ? 'disabled' : ''}></td>
                 <td><strong>\${order.edi_order_number || '-'}</strong></td>
                 <td>\${order.filename || '-'}</td>
                 <td>
@@ -563,6 +568,53 @@ const dashboardHTML = `
           </tbody>
         </table>
       \`;
+    }
+
+    function toggleSelectAll(checkbox) {
+      const checkboxes = document.querySelectorAll('.order-checkbox:not(:disabled)');
+      checkboxes.forEach(cb => cb.checked = checkbox.checked);
+    }
+
+    function getSelectedOrderIds() {
+      const checkboxes = document.querySelectorAll('.order-checkbox:checked');
+      return Array.from(checkboxes).map(cb => parseInt(cb.value));
+    }
+
+    async function processSelected() {
+      const selectedIds = getSelectedOrderIds();
+      
+      if (selectedIds.length === 0) {
+        showToast('Please select at least one order');
+        return;
+      }
+      
+      const btn = document.getElementById('btn-process-selected');
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div> Processing...';
+      
+      showToast(\`Processing \${selectedIds.length} selected orders...\`);
+
+      try {
+        const res = await fetch('/process-selected', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ orderIds: selectedIds })
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+          showToast(\`Done! Processed: \${result.processed}, Failed: \${result.failed}\`);
+        } else {
+          showToast('Error: ' + (result.error || 'Unknown error'));
+        }
+        
+        setTimeout(refreshData, 1000);
+      } catch (error) {
+        showToast('Error: ' + error.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Process Selected';
+      }
     }
 
     async function triggerProcessLimit() {
