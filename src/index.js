@@ -79,9 +79,10 @@ app.get('/zoho-accounts', async (req, res) => {
     const ZohoClient = require('./zoho');
     const zoho = new ZohoClient();
     const accounts = await zoho.getAllAccounts();
-    res.json(accounts);
+    res.json(accounts || []);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    logger.error('Failed to get Zoho accounts', { error: error.message });
+    res.json([]); // Return empty array instead of error
   }
 });
 
