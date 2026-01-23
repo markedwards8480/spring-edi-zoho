@@ -5,17 +5,14 @@ const { initDatabase } = require('./db');
 const { processEDIOrders } = require('./processor');
 const { setupOAuthRoutes } = require('./oauth');
 const logger = require('./logger');
+const dashboardHTML = require('./dashboard');
 
 const app = express();
 app.use(express.json());
 
-// Health check
+// Serve dashboard
 app.get('/', (req, res) => {
-  res.json({ 
-    status: 'running',
-    service: 'Spring EDI to Zoho Integration',
-    version: '1.0.0'
-  });
+  res.send(dashboardHTML);
 });
 
 app.get('/health', (req, res) => {
