@@ -61,12 +61,129 @@ app.get('/orders', async (req, res) => {
   const { pool } = require('./db');
   try {
     const result = await pool.query(`
-      SELECT id, filename, edi_order_number, status, zoho_so_id, error_message, created_at
+      SELECT id, filename, edi_order_number, status, zoho_so_id, error_message, created_at,
+             edi_customer_name, suggested_zoho_account_id, suggested_zoho_account_name, mapping_confirmed
       FROM edi_orders
       ORDER BY created_at DESC
       LIMIT 50
     `);
     res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all Zoho accounts for dropdown
+app.get('/zoho-accounts', async (req, res) => {
+  try {
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
+    const accounts = await zoho.getAllAccounts();
+    res.json(accounts);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Suggest customer mapping (fuzzy match)
+app.post('/suggest-mapping', async (req, res) => {
+  const { ediCustomerName } = req.body;
+  const { getCustomerMapping } = require('./db');
+  
+  try {
+    // First check if we have a confirmed mapping
+    const existingMapping = await getCustomerMapping(ediCustomerName);
+    if (existingMapping && existingMapping.confirmed) {
+      return res.json({
+        source: 'saved',
+        mapping: existingMapping
+      });
+    }
+
+    // Otherwise do fuzzy search
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
+    const match = await zoho.findBestAccountMatch(ediCustomerName);
+    
+    res.json({
+      source: 'suggested',
+      mapping: match ? {
+        zoho_account_id: match.account.id,
+        zoho_account_name: match.account.Account_Name,
+        match_score: match.score,
+        match_type: match.matchType
+      } : null
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save customer mapping
+app.post('/save-mapping', async (req, res) => {
+  const { ediCustomerName, zohoAccountId, zohoAccountName } = req.body;
+  const { saveCustomerMapping, pool } = require('./db');
+  
+  try {
+    // Save to mappings table
+    await saveCustomerMapping(ediCustomerName, zohoAccountId, zohoAccountName, true, 100);
+    
+    // Update all orders with this EDI customer name
+    await pool.query(`
+      UPDATE edi_orders SET
+        suggested_zoho_account_id = $2,
+        suggested_zoho_account_name = $3,
+        mapping_confirmed = TRUE
+      WHERE LOWER(edi_customer_name) = LOWER($1)
+    `, [ediCustomerName, zohoAccountId, zohoAccountName]);
+    
+    logger.info('Saved customer mapping', { ediCustomerName, zohoAccountName });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update order mapping (for individual order)
+app.post('/update-order-mapping', async (req, res) => {
+  const { orderId, zohoAccountId, zohoAccountName, saveForFuture } = req.body;
+  const { updateOrderMapping, saveCustomerMapping, pool } = require('./db');
+  
+  try {
+    // Update the specific order
+    await updateOrderMapping(orderId, zohoAccountId, zohoAccountName, true);
+    
+    // If saveForFuture, also save to mappings table
+    if (saveForFuture) {
+      const orderResult = await pool.query('SELECT edi_customer_name FROM edi_orders WHERE id = $1', [orderId]);
+      if (orderResult.rows[0]?.edi_customer_name) {
+        await saveCustomerMapping(orderResult.rows[0].edi_customer_name, zohoAccountId, zohoAccountName, true, 100);
+      }
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all customer mappings
+app.get('/customer-mappings', async (req, res) => {
+  const { getAllCustomerMappings } = require('./db');
+  try {
+    const mappings = await getAllCustomerMappings();
+    res.json(mappings);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete customer mapping
+app.delete('/customer-mappings/:id', async (req, res) => {
+  const { deleteCustomerMapping } = require('./db');
+  try {
+    await deleteCustomerMapping(req.params.id);
+    res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
