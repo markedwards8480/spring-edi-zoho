@@ -125,6 +125,7 @@ const dashboardHTML = `
       </div>
       <div class="section-body">
         <div class="actions-bar">
+          <button class="btn btn-primary" id="btn-fetch" onclick="fetchSFTP()">Fetch from SFTP</button>
           <button class="btn btn-primary" id="btn-process" onclick="triggerProcessLimit()">Process Orders</button>
           <select id="process-limit" style="padding: 0.35rem; border-radius: 6px; border: 1px solid #d2d2d7; font-size: 0.75rem;">
             <option value="1">1</option><option value="5">5</option><option value="10" selected>10</option><option value="25">25</option><option value="50">50</option><option value="9999">All</option>
@@ -494,6 +495,23 @@ const dashboardHTML = `
 
     function getSelectedIds() {
       return Array.from(document.querySelectorAll('.order-checkbox:checked')).map(c => parseInt(c.value));
+    }
+
+    async function fetchSFTP() {
+      const btn = document.getElementById('btn-fetch');
+      btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Fetching...';
+      showToast('Connecting to SFTP...');
+      try {
+        const res = await fetch('/fetch-sftp', { method: 'POST' });
+        const r = await res.json();
+        if (r.success) {
+          showToast('Fetched ' + r.filesProcessed + ' files, ' + r.ordersCreated + ' orders created');
+        } else {
+          showToast('Error: ' + (r.error || 'Unknown error'));
+        }
+        refreshData();
+      } catch (e) { showToast('Error: ' + e.message); }
+      btn.disabled = false; btn.innerHTML = 'Fetch from SFTP';
     }
 
     async function triggerProcessLimit() {
