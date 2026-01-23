@@ -33,7 +33,9 @@ function setupOAuthRoutes(app) {
     const scopes = [
       'ZohoCRM.modules.ALL',
       'ZohoCRM.settings.ALL',
-      'ZohoCRM.users.READ'
+      'ZohoCRM.users.READ',
+      'ZohoCRM.coql.READ',
+      'ZohoCRM.bulk.ALL'
     ].join(',');
 
     const authUrl = `${accountsUrl}/oauth/v2/auth?` +
