@@ -96,12 +96,16 @@ app.get('/zoho-test', async (req, res) => {
     const token = await zoho.ensureValidToken();
     const axios = require('axios');
     
+    // Try COQL query instead
     const response = await axios({
-      method: 'GET',
-      url: 'https://www.zohoapis.com/crm/v2/Accounts?per_page=5',
+      method: 'POST',
+      url: 'https://www.zohoapis.com/crm/v2/coql',
       headers: {
         'Authorization': `Zoho-oauthtoken ${token}`,
         'Content-Type': 'application/json'
+      },
+      data: {
+        select_query: "select id, Account_Name from Accounts limit 10"
       }
     });
     
