@@ -177,9 +177,15 @@ const dashboardHTML = `
     async function loadZohoAccounts() {
       try {
         const res = await fetch('/zoho-accounts');
-        zohoAccounts = await res.json();
+        if (res.ok) {
+          zohoAccounts = await res.json();
+        } else {
+          console.warn('Could not load Zoho accounts');
+          zohoAccounts = [];
+        }
       } catch (e) {
-        console.error('Failed to load Zoho accounts', e);
+        console.warn('Failed to load Zoho accounts', e);
+        zohoAccounts = [];
       }
     }
 
@@ -192,13 +198,17 @@ const dashboardHTML = `
         document.getElementById('stat-pending').textContent = status.last24Hours?.pending || '0';
         document.getElementById('stat-failed').textContent = status.last24Hours?.failed || '0';
         document.getElementById('last-check').textContent = new Date(status.timestamp).toLocaleString();
+      } catch (e) {
+        console.error('Status error:', e);
+      }
 
+      try {
         const ordersRes = await fetch('/orders');
         const orders = await ordersRes.json();
         renderOrders(orders);
       } catch (error) {
-        console.error('Error:', error);
-        showToast('Error loading data');
+        console.error('Orders error:', error);
+        showToast('Error loading orders');
       }
     }
 
