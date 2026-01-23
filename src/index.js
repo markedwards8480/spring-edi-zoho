@@ -96,7 +96,7 @@ app.get('/zoho-test', async (req, res) => {
     const token = await zoho.ensureValidToken();
     const axios = require('axios');
     
-    // Try COQL query instead
+    // Try COQL query with WHERE clause (required)
     const response = await axios({
       method: 'POST',
       url: 'https://www.zohoapis.com/crm/v2/coql',
@@ -105,7 +105,7 @@ app.get('/zoho-test', async (req, res) => {
         'Content-Type': 'application/json'
       },
       data: {
-        select_query: "select id, Account_Name from Accounts limit 10"
+        select_query: "select id, Account_Name from Accounts where id is not null limit 10"
       }
     });
     
