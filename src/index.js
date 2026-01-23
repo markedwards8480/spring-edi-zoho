@@ -78,7 +78,7 @@ app.post('/fetch-sftp', async (req, res) => {
   try {
     logger.info('Manual SFTP fetch triggered');
     const processor = require('./processor');
-    const result = await processor.processNewOrders();
+    const result = await processor.processEDIOrders();
     res.json({ 
       success: true, 
       message: 'SFTP fetch complete',
