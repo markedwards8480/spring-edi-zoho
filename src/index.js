@@ -73,6 +73,18 @@ app.get('/orders', async (req, res) => {
   }
 });
 
+// Reset all orders to pending status (for re-testing)
+app.post('/reset-to-pending', async (req, res) => {
+  const { pool } = require('./db');
+  try {
+    const result = await pool.query(`UPDATE edi_orders SET status = 'pending', zoho_so_id = NULL, error_message = NULL WHERE status IN ('processed', 'failed')`);
+    logger.info('Reset orders to pending', { count: result.rowCount });
+    res.json({ success: true, count: result.rowCount });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Manually trigger SFTP fetch
 app.post('/fetch-sftp', async (req, res) => {
   try {
@@ -244,6 +256,40 @@ app.get('/zoho-orgs', async (req, res) => {
       response: error.response?.data,
       status: error.response?.status
     });
+  }
+});
+
+// Get processing logs
+app.get('/processing-logs', async (req, res) => {
+  const { getProcessingLogs } = require('./db');
+  try {
+    const limit = parseInt(req.query.limit) || 100;
+    const logs = await getProcessingLogs(limit);
+    res.json(logs);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get customer stats for dashboard
+app.get('/customer-stats', async (req, res) => {
+  const { getCustomerStats } = require('./db');
+  try {
+    const stats = await getCustomerStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get order stats
+app.get('/order-stats', async (req, res) => {
+  const { getOrderStats } = require('./db');
+  try {
+    const stats = await getOrderStats();
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
