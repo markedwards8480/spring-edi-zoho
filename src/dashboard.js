@@ -415,12 +415,18 @@ const dashboardHTML = `
       </div>
       <div class="section-body">
         <div class="actions-bar">
-          <button class="btn btn-primary" id="btn-process" onclick="triggerProcess()">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-            </svg>
-            Process Orders Now
+          <button class="btn btn-primary" id="btn-process" onclick="triggerProcessLimit()">
+            Process Orders
           </button>
+          <select id="process-limit" class="btn btn-secondary" style="padding: 0.5rem 1rem;">
+            <option value="1">1 Order</option>
+            <option value="5">5 Orders</option>
+            <option value="10" selected>10 Orders</option>
+            <option value="25">25 Orders</option>
+            <option value="50">50 Orders</option>
+            <option value="100">100 Orders</option>
+            <option value="9999">All Orders</option>
+          </select>
           <button class="btn btn-secondary" id="btn-retry" onclick="retryFailed()">
             Retry Failed
           </button>
@@ -557,6 +563,38 @@ const dashboardHTML = `
           </tbody>
         </table>
       \`;
+    }
+
+    async function triggerProcessLimit() {
+      const btn = document.getElementById('btn-process');
+      const limit = document.getElementById('process-limit').value;
+      
+      btn.disabled = true;
+      btn.innerHTML = '<div class="spinner"></div> Processing...';
+      
+      showToast(\`Processing up to \${limit} orders...\`);
+
+      try {
+        const res = await fetch('/process-limit', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ limit: parseInt(limit) })
+        });
+        const result = await res.json();
+        
+        if (result.success) {
+          showToast(\`Done! Processed: \${result.processed}, Failed: \${result.failed}\`);
+        } else {
+          showToast('Error: ' + (result.error || 'Unknown error'));
+        }
+        
+        setTimeout(refreshData, 1000);
+      } catch (error) {
+        showToast('Error: ' + error.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Process Orders';
+      }
     }
 
     async function triggerProcess() {
