@@ -167,20 +167,27 @@ app.get('/zoho-test', async (req, res) => {
     const token = await zoho.ensureValidToken();
     const axios = require('axios');
     
-    // Try standard REST API (not COQL)
+    // Get all modules to find correct API names
     const response = await axios({
       method: 'GET',
-      url: 'https://www.zohoapis.com/crm/v2/Accounts',
+      url: 'https://www.zohoapis.com/crm/v2/settings/modules',
       headers: {
         'Authorization': `Zoho-oauthtoken ${token}`
       }
     });
     
+    // Filter to show relevant modules
+    const modules = response.data?.modules?.map(m => ({
+      api_name: m.api_name,
+      module_name: m.module_name,
+      singular_label: m.singular_label,
+      id: m.id
+    })) || [];
+    
     res.json({
       success: true,
-      count: response.data?.data?.length || 0,
-      data: response.data,
-      status: response.status
+      count: modules.length,
+      modules: modules
     });
   } catch (error) {
     res.json({
