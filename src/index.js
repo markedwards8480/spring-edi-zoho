@@ -73,6 +73,25 @@ app.get('/orders', async (req, res) => {
   }
 });
 
+// Manually trigger SFTP fetch
+app.post('/fetch-sftp', async (req, res) => {
+  try {
+    logger.info('Manual SFTP fetch triggered');
+    const processor = require('./processor');
+    const result = await processor.processNewOrders();
+    res.json({ 
+      success: true, 
+      message: 'SFTP fetch complete',
+      filesProcessed: result.filesProcessed || 0,
+      ordersCreated: result.ordersCreated || 0,
+      errors: result.errors || []
+    });
+  } catch (error) {
+    logger.error('Manual SFTP fetch failed', { error: error.message });
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Reset and re-import orders (clears orders and processed_files to re-download from SFTP)
 app.post('/reset-orders', async (req, res) => {
   const { pool } = require('./db');
