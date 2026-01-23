@@ -132,6 +132,7 @@ const dashboardHTML = `
           <button class="btn btn-primary" id="btn-process-selected" onclick="processSelected()">Process Selected</button>
           <button class="btn btn-secondary" onclick="retryFailed()">Retry Failed</button>
           <button class="btn btn-secondary" onclick="refreshData()">Refresh</button>
+          <button class="btn btn-secondary" onclick="resetOrders()" style="color:#ff3b30;">Reset All</button>
         </div>
       </div>
     </div>
@@ -425,17 +426,61 @@ const dashboardHTML = `
         const res = await fetch('/customer-mappings');
         const mappings = await res.json();
         const container = document.getElementById('mappings-container');
-        if (!mappings.length) {
-          container.innerHTML = '<div class="empty-state">No customer mappings saved yet.</div>';
-          return;
-        }
-        container.innerHTML = mappings.map(m => \`
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem;background:#f5f5f7;border-radius:6px;margin-bottom:0.5rem;">
-            <span><strong>\${m.edi_customer_name}</strong> → \${m.zoho_account_name}</span>
-            <button class="btn btn-sm btn-secondary" onclick="deleteMapping(\${m.id})">Delete</button>
+        
+        let html = \`
+          <div style="margin-bottom:1rem; padding:1rem; background:#f5f5f7; border-radius:8px;">
+            <strong style="font-size:0.8rem;">Add Manual Mapping:</strong>
+            <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+              <input type="text" id="edi-name" placeholder="EDI Customer Name (e.g. amazoncom)" style="flex:1; padding:0.4rem; border:1px solid #d2d2d7; border-radius:4px; font-size:0.75rem;">
+              <input type="text" id="zoho-name" placeholder="Zoho Account Name" style="flex:1; padding:0.4rem; border:1px solid #d2d2d7; border-radius:4px; font-size:0.75rem;">
+              <button class="btn btn-primary btn-sm" onclick="addMapping()">Add</button>
+            </div>
           </div>
-        \`).join('');
+        \`;
+        
+        if (!mappings.length) {
+          html += '<div class="empty-state">No customer mappings saved yet.</div>';
+        } else {
+          html += mappings.map(m => \`
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem;background:#f5f5f7;border-radius:6px;margin-bottom:0.5rem;">
+              <span><strong>\${m.edi_customer_name}</strong> → \${m.zoho_account_name || '(no Zoho account)'}</span>
+              <button class="btn btn-sm btn-secondary" onclick="deleteMapping(\${m.id})">Delete</button>
+            </div>
+          \`).join('');
+        }
+        
+        container.innerHTML = html;
       } catch (e) { console.error(e); }
+    }
+
+    async function addMapping() {
+      const ediName = document.getElementById('edi-name').value.trim();
+      const zohoName = document.getElementById('zoho-name').value.trim();
+      if (!ediName || !zohoName) { showToast('Enter both names'); return; }
+      
+      try {
+        const res = await fetch('/add-mapping', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ediCustomerName: ediName, zohoAccountName: zohoName })
+        });
+        if (res.ok) {
+          showToast('Mapping added!');
+          document.getElementById('edi-name').value = '';
+          document.getElementById('zoho-name').value = '';
+          loadMappings();
+        }
+      } catch (e) { showToast('Error adding mapping'); }
+    }
+
+    async function resetOrders() {
+      if (!confirm('This will DELETE all orders and re-import from SFTP. Are you sure?')) return;
+      try {
+        const res = await fetch('/reset-orders', { method: 'POST' });
+        const r = await res.json();
+        showToast(r.message || 'Orders reset');
+        refreshData();
+      } catch (e) { showToast('Error resetting'); }
     }
 
     async function deleteMapping(id) {
