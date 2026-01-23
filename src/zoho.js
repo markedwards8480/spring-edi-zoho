@@ -119,7 +119,7 @@ class ZohoClient {
     }
   }
 
-  async findAccountByName(name) {
+  async function findAccountByName(name) {
     if (!name) return null;
     try {
       const result = await this.request('POST', '/crm/v2/coql', {
@@ -130,6 +130,71 @@ class ZohoClient {
       logger.warn('Account search failed', { name, error: error.message });
       return null;
     }
+  }
+
+  async function fuzzySearchAccounts(searchTerm) {
+    if (!searchTerm) return [];
+    try {
+      // Search for accounts containing the search term
+      const result = await this.request('POST', '/crm/v2/coql', {
+        select_query: `select id, Account_Name, Client_ID from Accounts where Account_Name contains '${searchTerm.replace(/'/g, "\\'").split(' ')[0]}' limit 20`
+      });
+      return result?.data || [];
+    } catch (error) {
+      logger.warn('Fuzzy account search failed', { searchTerm, error: error.message });
+      return [];
+    }
+  }
+
+  async getAllAccounts() {
+    try {
+      const result = await this.request('GET', '/crm/v2/Accounts?fields=id,Account_Name,Client_ID&per_page=200');
+      return result?.data || [];
+    } catch (error) {
+      logger.warn('Get all accounts failed', { error: error.message });
+      return [];
+    }
+  }
+
+  async findBestAccountMatch(ediCustomerName) {
+    if (!ediCustomerName) return null;
+    
+    // First try exact match
+    const exact = await this.findAccountByName(ediCustomerName);
+    if (exact) {
+      return { account: exact, score: 100, matchType: 'exact' };
+    }
+
+    // Try fuzzy search
+    const searchTerms = ediCustomerName.split(' ').filter(t => t.length > 2);
+    let bestMatch = null;
+    let bestScore = 0;
+
+    for (const term of searchTerms) {
+      try {
+        const results = await this.request('POST', '/crm/v2/coql', {
+          select_query: `select id, Account_Name, Client_ID from Accounts where Account_Name contains '${term.replace(/'/g, "\\'")}' limit 10`
+        });
+        
+        if (results?.data) {
+          for (const account of results.data) {
+            const score = calculateMatchScore(ediCustomerName, account.Account_Name);
+            if (score > bestScore) {
+              bestScore = score;
+              bestMatch = account;
+            }
+          }
+        }
+      } catch (e) {
+        // Continue with other terms
+      }
+    }
+
+    if (bestMatch && bestScore > 30) {
+      return { account: bestMatch, score: bestScore, matchType: 'fuzzy' };
+    }
+
+    return null;
   }
 
   async findAccountByClientId(clientId) {
@@ -290,3 +355,33 @@ class ZohoClient {
 }
 
 module.exports = ZohoClient;
+
+// Fuzzy match score calculation
+function calculateMatchScore(str1, str2) {
+  if (!str1 || !str2) return 0;
+  
+  const s1 = str1.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const s2 = str2.toLowerCase().replace(/[^a-z0-9]/g, '');
+  
+  if (s1 === s2) return 100;
+  if (s1.includes(s2) || s2.includes(s1)) return 80;
+  
+  // Calculate word overlap
+  const words1 = str1.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+  const words2 = str2.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+  
+  let matches = 0;
+  for (const w1 of words1) {
+    for (const w2 of words2) {
+      if (w1 === w2 || w1.includes(w2) || w2.includes(w1)) {
+        matches++;
+        break;
+      }
+    }
+  }
+  
+  const maxWords = Math.max(words1.length, words2.length);
+  if (maxWords === 0) return 0;
+  
+  return Math.round((matches / maxWords) * 70);
+}
