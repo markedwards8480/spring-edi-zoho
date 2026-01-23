@@ -58,7 +58,8 @@ async function processEDIOrders() {
           ediOrderNumber: parsedOrder.header?.poNumber || file.name,
           customerPO: parsedOrder.header?.poNumber,
           rawEDI: content,
-          parsedData: parsedOrder
+          parsedData: parsedOrder,
+          ediCustomerName: parsedOrder.parties?.buyer?.name || parsedOrder.header?.retailerName || null
         });
 
         // Mark file as processed (so we don't download again)
