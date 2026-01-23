@@ -72,6 +72,23 @@ app.get('/orders', async (req, res) => {
   }
 });
 
+// Retry failed orders endpoint
+app.post('/retry-failed', async (req, res) => {
+  const { pool } = require('./db');
+  try {
+    const result = await pool.query(`
+      UPDATE edi_orders 
+      SET status = 'pending', error_message = NULL 
+      WHERE status = 'failed'
+      RETURNING id
+    `);
+    logger.info('Reset failed orders to pending', { count: result.rowCount });
+    res.json({ success: true, count: result.rowCount });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 async function startServer() {
   try {
     // Initialize database
