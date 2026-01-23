@@ -8,79 +8,98 @@ const dashboardHTML = `
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f7; color: #1e3a5f; min-height: 100vh; }
-    .header { background: linear-gradient(135deg, #1e3a5f 0%, #2d5a7f 100%); color: white; padding: 1.5rem 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+    .header { background: linear-gradient(135deg, #1e3a5f 0%, #2d5a7f 100%); color: white; padding: 1.25rem 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
     .header-content { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
-    .header h1 { font-size: 1.5rem; font-weight: 600; display: flex; align-items: center; gap: 0.75rem; }
-    .header-logo { width: 36px; height: 36px; background: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #1e3a5f; font-size: 0.875rem; }
-    .header-status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; opacity: 0.9; }
+    .header h1 { font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: 0.75rem; }
+    .header-logo { width: 32px; height: 32px; background: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #1e3a5f; font-size: 0.75rem; }
+    .header-status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; opacity: 0.9; }
     .status-dot { width: 8px; height: 8px; background: #34c759; border-radius: 50%; animation: pulse 2s infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-    .container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
-    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
-    .stat-card { background: white; border-radius: 12px; padding: 1.25rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: transform 0.2s, box-shadow 0.2s; }
-    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
-    .stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; margin-bottom: 0.25rem; }
-    .stat-value { font-size: 1.75rem; font-weight: 700; color: #1e3a5f; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+    .stat-card { background: white; border-radius: 10px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+    .stat-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; margin-bottom: 0.25rem; }
+    .stat-value { font-size: 1.5rem; font-weight: 700; color: #1e3a5f; }
     .stat-card.success .stat-value { color: #34c759; }
     .stat-card.error .stat-value { color: #ff3b30; }
     .stat-card.pending .stat-value { color: #ff9500; }
-    .section { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 1.5rem; overflow: hidden; }
-    .section-header { padding: 1rem 1.5rem; border-bottom: 1px solid rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
-    .section-title { font-size: 1rem; font-weight: 600; }
-    .section-body { padding: 1.5rem; }
-    .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 8px; font-size: 0.8rem; font-weight: 500; cursor: pointer; transition: all 0.15s; border: none; }
+    .section { background: white; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 1.5rem; overflow: hidden; }
+    .section-header { padding: 0.75rem 1rem; border-bottom: 1px solid rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
+    .section-title { font-size: 0.9rem; font-weight: 600; }
+    .section-body { padding: 1rem; }
+    .btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: all 0.15s; border: none; }
     .btn-primary { background: #1e3a5f; color: white; }
     .btn-primary:hover { background: #2d5a7f; }
     .btn-primary:disabled { background: #86868b; cursor: not-allowed; }
     .btn-secondary { background: white; color: #1e3a5f; border: 1px solid #d2d2d7; }
     .btn-secondary:hover { background: #f5f5f7; }
-    .btn-success { background: #34c759; color: white; }
-    .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.7rem; }
-    .actions-bar { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
-    .orders-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-    .orders-table th { text-align: left; padding: 0.5rem; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; font-weight: 600; border-bottom: 1px solid rgba(0,0,0,0.06); white-space: nowrap; }
+    .btn-sm { padding: 0.2rem 0.4rem; font-size: 0.65rem; }
+    .actions-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    
+    /* Orders Table */
+    .orders-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+    .orders-table th { text-align: left; padding: 0.5rem; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; font-weight: 600; border-bottom: 1px solid rgba(0,0,0,0.06); }
     .orders-table td { padding: 0.5rem; border-bottom: 1px solid rgba(0,0,0,0.06); vertical-align: middle; }
-    .orders-table tr:last-child td { border-bottom: none; }
-    .orders-table tr:hover { background: #f5f5f7; }
-    .badge { display: inline-flex; align-items: center; padding: 0.2rem 0.5rem; border-radius: 980px; font-size: 0.65rem; font-weight: 500; }
+    .orders-table tr:hover { background: #f5f5f7; cursor: pointer; }
+    .orders-table .po-link { color: #1e3a5f; text-decoration: none; font-weight: 500; }
+    .orders-table .po-link:hover { text-decoration: underline; }
+    
+    .badge { display: inline-flex; padding: 0.15rem 0.4rem; border-radius: 980px; font-size: 0.6rem; font-weight: 500; }
     .badge-success { background: rgba(52, 199, 89, 0.1); color: #34c759; }
     .badge-error { background: rgba(255, 59, 48, 0.1); color: #ff3b30; }
     .badge-pending { background: rgba(255, 149, 0, 0.1); color: #ff9500; }
-    .badge-info { background: rgba(0, 136, 194, 0.1); color: #0088c2; }
-    .empty-state { text-align: center; padding: 3rem 1.5rem; color: #86868b; }
-    .empty-state-icon { font-size: 3rem; margin-bottom: 1rem; opacity: 0.5; }
-    .empty-state-text { font-size: 0.875rem; }
-    .connection-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
-    .connection-item { background: #f5f5f7; border-radius: 8px; padding: 0.75rem; }
-    .connection-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; margin-bottom: 0.25rem; }
-    .connection-value { font-size: 0.8rem; font-weight: 500; display: flex; align-items: center; gap: 0.5rem; }
-    .connection-value .check { color: #34c759; }
-    .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .toast { position: fixed; bottom: 2rem; right: 2rem; background: #1e3a5f; color: white; padding: 1rem 1.5rem; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: none; align-items: center; gap: 0.75rem; font-size: 0.875rem; z-index: 1000; }
-    .toast.show { display: flex; animation: slideIn 0.3s ease; }
-    @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    .customer-cell { display: flex; flex-direction: column; gap: 0.25rem; }
-    .edi-customer { font-weight: 500; color: #1e3a5f; }
-    .zoho-customer { font-size: 0.7rem; color: #86868b; display: flex; align-items: center; gap: 0.25rem; }
-    .zoho-customer.confirmed { color: #34c759; }
-    .zoho-customer.suggested { color: #ff9500; }
-    .match-score { font-size: 0.6rem; background: #f5f5f7; padding: 0.1rem 0.3rem; border-radius: 4px; }
-    select.customer-select { font-size: 0.7rem; padding: 0.25rem; border: 1px solid #d2d2d7; border-radius: 4px; max-width: 150px; }
-    .tabs { display: flex; gap: 0; border-bottom: 1px solid rgba(0,0,0,0.06); margin-bottom: 1rem; }
-    .tab { padding: 0.75rem 1.5rem; cursor: pointer; font-size: 0.875rem; font-weight: 500; color: #86868b; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    
+    .customer-cell { font-size: 0.7rem; }
+    .edi-customer { font-weight: 500; }
+    .zoho-match { font-size: 0.6rem; color: #86868b; }
+    
+    select.customer-select { font-size: 0.65rem; padding: 0.2rem; border: 1px solid #d2d2d7; border-radius: 4px; max-width: 120px; }
+    
+    /* Tabs */
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid rgba(0,0,0,0.06); }
+    .tab { padding: 0.6rem 1rem; cursor: pointer; font-size: 0.8rem; font-weight: 500; color: #86868b; border-bottom: 2px solid transparent; margin-bottom: -1px; }
     .tab.active { color: #1e3a5f; border-bottom-color: #1e3a5f; }
-    .tab:hover { color: #1e3a5f; }
     .tab-content { display: none; }
     .tab-content.active { display: block; }
-    .mapping-row { display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; background: #f5f5f7; border-radius: 8px; margin-bottom: 0.5rem; }
-    .mapping-info { display: flex; align-items: center; gap: 1rem; }
-    .mapping-arrow { color: #86868b; }
+    
+    /* Modal */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: white; border-radius: 12px; max-width: 900px; width: 95%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; }
+    .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+    .modal-title { font-size: 1.1rem; font-weight: 600; }
+    .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #86868b; }
+    .modal-body { padding: 1.5rem; overflow-y: auto; flex: 1; }
+    .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid rgba(0,0,0,0.1); display: flex; justify-content: flex-end; gap: 0.5rem; }
+    
+    /* Order Details */
+    .order-header-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .order-field { background: #f5f5f7; padding: 0.75rem; border-radius: 8px; }
+    .order-field-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; margin-bottom: 0.25rem; }
+    .order-field-value { font-size: 0.85rem; font-weight: 500; }
+    
+    .line-items-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-top: 1rem; }
+    .line-items-table th { background: #f5f5f7; padding: 0.5rem; text-align: left; font-size: 0.6rem; text-transform: uppercase; font-weight: 600; color: #86868b; }
+    .line-items-table td { padding: 0.5rem; border-bottom: 1px solid rgba(0,0,0,0.06); }
+    .line-items-table tfoot td { font-weight: 600; background: #f5f5f7; }
+    
+    .order-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(0,0,0,0.1); }
+    .summary-item { text-align: center; }
+    .summary-value { font-size: 1.25rem; font-weight: 700; color: #1e3a5f; }
+    .summary-label { font-size: 0.65rem; color: #86868b; text-transform: uppercase; }
+    
+    .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    .toast { position: fixed; bottom: 2rem; right: 2rem; background: #1e3a5f; color: white; padding: 0.75rem 1.25rem; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: none; font-size: 0.8rem; z-index: 1001; }
+    .toast.show { display: flex; animation: slideIn 0.3s ease; }
+    @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    
+    .empty-state { text-align: center; padding: 2rem; color: #86868b; }
+    
     @media (max-width: 768px) {
-      .header-content { flex-direction: column; gap: 1rem; text-align: center; }
-      .container { padding: 1rem; }
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
-      .orders-table { font-size: 0.7rem; }
+      .order-header-grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -101,34 +120,18 @@ const dashboardHTML = `
     </div>
 
     <div class="section">
-      <div class="section-header"><h2 class="section-title">Actions</h2></div>
+      <div class="section-header">
+        <h2 class="section-title">Actions</h2>
+      </div>
       <div class="section-body">
         <div class="actions-bar">
           <button class="btn btn-primary" id="btn-process" onclick="triggerProcessLimit()">Process Orders</button>
-          <select id="process-limit" class="btn btn-secondary" style="padding: 0.4rem 0.75rem;">
-            <option value="1">1</option>
-            <option value="5">5</option>
-            <option value="10" selected>10</option>
-            <option value="25">25</option>
-            <option value="50">50</option>
-            <option value="9999">All</option>
+          <select id="process-limit" style="padding: 0.35rem; border-radius: 6px; border: 1px solid #d2d2d7; font-size: 0.75rem;">
+            <option value="1">1</option><option value="5">5</option><option value="10" selected>10</option><option value="25">25</option><option value="50">50</option><option value="9999">All</option>
           </select>
           <button class="btn btn-primary" id="btn-process-selected" onclick="processSelected()">Process Selected</button>
           <button class="btn btn-secondary" onclick="retryFailed()">Retry Failed</button>
           <button class="btn btn-secondary" onclick="refreshData()">Refresh</button>
-          <button class="btn btn-secondary" onclick="suggestAllMappings()">Auto-Match Customers</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-header"><h2 class="section-title">Connection Status</h2></div>
-      <div class="section-body">
-        <div class="connection-grid">
-          <div class="connection-item"><div class="connection-label">SFTP Server</div><div class="connection-value"><span class="check">✓</span>sftp.springsystems.com</div></div>
-          <div class="connection-item"><div class="connection-label">Zoho CRM</div><div class="connection-value"><span class="check">✓</span>Connected</div></div>
-          <div class="connection-item"><div class="connection-label">Schedule</div><div class="connection-value">Every 15 minutes</div></div>
-          <div class="connection-item"><div class="connection-label">Last Check</div><div class="connection-value" id="last-check">-</div></div>
         </div>
       </div>
     </div>
@@ -140,25 +143,37 @@ const dashboardHTML = `
       </div>
       
       <div id="tab-orders" class="tab-content active">
-        <div id="orders-container">
-          <div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-text">No orders yet.</div></div>
-        </div>
+        <div id="orders-container"><div class="empty-state">Loading...</div></div>
       </div>
       
       <div id="tab-mappings" class="tab-content">
-        <div class="section-body">
-          <div id="mappings-container">
-            <div class="empty-state"><div class="empty-state-text">No customer mappings saved yet.</div></div>
-          </div>
-        </div>
+        <div class="section-body" id="mappings-container"><div class="empty-state">No mappings yet.</div></div>
       </div>
     </div>
   </main>
 
-  <div class="toast" id="toast"><span id="toast-message">Processing...</span></div>
+  <!-- Order Details Modal -->
+  <div class="modal-overlay" id="order-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Order Details</h3>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="order-details-content">
+        <div class="empty-state">Loading...</div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+        <button class="btn btn-primary" id="btn-process-order" onclick="processCurrentOrder()">Process This Order</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"><span id="toast-message"></span></div>
 
   <script>
     let zohoAccounts = [];
+    let currentOrderId = null;
     
     document.addEventListener('DOMContentLoaded', () => {
       refreshData();
@@ -168,286 +183,311 @@ const dashboardHTML = `
     function switchTab(tab) {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-      document.querySelector(\`.tab[onclick="switchTab('\${tab}')"]\`).classList.add('active');
+      event.target.classList.add('active');
       document.getElementById('tab-' + tab).classList.add('active');
-      
       if (tab === 'mappings') loadMappings();
     }
 
     async function loadZohoAccounts() {
       try {
         const res = await fetch('/zoho-accounts');
-        if (res.ok) {
-          zohoAccounts = await res.json();
-        } else {
-          console.warn('Could not load Zoho accounts');
-          zohoAccounts = [];
-        }
-      } catch (e) {
-        console.warn('Failed to load Zoho accounts', e);
-        zohoAccounts = [];
-      }
+        if (res.ok) zohoAccounts = await res.json();
+      } catch (e) { console.warn('Could not load accounts'); }
     }
 
     async function refreshData() {
       try {
-        const statusRes = await fetch('/status');
+        const [statusRes, ordersRes] = await Promise.all([fetch('/status'), fetch('/orders')]);
         const status = await statusRes.json();
+        const orders = await ordersRes.json();
+        
         document.getElementById('stat-total').textContent = status.last24Hours?.total || '0';
         document.getElementById('stat-processed').textContent = status.last24Hours?.processed || '0';
         document.getElementById('stat-pending').textContent = status.last24Hours?.pending || '0';
         document.getElementById('stat-failed').textContent = status.last24Hours?.failed || '0';
-        document.getElementById('last-check').textContent = new Date(status.timestamp).toLocaleString();
-      } catch (e) {
-        console.error('Status error:', e);
-      }
-
-      try {
-        const ordersRes = await fetch('/orders');
-        const orders = await ordersRes.json();
+        
         renderOrders(orders);
-      } catch (error) {
-        console.error('Orders error:', error);
-        showToast('Error loading orders');
+      } catch (e) {
+        console.error('Error:', e);
+        showToast('Error loading data');
       }
     }
 
     function renderOrders(orders) {
       const container = document.getElementById('orders-container');
-      if (!orders || orders.length === 0) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-text">No orders yet.</div></div>';
+      if (!orders || !orders.length) {
+        container.innerHTML = '<div class="empty-state">No orders yet.</div>';
         return;
       }
-
-      const accountOptions = zohoAccounts.map(a => '<option value="' + a.id + '">' + (a.Account_Name || '').substring(0, 30) + '</option>').join('');
 
       container.innerHTML = \`
         <table class="orders-table">
           <thead>
             <tr>
-              <th><input type="checkbox" id="select-all" onclick="toggleSelectAll(this)"></th>
+              <th><input type="checkbox" onclick="toggleSelectAll(this)"></th>
               <th>PO #</th>
-              <th>EDI Customer → Zoho Account</th>
+              <th>Customer</th>
+              <th>Items</th>
               <th>Status</th>
-              <th>Zoho SO</th>
-              <th>Created</th>
+              <th>Date</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            \${orders.map(order => {
-              const canSelect = order.status === 'pending' || order.status === 'failed';
-              const ediCustomer = order.edi_customer_name || order.parsed_data?.parties?.buyer?.name || order.parsed_data?.header?.retailerName || '-';
-              const suggestedAccount = order.suggested_zoho_account_name || '';
-              const isConfirmed = order.mapping_confirmed;
-              
+            \${orders.map(o => {
+              const customer = o.edi_customer_name || o.parsed_data?.parties?.buyer?.name || o.parsed_data?.header?.retailerName || extractCustomerFromFilename(o.filename);
+              const itemCount = o.parsed_data?.items?.length || 0;
+              const canSelect = o.status === 'pending' || o.status === 'failed';
               return \`
-              <tr data-id="\${order.id}" data-edi-customer="\${ediCustomer}">
-                <td><input type="checkbox" class="order-checkbox" value="\${order.id}" \${!canSelect ? 'disabled' : ''}></td>
-                <td><strong>\${order.edi_order_number || '-'}</strong></td>
-                <td class="customer-cell">
-                  <span class="edi-customer">\${ediCustomer}</span>
-                  <span class="zoho-customer \${isConfirmed ? 'confirmed' : 'suggested'}">
-                    → \${suggestedAccount || '<em>Not matched</em>'}
-                    \${isConfirmed ? ' ✓' : ''}
-                  </span>
-                </td>
-                <td><span class="badge badge-\${order.status === 'processed' ? 'success' : order.status === 'failed' ? 'error' : 'pending'}">\${order.status}</span></td>
-                <td>\${order.zoho_so_id || '-'}</td>
-                <td>\${order.created_at ? new Date(order.created_at).toLocaleDateString() : '-'}</td>
-                <td>
-                  \${canSelect ? \`
-                    <select class="customer-select" onchange="updateMapping(\${order.id}, this.value, this.options[this.selectedIndex].text)">
-                      <option value="">Select account...</option>
-                      \${accountOptions}
-                    </select>
-                  \` : ''}
-                </td>
-              </tr>\`;
+                <tr>
+                  <td onclick="event.stopPropagation()"><input type="checkbox" class="order-checkbox" value="\${o.id}" \${!canSelect ? 'disabled' : ''}></td>
+                  <td><a href="#" class="po-link" onclick="openOrderDetails(\${o.id}); return false;">\${o.edi_order_number || o.filename?.substring(0,25) || '-'}</a></td>
+                  <td class="customer-cell">\${customer}</td>
+                  <td>\${itemCount} items</td>
+                  <td><span class="badge badge-\${o.status === 'processed' ? 'success' : o.status === 'failed' ? 'error' : 'pending'}">\${o.status}</span></td>
+                  <td>\${o.created_at ? new Date(o.created_at).toLocaleDateString() : '-'}</td>
+                  <td onclick="event.stopPropagation()">
+                    <button class="btn btn-sm btn-secondary" onclick="openOrderDetails(\${o.id})">View</button>
+                  </td>
+                </tr>
+              \`;
             }).join('')}
           </tbody>
         </table>
       \`;
     }
 
-    async function loadMappings() {
-      try {
-        const res = await fetch('/customer-mappings');
-        const mappings = await res.json();
-        renderMappings(mappings);
-      } catch (e) {
-        console.error('Failed to load mappings', e);
-      }
+    function extractCustomerFromFilename(filename) {
+      if (!filename) return '-';
+      const match = filename.match(/to-([\\w_]+)\\.csv/i);
+      if (match) return match[1].replace(/_/g, ' ');
+      return '-';
     }
 
-    function renderMappings(mappings) {
-      const container = document.getElementById('mappings-container');
-      if (!mappings || mappings.length === 0) {
-        container.innerHTML = '<div class="empty-state"><div class="empty-state-text">No customer mappings saved yet. Match customers in the Orders tab and they will appear here.</div></div>';
-        return;
-      }
-
-      container.innerHTML = mappings.map(m => \`
-        <div class="mapping-row">
-          <div class="mapping-info">
-            <strong>\${m.edi_customer_name}</strong>
-            <span class="mapping-arrow">→</span>
-            <span>\${m.zoho_account_name}</span>
-            \${m.confirmed ? '<span class="badge badge-success">Confirmed</span>' : '<span class="badge badge-info">Auto</span>'}
-          </div>
-          <button class="btn btn-sm btn-secondary" onclick="deleteMapping(\${m.id})">Delete</button>
-        </div>
-      \`).join('');
-    }
-
-    async function updateMapping(orderId, zohoAccountId, zohoAccountName) {
-      if (!zohoAccountId) return;
+    async function openOrderDetails(orderId) {
+      currentOrderId = orderId;
+      document.getElementById('order-modal').classList.add('show');
+      document.getElementById('order-details-content').innerHTML = '<div class="empty-state">Loading...</div>';
       
-      showToast('Saving mapping...');
       try {
-        const res = await fetch('/update-order-mapping', {
+        const res = await fetch('/orders/' + orderId);
+        const order = await res.json();
+        renderOrderDetails(order);
+      } catch (e) {
+        document.getElementById('order-details-content').innerHTML = '<div class="empty-state">Error loading order</div>';
+      }
+    }
+
+    function renderOrderDetails(order) {
+      const data = order.parsed_data || {};
+      const header = data.header || {};
+      const parties = data.parties || {};
+      const dates = data.dates || {};
+      const items = data.items || [];
+      
+      const customer = parties.buyer?.name || header.retailerName || extractCustomerFromFilename(order.filename);
+      const shipTo = parties.shipTo || {};
+      
+      let totalQty = 0, totalAmount = 0;
+      items.forEach(i => {
+        totalQty += i.quantityOrdered || 0;
+        totalAmount += i.amount || (i.quantityOrdered * i.unitPrice) || 0;
+      });
+
+      document.getElementById('order-details-content').innerHTML = \`
+        <div class="order-header-grid">
+          <div class="order-field">
+            <div class="order-field-label">PO Number</div>
+            <div class="order-field-value">\${header.poNumber || order.edi_order_number || '-'}</div>
+          </div>
+          <div class="order-field">
+            <div class="order-field-label">Customer</div>
+            <div class="order-field-value">\${customer}</div>
+          </div>
+          <div class="order-field">
+            <div class="order-field-label">Order Date</div>
+            <div class="order-field-value">\${dates.orderDate || '-'}</div>
+          </div>
+          <div class="order-field">
+            <div class="order-field-label">Status</div>
+            <div class="order-field-value"><span class="badge badge-\${order.status === 'processed' ? 'success' : order.status === 'failed' ? 'error' : 'pending'}">\${order.status}</span></div>
+          </div>
+        </div>
+        
+        <div class="order-header-grid">
+          <div class="order-field">
+            <div class="order-field-label">Ship To</div>
+            <div class="order-field-value" style="font-size:0.75rem;">
+              \${shipTo.name || '-'}<br>
+              \${shipTo.address1 || ''} \${shipTo.address2 || ''}<br>
+              \${shipTo.city || ''}, \${shipTo.state || ''} \${shipTo.zip || ''}
+            </div>
+          </div>
+          <div class="order-field">
+            <div class="order-field-label">Ship Window</div>
+            <div class="order-field-value">\${dates.shipNotBefore || '-'} to \${dates.shipNotAfter || '-'}</div>
+          </div>
+          <div class="order-field">
+            <div class="order-field-label">Cancel Date</div>
+            <div class="order-field-value">\${dates.cancelAfter || '-'}</div>
+          </div>
+          <div class="order-field">
+            <div class="order-field-label">Payment Terms</div>
+            <div class="order-field-value">\${header.paymentTerms || '-'}</div>
+          </div>
+        </div>
+
+        <h4 style="margin: 1rem 0 0.5rem; font-size: 0.9rem;">Line Items (\${items.length})</h4>
+        <table class="line-items-table">
+          <thead>
+            <tr>
+              <th>Line</th>
+              <th>Style/SKU</th>
+              <th>Description</th>
+              <th>Color</th>
+              <th>Size</th>
+              <th>Qty</th>
+              <th>Price</th>
+              <th>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            \${items.map(item => \`
+              <tr>
+                <td>\${item.lineNumber || '-'}</td>
+                <td>\${item.productIds?.vendorItemNumber || item.productIds?.buyerItemNumber || item.productIds?.sku || '-'}</td>
+                <td>\${item.description || '-'}</td>
+                <td>\${item.color || '-'}</td>
+                <td>\${item.size || '-'}</td>
+                <td>\${item.quantityOrdered || 0}</td>
+                <td>$\${(item.unitPrice || 0).toFixed(2)}</td>
+                <td>$\${(item.amount || (item.quantityOrdered * item.unitPrice) || 0).toFixed(2)}</td>
+              </tr>
+            \`).join('')}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="5" style="text-align:right;"><strong>Totals:</strong></td>
+              <td><strong>\${totalQty}</strong></td>
+              <td></td>
+              <td><strong>$\${totalAmount.toFixed(2)}</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div class="order-summary">
+          <div class="summary-item">
+            <div class="summary-value">\${items.length}</div>
+            <div class="summary-label">Line Items</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-value">\${totalQty}</div>
+            <div class="summary-label">Total Units</div>
+          </div>
+          <div class="summary-item">
+            <div class="summary-value">$\${totalAmount.toFixed(2)}</div>
+            <div class="summary-label">Total Value</div>
+          </div>
+        </div>
+        
+        \${order.error_message ? \`<div style="margin-top:1rem; padding:0.75rem; background:#fff0f0; border-radius:8px; color:#ff3b30; font-size:0.75rem;"><strong>Error:</strong> \${order.error_message}</div>\` : ''}
+      \`;
+      
+      // Show/hide process button based on status
+      document.getElementById('btn-process-order').style.display = (order.status === 'pending' || order.status === 'failed') ? 'inline-flex' : 'none';
+    }
+
+    function closeModal() {
+      document.getElementById('order-modal').classList.remove('show');
+      currentOrderId = null;
+    }
+
+    async function processCurrentOrder() {
+      if (!currentOrderId) return;
+      showToast('Processing order...');
+      try {
+        const res = await fetch('/process-selected', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderId, zohoAccountId, zohoAccountName, saveForFuture: true })
+          body: JSON.stringify({ orderIds: [currentOrderId] })
         });
         const result = await res.json();
-        if (result.success) {
-          showToast('Mapping saved!');
-          refreshData();
-        }
-      } catch (e) {
-        showToast('Error: ' + e.message);
-      }
-    }
-
-    async function deleteMapping(id) {
-      if (!confirm('Delete this mapping?')) return;
-      try {
-        await fetch('/customer-mappings/' + id, { method: 'DELETE' });
-        loadMappings();
-        showToast('Mapping deleted');
-      } catch (e) {
-        showToast('Error: ' + e.message);
-      }
-    }
-
-    async function suggestAllMappings() {
-      showToast('Auto-matching customers...');
-      try {
-        const ordersRes = await fetch('/orders');
-        const orders = await ordersRes.json();
-        
-        const unmapped = orders.filter(o => !o.mapping_confirmed && o.status !== 'processed');
-        let matched = 0;
-        
-        for (const order of unmapped.slice(0, 20)) {
-          const ediCustomer = order.edi_customer_name || order.parsed_data?.parties?.buyer?.name;
-          if (!ediCustomer) continue;
-          
-          const res = await fetch('/suggest-mapping', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ediCustomerName: ediCustomer })
-          });
-          const result = await res.json();
-          
-          if (result.mapping && result.mapping.zoho_account_id) {
-            await fetch('/update-order-mapping', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                orderId: order.id,
-                zohoAccountId: result.mapping.zoho_account_id,
-                zohoAccountName: result.mapping.zoho_account_name,
-                saveForFuture: result.source === 'saved'
-              })
-            });
-            matched++;
-          }
-        }
-        
-        showToast(\`Matched \${matched} customers\`);
+        showToast(result.processed > 0 ? 'Order processed!' : 'Processing failed');
+        closeModal();
         refreshData();
       } catch (e) {
         showToast('Error: ' + e.message);
       }
     }
 
-    function toggleSelectAll(checkbox) {
-      document.querySelectorAll('.order-checkbox:not(:disabled)').forEach(cb => cb.checked = checkbox.checked);
+    async function loadMappings() {
+      try {
+        const res = await fetch('/customer-mappings');
+        const mappings = await res.json();
+        const container = document.getElementById('mappings-container');
+        if (!mappings.length) {
+          container.innerHTML = '<div class="empty-state">No customer mappings saved yet.</div>';
+          return;
+        }
+        container.innerHTML = mappings.map(m => \`
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem;background:#f5f5f7;border-radius:6px;margin-bottom:0.5rem;">
+            <span><strong>\${m.edi_customer_name}</strong> → \${m.zoho_account_name}</span>
+            <button class="btn btn-sm btn-secondary" onclick="deleteMapping(\${m.id})">Delete</button>
+          </div>
+        \`).join('');
+      } catch (e) { console.error(e); }
     }
 
-    function getSelectedOrderIds() {
-      return Array.from(document.querySelectorAll('.order-checkbox:checked')).map(cb => parseInt(cb.value));
+    async function deleteMapping(id) {
+      await fetch('/customer-mappings/' + id, { method: 'DELETE' });
+      loadMappings();
+    }
+
+    function toggleSelectAll(cb) {
+      document.querySelectorAll('.order-checkbox:not(:disabled)').forEach(c => c.checked = cb.checked);
+    }
+
+    function getSelectedIds() {
+      return Array.from(document.querySelectorAll('.order-checkbox:checked')).map(c => parseInt(c.value));
     }
 
     async function triggerProcessLimit() {
       const btn = document.getElementById('btn-process');
       const limit = document.getElementById('process-limit').value;
-      btn.disabled = true;
-      btn.innerHTML = '<div class="spinner"></div>';
-      showToast('Processing...');
-
+      btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
       try {
-        const res = await fetch('/process-limit', { 
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ limit: parseInt(limit) })
-        });
-        const result = await res.json();
-        showToast(\`Done! Processed: \${result.processed}, Failed: \${result.failed}\`);
-        setTimeout(refreshData, 1000);
-      } catch (error) {
-        showToast('Error: ' + error.message);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = 'Process Orders';
-      }
+        const res = await fetch('/process-limit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ limit: parseInt(limit) }) });
+        const r = await res.json();
+        showToast(\`Processed: \${r.processed}, Failed: \${r.failed}\`);
+        refreshData();
+      } catch (e) { showToast('Error'); }
+      btn.disabled = false; btn.innerHTML = 'Process Orders';
     }
 
     async function processSelected() {
-      const selectedIds = getSelectedOrderIds();
-      if (selectedIds.length === 0) { showToast('Select at least one order'); return; }
-      
-      const btn = document.getElementById('btn-process-selected');
-      btn.disabled = true;
-      btn.innerHTML = '<div class="spinner"></div>';
-      showToast(\`Processing \${selectedIds.length} orders...\`);
-
+      const ids = getSelectedIds();
+      if (!ids.length) { showToast('Select orders first'); return; }
+      showToast('Processing ' + ids.length + ' orders...');
       try {
-        const res = await fetch('/process-selected', { 
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderIds: selectedIds })
-        });
-        const result = await res.json();
-        showToast(\`Done! Processed: \${result.processed}, Failed: \${result.failed}\`);
-        setTimeout(refreshData, 1000);
-      } catch (error) {
-        showToast('Error: ' + error.message);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = 'Process Selected';
-      }
+        const res = await fetch('/process-selected', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderIds: ids }) });
+        const r = await res.json();
+        showToast(\`Processed: \${r.processed}, Failed: \${r.failed}\`);
+        refreshData();
+      } catch (e) { showToast('Error'); }
     }
 
     async function retryFailed() {
-      showToast('Resetting failed orders...');
-      try {
-        const res = await fetch('/retry-failed', { method: 'POST' });
-        const result = await res.json();
-        showToast(\`Reset \${result.count} orders to pending\`);
-        setTimeout(refreshData, 500);
-      } catch (error) {
-        showToast('Error: ' + error.message);
-      }
+      const res = await fetch('/retry-failed', { method: 'POST' });
+      const r = await res.json();
+      showToast('Reset ' + r.count + ' orders');
+      refreshData();
     }
 
-    function showToast(message) {
-      const toast = document.getElementById('toast');
-      document.getElementById('toast-message').textContent = message;
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 4000);
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      document.getElementById('toast-message').textContent = msg;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3000);
     }
   </script>
 </body>
