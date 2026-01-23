@@ -73,6 +73,56 @@ app.get('/orders', async (req, res) => {
   }
 });
 
+// Reset and re-import orders (clears orders and processed_files to re-download from SFTP)
+app.post('/reset-orders', async (req, res) => {
+  const { pool } = require('./db');
+  try {
+    await pool.query('DELETE FROM edi_orders');
+    await pool.query('DELETE FROM processed_files');
+    logger.info('Reset all orders and processed files');
+    res.json({ success: true, message: 'All orders cleared. Click Process Orders to re-import from SFTP.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET version for easy browser access
+app.get('/reset-orders', async (req, res) => {
+  const { pool } = require('./db');
+  try {
+    const ordersResult = await pool.query('SELECT COUNT(*) FROM edi_orders');
+    const count = ordersResult.rows[0].count;
+    await pool.query('DELETE FROM edi_orders');
+    await pool.query('DELETE FROM processed_files');
+    logger.info('Reset all orders and processed files via GET');
+    res.send(\`
+      <h1>✅ Reset Complete</h1>
+      <p>Deleted \${count} orders and cleared processed files.</p>
+      <p><a href="/">Go to Dashboard</a> and click "Process Orders" to re-import from SFTP.</p>
+    \`);
+  } catch (error) {
+    res.status(500).send('Error: ' + error.message);
+  }
+});
+
+// Add manual customer mapping
+app.post('/add-mapping', async (req, res) => {
+  const { ediCustomerName, zohoAccountName } = req.body;
+  const { saveCustomerMapping } = require('./db');
+  
+  if (!ediCustomerName || !zohoAccountName) {
+    return res.status(400).json({ error: 'Both ediCustomerName and zohoAccountName are required' });
+  }
+  
+  try {
+    await saveCustomerMapping(ediCustomerName, null, zohoAccountName, true, 100);
+    logger.info('Added manual customer mapping', { ediCustomerName, zohoAccountName });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get single order details
 app.get('/orders/:id', async (req, res) => {
   const { pool } = require('./db');
