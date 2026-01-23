@@ -89,6 +89,68 @@ app.post('/retry-failed', async (req, res) => {
   }
 });
 
+// Process with limit endpoint
+app.post('/process-limit', async (req, res) => {
+  const { pool } = require('./db');
+  const limit = parseInt(req.body.limit) || 10;
+  
+  try {
+    logger.info('Processing with limit', { limit });
+    
+    // Get pending orders with limit
+    const pendingResult = await pool.query(`
+      SELECT id, filename, edi_order_number, parsed_data
+      FROM edi_orders
+      WHERE status = 'pending'
+      ORDER BY created_at ASC
+      LIMIT $1
+    `, [limit]);
+    
+    const orders = pendingResult.rows;
+    logger.info(`Found ${orders.length} pending orders to process`);
+    
+    if (orders.length === 0) {
+      return res.json({ success: true, message: 'No pending orders', processed: 0, failed: 0 });
+    }
+    
+    const ZohoClient = require('./zoho');
+    const { processOrderToZoho } = require('./processor');
+    const { updateOrderStatus } = require('./db');
+    const zoho = new ZohoClient();
+    
+    let processed = 0;
+    let failed = 0;
+    
+    for (const order of orders) {
+      try {
+        const result = await processOrderToZoho(zoho, order);
+        
+        if (result.success) {
+          await updateOrderStatus(order.id, 'processed', {
+            soId: result.soId,
+            soNumber: result.soNumber
+          });
+          processed++;
+        } else {
+          await updateOrderStatus(order.id, 'failed', {
+            error: result.error
+          });
+          failed++;
+        }
+      } catch (error) {
+        logger.error('Error processing order', { orderId: order.id, error: error.message });
+        await updateOrderStatus(order.id, 'failed', { error: error.message });
+        failed++;
+      }
+    }
+    
+    res.json({ success: true, processed, failed, total: orders.length });
+  } catch (error) {
+    logger.error('Process with limit failed', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 async function startServer() {
   try {
     // Initialize database
