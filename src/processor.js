@@ -1,6 +1,6 @@
 const SFTPClient = require('./sftp');
 const ZohoClient = require('./zoho');
-const { parseEDIContent } = require('./edi-parser');
+const { parseSpringCSV } = require('./csv-parser');
 const { 
   isFileProcessed, 
   markFileProcessed, 
@@ -42,8 +42,15 @@ async function processEDIOrders() {
         // Download file content
         const content = await sftp.downloadFile(file.name);
 
-        // Parse EDI content
-        const parsedOrder = parseEDIContent(content, file.name);
+        // Parse CSV content
+        let parsedOrder;
+        try {
+          parsedOrder = parseSpringCSV(content, file.name);
+        } catch (parseError) {
+          logger.error('Failed to parse file', { filename: file.name, error: parseError.message });
+          results.errors.push({ file: file.name, error: parseError.message });
+          continue;
+        }
 
         // Save to database as pending
         const savedOrder = await saveEDIOrder({
@@ -58,8 +65,12 @@ async function processEDIOrders() {
         await markFileProcessed(file.name, file.size, 1);
         results.filesProcessed++;
 
-        // Archive the file on SFTP
-        await sftp.archiveFile(file.name);
+        // Archive the file on SFTP (ignore errors)
+        try {
+          await sftp.archiveFile(file.name);
+        } catch (e) {
+          // Ignore archive errors
+        }
 
       } catch (error) {
         logger.error('Error processing file', { 
@@ -120,70 +131,68 @@ async function processOrderToZoho(zoho, order) {
   logger.info('Creating Zoho order', { poNumber });
 
   // Check for duplicate
-  const existing = await zoho.checkDuplicateOrder(poNumber);
-  if (existing) {
-    logger.warn('Duplicate order found', { poNumber, existingId: existing.id });
-    return {
-      success: true,
-      soId: existing.id,
-      soNumber: existing.Name,
-      duplicate: true
-    };
+  try {
+    const existing = await zoho.checkDuplicateOrder(poNumber);
+    if (existing) {
+      logger.warn('Duplicate order found', { poNumber, existingId: existing.id });
+      return {
+        success: true,
+        soId: existing.id,
+        soNumber: existing.Name,
+        duplicate: true
+      };
+    }
+  } catch (e) {
+    // Ignore duplicate check errors
   }
 
   // Find/match customer account
   let account = null;
   const buyerInfo = parsedData.parties?.buyer;
-  const shipToInfo = parsedData.parties?.shipTo;
 
-  if (buyerInfo?.id) {
-    account = await zoho.findAccountByClientId(buyerInfo.id);
-  }
-  if (!account && buyerInfo?.name) {
+  if (buyerInfo?.name) {
     account = await zoho.findAccountByName(buyerInfo.name);
+  }
+  if (!account && buyerInfo?.id) {
+    account = await zoho.findAccountByClientId(buyerInfo.id);
   }
 
   if (!account) {
-    logger.warn('Customer not found, creating order with raw data', { 
-      buyerId: buyerInfo?.id,
+    logger.warn('Customer not found, creating order without account link', { 
       buyerName: buyerInfo?.name 
     });
   }
 
   // Find customer DC if we have ship-to info
   let customerDC = null;
-  if (account && shipToInfo?.id) {
-    customerDC = await zoho.findCustomerDC(account.id, shipToInfo.id);
+  const shipToInfo = parsedData.parties?.shipTo;
+  if (shipToInfo?.code) {
+    customerDC = await zoho.findCustomerDC(account?.id, shipToInfo.code);
   }
 
-  // Prepare line items with item lookups
+  // Prepare line items
   const lineItems = [];
   for (const item of parsedData.items || []) {
-    const productIds = item.productIds || {};
-    
     // Try to find item in Zoho
     let zohoItem = null;
-    if (productIds.sku) {
-      zohoItem = await zoho.findItemBySKU(productIds.sku);
+    if (item.productIds?.sku) {
+      zohoItem = await zoho.findItemBySKU(item.productIds.sku);
     }
-    if (!zohoItem && productIds.style) {
-      zohoItem = await zoho.findItemByStyle(productIds.style);
-    }
-    if (!zohoItem && productIds.vendorPartNumber) {
-      zohoItem = await zoho.findItemBySKU(productIds.vendorPartNumber);
+    if (!zohoItem && item.productIds?.vendorItemNumber) {
+      zohoItem = await zoho.findItemBySKU(item.productIds.vendorItemNumber);
     }
 
     lineItems.push({
       itemId: zohoItem?.id || null,
-      customerSKU: productIds.sku || productIds.buyerPartNumber || '',
-      customerStyle: productIds.style || productIds.buyerItemNumber || '',
-      style: productIds.vendorPartNumber || productIds.style || '',
-      color: productIds.color || productIds.CB || '',
-      size: productIds.size || productIds.IZ || '',
+      customerSKU: item.productIds?.buyerItemNumber || item.productIds?.sku || '',
+      customerStyle: item.productIds?.vendorItemNumber || '',
+      style: item.productIds?.vendorItemNumber || '',
+      color: item.color || '',
+      size: item.size || '',
       quantity: item.quantityOrdered || 0,
       unitPrice: item.unitPrice || 0,
-      amount: (item.quantityOrdered || 0) * (item.unitPrice || 0),
-      shipDate: item.requestedDelivery || item.requestedShip,
+      amount: item.amount || (item.quantityOrdered * item.unitPrice) || 0,
+      shipDate: parsedData.dates?.shipNotBefore,
       description: item.description || '',
       lineNumber: item.lineNumber
     });
@@ -192,16 +201,15 @@ async function processOrderToZoho(zoho, order) {
   // Create the Sales Order
   const orderData = {
     poNumber: poNumber,
-    orderDate: parsedData.header?.poDate || new Date().toISOString().split('T')[0],
+    orderDate: parsedData.dates?.orderDate || new Date().toISOString().split('T')[0],
     accountId: account?.id,
-    clientId: buyerInfo?.id || '',
+    clientId: shipToInfo?.code || buyerInfo?.id || '',
     customerDCId: customerDC?.id,
-    shipToId: customerDC?.id,
-    cancelDate: parsedData.dates?.cancelAfter || parsedData.dates?.doNotDeliverAfter,
-    shipDate: parsedData.dates?.requestedShip || parsedData.dates?.shipNotBefore,
-    expectedShipDate: parsedData.dates?.deliveryRequested,
-    referenceNumber: parsedData.header?.interchangeControlNumber,
-    notes: `EDI Import from ${order.filename}`
+    cancelDate: parsedData.dates?.cancelAfter,
+    shipDate: parsedData.dates?.shipNotBefore,
+    shipCloseDate: parsedData.dates?.shipNotAfter,
+    referenceNumber: parsedData.header?.poId || '',
+    notes: `EDI Import from ${order.filename} | ${parsedData.header?.retailerName || ''}`
   };
 
   const result = await zoho.createSalesOrderWithItems(orderData, lineItems);
