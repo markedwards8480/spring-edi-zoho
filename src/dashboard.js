@@ -468,7 +468,10 @@ const dashboardHTML = `
                   </div>
                   <div class="info-box">
                     <div class="info-label">Unit of Measure</div>
-                    <div class="info-value">\${uom} \${uom === 'AS' ? '(Prepack)' : '(Each)'}</div>
+                    <div class="info-value">
+                      <span class="uom-badge \${uom === 'AS' ? 'uom-as' : uom === 'EA' ? 'uom-ea' : ''}" style="\${uom === 'ST' ? 'background:#8b5cf6;color:white' : ''}">\${uom}</span>
+                      \${uom === 'AS' ? 'Prepack' : uom === 'EA' ? 'Each' : uom === 'ST' ? 'Set' : ''}
+                    </div>
                   </div>
                 </div>
                 
@@ -479,7 +482,7 @@ const dashboardHTML = `
                   </div>
                   <div class="summary-box">
                     <div class="summary-number">\${totalUnits.toLocaleString()}</div>
-                    <div class="summary-label">Total Units</div>
+                    <div class="summary-label">Units Ordered</div>
                   </div>
                   <div class="summary-box green">
                     <div class="summary-number">$\${totalValue.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
@@ -487,13 +490,72 @@ const dashboardHTML = `
                   </div>
                 </div>
                 
-                \${uom === 'AS' ? '<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:1rem;margin-top:1rem;"><strong>⚠️ Prepack Order:</strong> Unit prices shown are for the entire prepack, not individual items.</div>' : ''}
+                <!-- Pack/Price Details Box -->
+                <div style="background:#0f172a;border-radius:8px;padding:1.25rem;margin-top:1rem;">
+                  <h4 style="margin:0 0 1rem 0;color:#3b82f6;font-size:0.9rem;">📦 Pack & Pricing Details</h4>
+                  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;font-size:0.875rem;">
+                    <div>
+                      <div style="color:#64748b;font-size:0.75rem;margin-bottom:0.25rem;">Unit Price (per \${uom})</div>
+                      <div style="font-weight:600;font-size:1.1rem;">$\${currentRawFields['po_item_po_item_unit_price'] || '0'}</div>
+                    </div>
+                    \${currentRawFields['product_pack_product_pack_unit_price'] ? \`
+                    <div>
+                      <div style="color:#64748b;font-size:0.75rem;margin-bottom:0.25rem;">Item Price (per each)</div>
+                      <div style="font-weight:600;font-size:1.1rem;color:#22c55e;">$\${currentRawFields['product_pack_product_pack_unit_price']}</div>
+                    </div>
+                    \` : ''}
+                    \${currentRawFields['product_pack_product_pack_product_qty'] ? \`
+                    <div>
+                      <div style="color:#64748b;font-size:0.75rem;margin-bottom:0.25rem;">Items per Pack</div>
+                      <div style="font-weight:600;font-size:1.1rem;">\${currentRawFields['product_pack_product_pack_product_qty']}</div>
+                    </div>
+                    \` : ''}
+                    \${currentRawFields['product_pack_product_pack_product_qty_calculated'] ? \`
+                    <div>
+                      <div style="color:#64748b;font-size:0.75rem;margin-bottom:0.25rem;">Total Items</div>
+                      <div style="font-weight:600;font-size:1.1rem;">\${currentRawFields['product_pack_product_pack_product_qty_calculated']}</div>
+                    </div>
+                    \` : ''}
+                    \${currentRawFields['po_item_attributes_retail_price'] ? \`
+                    <div>
+                      <div style="color:#64748b;font-size:0.75rem;margin-bottom:0.25rem;">Retail Price</div>
+                      <div style="font-weight:600;font-size:1.1rem;color:#f59e0b;">$\${currentRawFields['po_item_attributes_retail_price']}</div>
+                    </div>
+                    \` : ''}
+                    <div>
+                      <div style="color:#64748b;font-size:0.75rem;margin-bottom:0.25rem;">Line Amount</div>
+                      <div style="font-weight:600;font-size:1.1rem;">$\${currentRawFields['po_item_attributes_amount'] || totalValue.toFixed(2)}</div>
+                    </div>
+                  </div>
+                </div>
+                
+                \${uom === 'AS' && !currentRawFields['product_pack_product_pack_unit_price'] ? '<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:1rem;margin-top:1rem;"><strong>⚠️ Prepack Order:</strong> This is a prepack/assortment order. The unit price shown ($' + (currentRawFields['po_item_po_item_unit_price'] || '0') + ') is for the entire prepack bundle, not individual items. Individual item pricing is not available in this EDI data.</div>' : ''}
                 
                 \${o.zoho_so_number ? '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:1rem;margin-top:1rem;"><strong>✓ Zoho Sales Order:</strong> ' + o.zoho_so_number + '</div>' : ''}
               </div>
               
               <!-- Items Tab -->
               <div class="tab-content" id="tab-items">
+                <!-- UOM Legend -->
+                <div style="background:#0f172a;border-radius:8px;padding:1rem;margin-bottom:1rem;display:flex;gap:2rem;flex-wrap:wrap;font-size:0.8rem;">
+                  <div><span class="uom-badge uom-ea">EA</span> Each - Individual items</div>
+                  <div><span class="uom-badge uom-as">AS</span> Assortment - Prepack bundle</div>
+                  <div><span class="uom-badge" style="background:#8b5cf6;color:white">ST</span> Set - Multiple items per unit</div>
+                </div>
+                
+                <!-- Pack Info Summary (if available) -->
+                \${currentRawFields['product_pack_product_pack_product_qty'] ? \`
+                <div style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);border-radius:8px;padding:1rem;margin-bottom:1rem;">
+                  <strong>📦 Pack Breakdown:</strong><br>
+                  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-top:0.75rem;">
+                    <div>Pack Size: <strong>\${currentRawFields['product_pack_product_pack_product_qty'] || 'N/A'}</strong> items per pack</div>
+                    <div>Item Price: <strong>$\${currentRawFields['product_pack_product_pack_unit_price'] || 'N/A'}</strong> per item</div>
+                    <div>Pack Price: <strong>$\${currentRawFields['po_item_po_item_unit_price'] || 'N/A'}</strong> per pack</div>
+                    <div>Total Items: <strong>\${currentRawFields['product_pack_product_pack_product_qty_calculated'] || 'N/A'}</strong></div>
+                  </div>
+                </div>
+                \` : ''}
+                
                 <table class="line-items-table">
                   <thead>
                     <tr>
@@ -503,27 +565,39 @@ const dashboardHTML = `
                       <th>Color</th>
                       <th>Size</th>
                       <th>UOM</th>
-                      <th style="text-align:right">Qty</th>
+                      <th style="text-align:right">Qty Ordered</th>
                       <th style="text-align:right">Unit Price</th>
-                      <th style="text-align:right">Amount</th>
+                      <th style="text-align:right">Line Amount</th>
                     </tr>
                   </thead>
                   <tbody>
-                    \${items.map((item, idx) => \`
+                    \${items.map((item, idx) => {
+                      const itemUom = item.unitOfMeasure || uom;
+                      const uomClass = itemUom === 'AS' ? 'uom-as' : itemUom === 'EA' ? 'uom-ea' : '';
+                      const uomStyle = itemUom === 'ST' ? 'background:#8b5cf6;color:white' : '';
+                      return \`
                       <tr>
                         <td>\${item.lineNumber || idx + 1}</td>
                         <td><strong>\${item.productIds?.sku || item.productIds?.vendorItemNumber || item.productIds?.buyerItemNumber || 'N/A'}</strong></td>
                         <td>\${item.description || ''}</td>
                         <td>\${item.color || ''}</td>
                         <td>\${item.size || ''}</td>
-                        <td>\${item.unitOfMeasure || uom}</td>
+                        <td><span class="uom-badge \${uomClass}" style="\${uomStyle}">\${itemUom}</span></td>
                         <td style="text-align:right">\${item.quantityOrdered || 0}</td>
                         <td style="text-align:right">$\${(item.unitPrice || 0).toFixed(2)}</td>
                         <td style="text-align:right"><strong>$\${((item.quantityOrdered || 0) * (item.unitPrice || 0)).toFixed(2)}</strong></td>
                       </tr>
-                    \`).join('')}
+                    \`;}).join('')}
                   </tbody>
                 </table>
+                
+                <!-- Pricing Note -->
+                <div style="margin-top:1rem;padding:1rem;background:#0f172a;border-radius:8px;font-size:0.85rem;color:#94a3b8;">
+                  <strong>💡 Understanding Prices:</strong><br>
+                  • <strong>EA</strong> (Each): Unit price is per individual item<br>
+                  • <strong>AS</strong> (Assortment): Unit price is for the entire prepack bundle<br>
+                  • <strong>ST</strong> (Set): Unit price is per set (check Pack Breakdown for items per set)
+                </div>
               </div>
               
               <!-- Pricing Tab -->
