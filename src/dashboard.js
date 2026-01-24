@@ -73,13 +73,15 @@ const dashboardHTML = `
     .btn-secondary:hover { background: #f5f5f7; }
     .btn-success { background: #34c759; color: white; }
     .btn-success:hover { background: #2db14d; }
+    .btn-warning { background: #ff9500; color: white; }
+    .btn-warning:hover { background: #e68600; }
     .btn-danger { background: white; color: #ff3b30; border: 1px solid #ff3b30; }
     .btn-danger:hover { background: rgba(255, 59, 48, 0.08); }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     select { background: white; border: 1px solid #d2d2d7; color: #1e3a5f; padding: 0.5rem 0.75rem; border-radius: 8px; font-size: 0.875rem; font-family: inherit; }
     
     .table-container { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-    .table-info { padding: 0.75rem 1rem; background: #f5f5f7; font-size: 0.8rem; color: #6e6e73; border-bottom: 1px solid rgba(0,0,0,0.06); }
+    .table-info { padding: 0.75rem 1rem; background: #f5f5f7; font-size: 0.8rem; color: #6e6e73; border-bottom: 1px solid rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
     table { width: 100%; border-collapse: collapse; }
     th { background: #f5f5f7; padding: 1rem; text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.02em; color: #86868b; font-weight: 600; }
     td { padding: 1rem; border-top: 1px solid rgba(0,0,0,0.06); font-size: 0.875rem; }
@@ -228,11 +230,15 @@ const dashboardHTML = `
           <button class="btn btn-success" onclick="processSelected()">✓ Process Selected</button>
           <button class="btn btn-secondary" onclick="retryFailed()">🔄 Retry Failed</button>
           <button class="btn btn-secondary" onclick="loadOrders()">↻ Refresh</button>
+          <button class="btn btn-warning" onclick="exportToCSV()">📊 Export to Excel</button>
           <button class="btn btn-danger" onclick="resetAll()">Reset All</button>
         </div>
         
         <div class="table-container">
-          <div class="table-info" id="tableInfo">Showing 0 orders</div>
+          <div class="table-info">
+            <span id="tableInfo">Showing 0 orders</span>
+            <span style="font-size: 0.75rem;">Click "Export to Excel" to download for your team</span>
+          </div>
           <table>
             <thead>
               <tr>
@@ -297,12 +303,12 @@ const dashboardHTML = `
     let currentOrder = null;
     let customers = new Set();
     
-    document.addEventListener('DOMContentLoaded', () => { loadOrders(); loadStats(); });
+    document.addEventListener('DOMContentLoaded', function() { loadOrders(); loadStats(); });
     
     function showTab(tab, el) {
-      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
       el.classList.add('active');
-      ['tabOrders','tabMappings','tabActivity','tabDrafts'].forEach(t => document.getElementById(t).style.display = 'none');
+      ['tabOrders','tabMappings','tabActivity','tabDrafts'].forEach(function(t) { document.getElementById(t).style.display = 'none'; });
       document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).style.display = 'block';
       if (tab === 'mappings') loadMappings();
       if (tab === 'activity') loadActivity();
@@ -311,10 +317,10 @@ const dashboardHTML = `
     
     async function loadOrders() {
       try {
-        const res = await fetch('/orders');
+        var res = await fetch('/orders');
         orders = await res.json();
         customers.clear();
-        orders.forEach(o => { if (o.edi_customer_name) customers.add(o.edi_customer_name); });
+        orders.forEach(function(o) { if (o.edi_customer_name) customers.add(o.edi_customer_name); });
         populateCustomerFilter();
         applyFilters();
         loadStats();
@@ -322,10 +328,10 @@ const dashboardHTML = `
     }
     
     function populateCustomerFilter() {
-      const select = document.getElementById('filterCustomer');
-      const currentValue = select.value;
+      var select = document.getElementById('filterCustomer');
+      var currentValue = select.value;
       select.innerHTML = '<option value="">All Customers</option>';
-      Array.from(customers).sort().forEach(c => { select.innerHTML += '<option value="' + c + '">' + c + '</option>'; });
+      Array.from(customers).sort().forEach(function(c) { select.innerHTML += '<option value="' + c + '">' + c + '</option>'; });
       select.value = currentValue;
     }
     
@@ -338,32 +344,32 @@ const dashboardHTML = `
     }
     
     function applyFilters() {
-      const searchPO = document.getElementById('searchPO').value.toLowerCase();
-      const customer = document.getElementById('filterCustomer').value;
-      const status = document.getElementById('filterStatus').value;
-      const dateFrom = document.getElementById('filterDateFrom').value;
-      const dateTo = document.getElementById('filterDateTo').value;
+      var searchPO = document.getElementById('searchPO').value.toLowerCase();
+      var customer = document.getElementById('filterCustomer').value;
+      var status = document.getElementById('filterStatus').value;
+      var dateFrom = document.getElementById('filterDateFrom').value;
+      var dateTo = document.getElementById('filterDateTo').value;
       
-      filteredOrders = orders.filter(o => {
+      filteredOrders = orders.filter(function(o) {
         if (searchPO && !(o.edi_order_number || '').toLowerCase().includes(searchPO)) return false;
         if (customer && o.edi_customer_name !== customer) return false;
         if (status) {
-          const syncStatus = getOrderSyncStatus(o);
+          var syncStatus = getOrderSyncStatus(o);
           if (status !== syncStatus) return false;
         }
         if (dateFrom) {
-          const orderDate = new Date(o.created_at).toISOString().split('T')[0];
+          var orderDate = new Date(o.created_at).toISOString().split('T')[0];
           if (orderDate < dateFrom) return false;
         }
         if (dateTo) {
-          const orderDate = new Date(o.created_at).toISOString().split('T')[0];
+          var orderDate = new Date(o.created_at).toISOString().split('T')[0];
           if (orderDate > dateTo) return false;
         }
         return true;
       });
       
       renderOrders();
-      document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active-filter'));
+      document.querySelectorAll('.stat-card').forEach(function(c) { c.classList.remove('active-filter'); });
     }
     
     function clearFilters() {
@@ -385,7 +391,7 @@ const dashboardHTML = `
     }
     
     function renderOrders() {
-      const tbody = document.getElementById('ordersTable');
+      var tbody = document.getElementById('ordersTable');
       document.getElementById('tableInfo').textContent = 'Showing ' + filteredOrders.length + ' of ' + orders.length + ' orders';
       
       if (!filteredOrders.length) { 
@@ -393,12 +399,12 @@ const dashboardHTML = `
         return; 
       }
       
-      tbody.innerHTML = filteredOrders.map(o => {
-        const items = o.parsed_data?.items || [];
-        const amt = items.reduce((s,i) => s + (i.quantityOrdered||0)*(i.unitPrice||0), 0);
-        const syncStatus = getOrderSyncStatus(o);
+      tbody.innerHTML = filteredOrders.map(function(o) {
+        var items = o.parsed_data && o.parsed_data.items ? o.parsed_data.items : [];
+        var amt = items.reduce(function(s,i) { return s + (i.quantityOrdered||0)*(i.unitPrice||0); }, 0);
+        var syncStatus = getOrderSyncStatus(o);
         
-        let statusBadge, zohoCell;
+        var statusBadge, zohoCell;
         if (syncStatus === 'in_zoho') {
           statusBadge = '<span class="status-badge status-in-zoho">✓ Sent to Zoho</span>';
           zohoCell = '<a href="https://books.zoho.com/app/677681121#/salesorders/' + o.zoho_so_id + '" target="_blank" class="zoho-link">View in Zoho ↗</a>';
@@ -427,10 +433,60 @@ const dashboardHTML = `
       }).join('');
     }
     
+    // EXPORT TO CSV/EXCEL FUNCTION
+    function exportToCSV() {
+      // Filter to only processed orders (sent to Zoho)
+      var exportOrders = orders.filter(function(o) { 
+        return o.status === 'processed'; 
+      });
+      
+      if (exportOrders.length === 0) {
+        toast('No processed orders to export', 'error');
+        return;
+      }
+      
+      // Build CSV content
+      var headers = ['PO Number', 'Customer', 'Zoho SO ID', 'Status', 'Items', 'Amount', 'EDI Received', 'Processed At'];
+      var rows = [headers.join(',')];
+      
+      exportOrders.forEach(function(o) {
+        var items = o.parsed_data && o.parsed_data.items ? o.parsed_data.items : [];
+        var amt = items.reduce(function(s,i) { return s + (i.quantityOrdered||0)*(i.unitPrice||0); }, 0);
+        var syncStatus = o.zoho_so_id ? 'Sent to Zoho' : 'Sent (Unlinked)';
+        
+        var row = [
+          '"' + (o.edi_order_number || '') + '"',
+          '"' + (o.edi_customer_name || '') + '"',
+          '"' + (o.zoho_so_id || '') + '"',
+          '"' + syncStatus + '"',
+          items.length,
+          '"$' + amt.toFixed(2) + '"',
+          '"' + new Date(o.created_at).toLocaleString() + '"',
+          '"' + (o.processed_at ? new Date(o.processed_at).toLocaleString() : '') + '"'
+        ];
+        rows.push(row.join(','));
+      });
+      
+      var csv = rows.join('\\n');
+      
+      // Download the file
+      var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      var link = document.createElement('a');
+      var url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'zoho-orders-export-' + new Date().toISOString().split('T')[0] + '.csv');
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast('Exported ' + exportOrders.length + ' orders to CSV', 'success');
+    }
+    
     async function loadStats() {
       try {
-        const res = await fetch('/status');
-        const d = (await res.json()).last24Hours;
+        var res = await fetch('/status');
+        var d = (await res.json()).last24Hours;
         document.getElementById('statTotal').textContent = d.total||0;
         document.getElementById('statProcessed').textContent = d.processed||0;
         document.getElementById('statPending').textContent = d.pending||0;
@@ -440,11 +496,11 @@ const dashboardHTML = `
     }
     
     function toggleSelect(id) { selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id); }
-    function toggleAll() { const c = document.getElementById('selectAll').checked; filteredOrders.forEach(o => c ? selectedIds.add(o.id) : selectedIds.delete(o.id)); renderOrders(); }
+    function toggleAll() { var c = document.getElementById('selectAll').checked; filteredOrders.forEach(function(o) { c ? selectedIds.add(o.id) : selectedIds.delete(o.id); }); renderOrders(); }
     
     async function viewOrder(id) {
       try {
-        const res = await fetch('/orders/' + id);
+        var res = await fetch('/orders/' + id);
         currentOrder = await res.json();
         renderOrderModal();
         document.getElementById('orderModal').classList.add('active');
@@ -452,15 +508,15 @@ const dashboardHTML = `
     }
     
     function renderOrderModal() {
-      const o = currentOrder;
-      const p = o.parsed_data || {};
-      const items = p.items || [];
-      const totalQty = items.reduce((s,i) => s + (i.quantityOrdered||0), 0);
-      const totalAmt = items.reduce((s,i) => s + (i.quantityOrdered||0)*(i.unitPrice||0), 0);
-      const ship = p.parties?.shipTo || {};
-      const syncStatus = getOrderSyncStatus(o);
+      var o = currentOrder;
+      var p = o.parsed_data || {};
+      var items = p.items || [];
+      var totalQty = items.reduce(function(s,i) { return s + (i.quantityOrdered||0); }, 0);
+      var totalAmt = items.reduce(function(s,i) { return s + (i.quantityOrdered||0)*(i.unitPrice||0); }, 0);
+      var ship = p.parties && p.parties.shipTo ? p.parties.shipTo : {};
+      var syncStatus = getOrderSyncStatus(o);
       
-      let zohoSection = '';
+      var zohoSection = '';
       if (syncStatus === 'in_zoho') {
         zohoSection = '<div class="zoho-link-box">' +
           '<div class="icon">✓</div>' +
@@ -475,39 +531,50 @@ const dashboardHTML = `
         '</div>';
       }
       
-      let statusText, statusClass;
+      var statusText, statusClass;
       if (syncStatus === 'in_zoho') { statusText = '✓ Sent to Zoho'; statusClass = 'status-in-zoho'; }
       else if (syncStatus === 'not_synced') { statusText = '⚠️ Sent (Unlinked)'; statusClass = 'status-not-synced'; }
       else if (syncStatus === 'failed') { statusText = '❌ Send Failed'; statusClass = 'status-failed'; }
       else { statusText = '⏳ Ready to Send'; statusClass = 'status-pending'; }
       
+      var poNumber = (p.header && p.header.poNumber) ? p.header.poNumber : (o.edi_order_number || 'N/A');
+      var orderDate = (p.dates && p.dates.orderDate) ? p.dates.orderDate : 'N/A';
+      var shipNotBefore = (p.dates && p.dates.shipNotBefore) ? p.dates.shipNotBefore : '';
+      var shipNotAfter = (p.dates && p.dates.shipNotAfter) ? p.dates.shipNotAfter : '';
+      var cancelDate = (p.dates && p.dates.cancelDate) ? p.dates.cancelDate : '-';
+      var paymentTerms = (p.header && p.header.paymentTerms) ? p.header.paymentTerms : 'N/A';
+      var shipToInfo = [ship.name, ship.city, ship.state].filter(Boolean).join(', ') || 'N/A';
+      
       document.getElementById('modalBody').innerHTML = zohoSection +
         '<div class="order-header">' +
-          '<div class="order-field"><div class="order-field-label">PO Number</div><div class="order-field-value">' + (p.header?.poNumber||o.edi_order_number||'N/A') + '</div></div>' +
+          '<div class="order-field"><div class="order-field-label">PO Number</div><div class="order-field-value">' + poNumber + '</div></div>' +
           '<div class="order-field"><div class="order-field-label">Customer</div><div class="order-field-value">' + (o.edi_customer_name||'Unknown') + '</div></div>' +
-          '<div class="order-field"><div class="order-field-label">Order Date</div><div class="order-field-value">' + (p.dates?.orderDate||'N/A') + '</div></div>' +
+          '<div class="order-field"><div class="order-field-label">Order Date</div><div class="order-field-value">' + orderDate + '</div></div>' +
           '<div class="order-field"><div class="order-field-label">Status</div><div class="order-field-value"><span class="status-badge ' + statusClass + '">' + statusText + '</span></div></div>' +
         '</div>' +
         '<div class="order-header">' +
-          '<div class="order-field"><div class="order-field-label">Ship To</div><div class="order-field-value" style="font-size:0.85rem">' + ([ship.name,ship.city,ship.state].filter(Boolean).join(', ')||'N/A') + '</div></div>' +
-          '<div class="order-field"><div class="order-field-label">Ship Window</div><div class="order-field-value">' + (p.dates?.shipNotBefore||'') + ' to ' + (p.dates?.shipNotAfter||'') + '</div></div>' +
-          '<div class="order-field"><div class="order-field-label">Cancel Date</div><div class="order-field-value">' + (p.dates?.cancelDate||'-') + '</div></div>' +
-          '<div class="order-field"><div class="order-field-label">Terms</div><div class="order-field-value">' + (p.header?.paymentTerms||'N/A') + '</div></div>' +
+          '<div class="order-field"><div class="order-field-label">Ship To</div><div class="order-field-value" style="font-size:0.85rem">' + shipToInfo + '</div></div>' +
+          '<div class="order-field"><div class="order-field-label">Ship Window</div><div class="order-field-value">' + shipNotBefore + ' to ' + shipNotAfter + '</div></div>' +
+          '<div class="order-field"><div class="order-field-label">Cancel Date</div><div class="order-field-value">' + cancelDate + '</div></div>' +
+          '<div class="order-field"><div class="order-field-label">Terms</div><div class="order-field-value">' + paymentTerms + '</div></div>' +
         '</div>' +
         (o.error_message ? '<div class="error-box"><strong>Error:</strong> ' + o.error_message + '</div>' : '') +
         '<h3 style="margin:1rem 0;color:#1e3a5f">Line Items (' + items.length + ')</h3>' +
         '<div class="line-items-container">' +
           '<table class="line-items-table">' +
             '<thead><tr><th>Style</th><th>Description</th><th>Color</th><th>Size</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead>' +
-            '<tbody>' + (items.length ? items.map(function(i) { return '<tr>' +
-              '<td>' + (i.productIds?.vendorItemNumber||i.productIds?.buyerItemNumber||'') + '</td>' +
-              '<td>' + (i.description||'') + '</td>' +
-              '<td>' + (i.color||'') + '</td>' +
-              '<td>' + (i.size||'') + '</td>' +
-              '<td>' + (i.quantityOrdered||0) + '</td>' +
-              '<td>$' + (i.unitPrice||0).toFixed(2) + '</td>' +
-              '<td>$' + ((i.quantityOrdered||0)*(i.unitPrice||0)).toFixed(2) + '</td>' +
-            '</tr>'; }).join('') : '<tr><td colspan="7" style="text-align:center;color:#86868b;padding:2rem;">No line items parsed</td></tr>') + '</tbody>' +
+            '<tbody>' + (items.length ? items.map(function(i) { 
+              var style = (i.productIds && (i.productIds.vendorItemNumber || i.productIds.buyerItemNumber)) || '';
+              return '<tr>' +
+                '<td>' + style + '</td>' +
+                '<td>' + (i.description||'') + '</td>' +
+                '<td>' + (i.color||'') + '</td>' +
+                '<td>' + (i.size||'') + '</td>' +
+                '<td>' + (i.quantityOrdered||0) + '</td>' +
+                '<td>$' + (i.unitPrice||0).toFixed(2) + '</td>' +
+                '<td>$' + ((i.quantityOrdered||0)*(i.unitPrice||0)).toFixed(2) + '</td>' +
+              '</tr>'; 
+            }).join('') : '<tr><td colspan="7" style="text-align:center;color:#86868b;padding:2rem;">No line items parsed</td></tr>') + '</tbody>' +
           '</table>' +
         '</div>' +
         '<div class="summary-row">' +
@@ -516,7 +583,7 @@ const dashboardHTML = `
           '<div class="summary-item"><div class="summary-value">$' + totalAmt.toLocaleString('en-US',{minimumFractionDigits:2}) + '</div><div class="summary-label">Total Value</div></div>' +
         '</div>';
       
-      const btn = document.getElementById('processBtn');
+      var btn = document.getElementById('processBtn');
       if (syncStatus === 'in_zoho') {
         btn.disabled = true;
         btn.textContent = 'Already Sent to Zoho';
@@ -538,36 +605,36 @@ const dashboardHTML = `
         document.getElementById('processBtn').textContent = 'Sending...';
         await processOrderDirect(currentOrder.id);
       } catch(e) { toast('Error: ' + e.message, 'error'); }
-      finally { const btn = document.getElementById('processBtn'); if (btn) { btn.disabled = false; btn.textContent = 'Send to Zoho'; } }
+      finally { var btn = document.getElementById('processBtn'); if (btn) { btn.disabled = false; btn.textContent = 'Send to Zoho'; } }
     }
     
     async function processOrderDirect(orderId) {
-      const res = await fetch('/process-selected', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ orderIds: [orderId] }) });
-      const data = await res.json();
+      var res = await fetch('/process-selected', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ orderIds: [orderId] }) });
+      var data = await res.json();
       if (data.processed > 0) { toast('Order sent to Zoho successfully!', 'success'); closeModal(); loadOrders(); }
       else { toast('Error: ' + (data.error || 'Processing failed'), 'error'); }
     }
     
     async function fetchSFTP() {
       toast('Fetching from SFTP...', 'info');
-      try { const res = await fetch('/fetch-sftp', { method: 'POST' }); const data = await res.json(); toast('Fetched ' + (data.filesProcessed||0) + ' files', 'success'); loadOrders(); }
+      try { var res = await fetch('/fetch-sftp', { method: 'POST' }); var data = await res.json(); toast('Fetched ' + (data.filesProcessed||0) + ' files', 'success'); loadOrders(); }
       catch(e) { toast('SFTP fetch failed', 'error'); }
     }
     
     async function processOrders() {
-      const limit = document.getElementById('limitSelect').value;
-      try { const res = await fetch('/process-limit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ limit: parseInt(limit) }) }); const data = await res.json(); toast('Sent: ' + data.processed + ', Failed: ' + data.failed, data.failed ? 'error' : 'success'); loadOrders(); }
+      var limit = document.getElementById('limitSelect').value;
+      try { var res = await fetch('/process-limit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ limit: parseInt(limit) }) }); var data = await res.json(); toast('Sent: ' + data.processed + ', Failed: ' + data.failed, data.failed ? 'error' : 'success'); loadOrders(); }
       catch(e) { toast('Processing failed', 'error'); }
     }
     
     async function processSelected() {
       if (!selectedIds.size) { toast('No orders selected', 'error'); return; }
-      try { const res = await fetch('/process-selected', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ orderIds: Array.from(selectedIds) }) }); const data = await res.json(); toast('Sent: ' + data.processed, 'success'); selectedIds.clear(); loadOrders(); }
+      try { var res = await fetch('/process-selected', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ orderIds: Array.from(selectedIds) }) }); var data = await res.json(); toast('Sent: ' + data.processed, 'success'); selectedIds.clear(); loadOrders(); }
       catch(e) { toast('Failed', 'error'); }
     }
     
     async function retryFailed() {
-      try { const res = await fetch('/retry-failed', { method: 'POST' }); const data = await res.json(); toast('Reset ' + data.count + ' failed orders', 'success'); loadOrders(); }
+      try { var res = await fetch('/retry-failed', { method: 'POST' }); var data = await res.json(); toast('Reset ' + data.count + ' failed orders', 'success'); loadOrders(); }
       catch(e) { toast('Failed', 'error'); }
     }
     
@@ -578,13 +645,13 @@ const dashboardHTML = `
     }
     
     async function loadMappings() {
-      try { const res = await fetch('/customer-mappings'); const mappings = await res.json(); document.getElementById('mappingsList').innerHTML = mappings.length ? mappings.map(function(m) { return '<div class="mapping-item"><span style="flex:1">' + m.edi_customer_name + '</span><span class="mapping-arrow">→</span><span style="flex:1">' + m.zoho_account_name + '</span><button class="btn btn-danger" style="padding:0.25rem 0.75rem;font-size:0.75rem" onclick="deleteMapping(' + m.id + ')">Delete</button></div>'; }).join('') : '<p class="empty-state">No mappings yet.</p>'; }
+      try { var res = await fetch('/customer-mappings'); var mappings = await res.json(); document.getElementById('mappingsList').innerHTML = mappings.length ? mappings.map(function(m) { return '<div class="mapping-item"><span style="flex:1">' + m.edi_customer_name + '</span><span class="mapping-arrow">→</span><span style="flex:1">' + m.zoho_account_name + '</span><button class="btn btn-danger" style="padding:0.25rem 0.75rem;font-size:0.75rem" onclick="deleteMapping(' + m.id + ')">Delete</button></div>'; }).join('') : '<p class="empty-state">No mappings yet.</p>'; }
       catch(e) {}
     }
     
     async function addMapping() {
-      const edi = document.getElementById('ediName').value.trim();
-      const zoho = document.getElementById('zohoName').value.trim();
+      var edi = document.getElementById('ediName').value.trim();
+      var zoho = document.getElementById('zohoName').value.trim();
       if (!edi || !zoho) { toast('Fill both fields', 'error'); return; }
       try { await fetch('/add-mapping', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ ediCustomerName: edi, zohoAccountName: zoho }) }); document.getElementById('ediName').value = ''; document.getElementById('zohoName').value = ''; toast('Mapping added', 'success'); loadMappings(); }
       catch(e) { toast('Failed', 'error'); }
@@ -593,12 +660,12 @@ const dashboardHTML = `
     async function deleteMapping(id) { try { await fetch('/customer-mappings/' + id, { method: 'DELETE' }); loadMappings(); } catch(e) {} }
     
     async function loadActivity() {
-      try { const res = await fetch('/processing-logs?limit=50'); const logs = await res.json(); document.getElementById('activityList').innerHTML = logs.length ? logs.map(function(l) { return '<div class="activity-item ' + l.status + '"><div class="activity-time">' + new Date(l.created_at).toLocaleString() + '</div><div class="activity-content"><div class="activity-title">' + (l.action||'Action') + '</div><div class="activity-details">' + (l.details||'') + '</div></div></div>'; }).join('') : '<p class="empty-state">No activity yet.</p>'; }
+      try { var res = await fetch('/processing-logs?limit=50'); var logs = await res.json(); document.getElementById('activityList').innerHTML = logs.length ? logs.map(function(l) { return '<div class="activity-item ' + l.status + '"><div class="activity-time">' + new Date(l.created_at).toLocaleString() + '</div><div class="activity-content"><div class="activity-title">' + (l.action||'Action') + '</div><div class="activity-details">' + (l.details||'') + '</div></div></div>'; }).join('') : '<p class="empty-state">No activity yet.</p>'; }
       catch(e) { document.getElementById('activityList').innerHTML = '<p class="empty-state">No activity yet.</p>'; }
     }
     
     async function loadReplacedDrafts() {
-      try { const res = await fetch('/replaced-drafts'); const drafts = await res.json(); document.getElementById('draftsList').innerHTML = drafts.length ? drafts.map(function(d) { return '<div class="mapping-item"><div style="flex:1"><strong>' + d.original_so_number + '</strong><div style="font-size:0.75rem;color:#86868b">Replaced by PO# ' + d.edi_po_number + ' on ' + new Date(d.replaced_at).toLocaleDateString() + '</div></div><button class="btn btn-secondary" style="padding:0.25rem 0.75rem;font-size:0.75rem">Details</button></div>'; }).join('') : '<p class="empty-state">No replaced drafts yet.</p>'; }
+      try { var res = await fetch('/replaced-drafts'); var drafts = await res.json(); document.getElementById('draftsList').innerHTML = drafts.length ? drafts.map(function(d) { return '<div class="mapping-item"><div style="flex:1"><strong>' + d.original_so_number + '</strong><div style="font-size:0.75rem;color:#86868b">Replaced by PO# ' + d.edi_po_number + ' on ' + new Date(d.replaced_at).toLocaleDateString() + '</div></div><button class="btn btn-secondary" style="padding:0.25rem 0.75rem;font-size:0.75rem">Details</button></div>'; }).join('') : '<p class="empty-state">No replaced drafts yet.</p>'; }
       catch(e) {}
     }
     
