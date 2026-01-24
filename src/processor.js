@@ -1,24 +1,13 @@
 const SFTPClient = require('./sftp');
 const ZohoClient = require('./zoho');
 const { parseSpringCSV } = require('./csv-parser');
-const { 
-  isFileProcessed, 
-  markFileProcessed, 
-  saveEDIOrder, 
-  updateOrderStatus,
-  getPendingOrders 
-} = require('./db');
+const { isFileProcessed, markFileProcessed, saveEDIOrder, updateOrderStatus, getPendingOrders, logProcessingActivity } = require('./db');
 const logger = require('./logger');
 
 async function processEDIOrders() {
   const sftp = new SFTPClient();
   const zoho = new ZohoClient();
-  const results = {
-    filesProcessed: 0,
-    ordersCreated: 0,
-    ordersFailed: 0,
-    errors: []
-  };
+  const results = { filesProcessed: 0, ordersCreated: 0, ordersFailed: 0, errors: [] };
 
   try {
     // Step 1: Connect to SFTP
@@ -31,7 +20,6 @@ async function processEDIOrders() {
     // Step 3: Process each new file
     for (const file of files) {
       try {
-        // Skip if already processed
         if (await isFileProcessed(file.name)) {
           logger.debug('Skipping already processed file', { filename: file.name });
           continue;
@@ -39,10 +27,8 @@ async function processEDIOrders() {
 
         logger.info('Processing file', { filename: file.name, size: file.size });
 
-        // Download file content
         const content = await sftp.downloadFile(file.name);
 
-        // Parse CSV content
         let parsedOrder;
         try {
           parsedOrder = parseSpringCSV(content, file.name);
@@ -52,7 +38,6 @@ async function processEDIOrders() {
           continue;
         }
 
-        // Save to database as pending
         const savedOrder = await saveEDIOrder({
           filename: file.name,
           ediOrderNumber: parsedOrder.header?.poNumber || file.name,
@@ -62,58 +47,23 @@ async function processEDIOrders() {
           ediCustomerName: parsedOrder.parties?.buyer?.name || parsedOrder.header?.retailerName || null
         });
 
-        // Mark file as processed (so we don't download again)
         await markFileProcessed(file.name, file.size, 1);
         results.filesProcessed++;
 
-        // Archive the file on SFTP (ignore errors)
         try {
           await sftp.archiveFile(file.name);
         } catch (e) {
           // Ignore archive errors
         }
-
       } catch (error) {
-        logger.error('Error processing file', { 
-          filename: file.name, 
-          error: error.message 
-        });
+        logger.error('Error processing file', { filename: file.name, error: error.message });
         results.errors.push({ file: file.name, error: error.message });
       }
     }
 
-    // Step 4: Process pending orders in database
-    const pendingOrders = await getPendingOrders();
-    logger.info(`Processing ${pendingOrders.length} pending orders`);
-
-    for (const order of pendingOrders) {
-      try {
-        const result = await processOrderToZoho(zoho, order);
-        
-        if (result.success) {
-          await updateOrderStatus(order.id, 'processed', {
-            soId: result.soId,
-            soNumber: result.soNumber
-          });
-          results.ordersCreated++;
-        } else {
-          await updateOrderStatus(order.id, 'failed', {
-            error: result.error
-          });
-          results.ordersFailed++;
-        }
-      } catch (error) {
-        logger.error('Error creating Zoho order', {
-          orderId: order.id,
-          error: error.message
-        });
-        await updateOrderStatus(order.id, 'failed', {
-          error: error.message
-        });
-        results.ordersFailed++;
-      }
-    }
-
+    // Step 4: Process pending orders (but NOT automatically - let user trigger this)
+    // Removed auto-processing of pending orders from SFTP fetch
+    
   } catch (error) {
     logger.error('Processing failed', { error: error.message });
     results.errors.push({ error: error.message });
@@ -121,39 +71,50 @@ async function processEDIOrders() {
     await sftp.disconnect();
   }
 
-  logger.info('Processing complete', results);
+  logger.info('SFTP fetch complete', results);
   return results;
 }
 
 async function processOrderToZoho(zoho, order) {
   const parsedData = order.parsed_data;
   const poNumber = parsedData.header?.poNumber || order.edi_order_number;
-
-  logger.info('Creating Zoho Books order', { poNumber });
+  
+  logger.info('Creating Zoho Books order', { orderId: order.id, poNumber });
 
   // Find customer in Zoho Books
   let customer = null;
   const buyerName = parsedData.parties?.buyer?.name || order.edi_customer_name;
-
+  
   if (buyerName) {
     customer = await zoho.findBooksCustomerByName(buyerName);
   }
 
   if (!customer) {
+    const errorMsg = `Customer not found: ${buyerName}. Please add a customer mapping.`;
     logger.warn('Customer not found in Zoho Books', { buyerName });
-    return {
-      success: false,
-      error: `Customer not found: ${buyerName}. Please create the customer in Zoho Books first.`
-    };
+    
+    // Log the failure
+    try {
+      await logProcessingActivity({
+        action: 'Create Sales Order',
+        status: 'error',
+        ediOrderId: order.id,
+        ediPoNumber: poNumber,
+        customerName: buyerName,
+        details: { error: errorMsg }
+      });
+    } catch (e) { /* ignore logging errors */ }
+    
+    return { success: false, error: errorMsg };
   }
 
-  // Prepare line items for Zoho Books
+  // Prepare line items
   const lineItems = (parsedData.items || []).map((item, idx) => {
     const sku = item.productIds?.vendorItemNumber || item.productIds?.buyerItemNumber || item.productIds?.sku || '';
     const description = item.description || '';
     const color = item.color || '';
     const size = item.size || '';
-    
+
     return {
       style: sku,
       description: `${sku} ${description} ${color} ${size}`.trim(),
@@ -164,12 +125,15 @@ async function processOrderToZoho(zoho, order) {
     };
   });
 
-  // Build order data for Zoho Books
+  // Build order data
   const orderData = {
     customerId: customer.contact_id,
     poNumber: poNumber,
     orderDate: parsedData.dates?.orderDate || new Date().toISOString().split('T')[0],
     shipDate: parsedData.dates?.shipNotBefore || '',
+    shipNotAfter: parsedData.dates?.shipNotAfter || '',
+    cancelDate: parsedData.dates?.cancelDate || '',
+    paymentTerms: parsedData.header?.paymentTerms || '',
     notes: `EDI Import from ${order.filename || 'unknown'} | Ship To: ${parsedData.parties?.shipTo?.name || ''} ${parsedData.parties?.shipTo?.city || ''}, ${parsedData.parties?.shipTo?.state || ''}`,
     items: lineItems
   };
@@ -177,22 +141,71 @@ async function processOrderToZoho(zoho, order) {
   try {
     const salesOrder = await zoho.createBooksSalesOrder(orderData);
     
+    // Log the full response for debugging
+    logger.info('Zoho Books API Response', { 
+      orderId: order.id,
+      poNumber: poNumber,
+      response: salesOrder 
+    });
+
+    // Extract SO ID and Number from the response
+    // Zoho Books returns: { salesorder_id: "...", salesorder_number: "...", ... }
+    const soId = salesOrder.salesorder_id || salesOrder.salesorder?.salesorder_id || null;
+    const soNumber = salesOrder.salesorder_number || salesOrder.salesorder?.salesorder_number || null;
+
+    logger.info('Zoho Sales Order created', { 
+      orderId: order.id,
+      poNumber: poNumber,
+      soId: soId, 
+      soNumber: soNumber 
+    });
+
+    // Log success
+    try {
+      await logProcessingActivity({
+        action: 'Create Sales Order',
+        status: 'success',
+        ediOrderId: order.id,
+        ediPoNumber: poNumber,
+        zohoSoId: soId,
+        zohoSoNumber: soNumber,
+        customerName: buyerName,
+        details: { 
+          lineItems: lineItems.length,
+          totalQty: lineItems.reduce((s, i) => s + (i.quantity || 0), 0),
+          totalAmount: lineItems.reduce((s, i) => s + ((i.quantity || 0) * (i.unitPrice || 0)), 0)
+        }
+      });
+    } catch (e) { /* ignore logging errors */ }
+
     return {
       success: true,
-      soId: salesOrder.salesorder_id,
-      soNumber: salesOrder.salesorder_number,
+      soId: soId,
+      soNumber: soNumber,
       itemsCreated: lineItems.length,
       itemsFailed: 0
     };
   } catch (error) {
+    const errorMsg = error.response?.data?.message || error.message;
     logger.error('Failed to create Zoho Books order', { 
+      orderId: order.id,
       poNumber, 
       error: error.response?.data || error.message 
     });
-    return {
-      success: false,
-      error: error.response?.data?.message || error.message
-    };
+
+    // Log failure
+    try {
+      await logProcessingActivity({
+        action: 'Create Sales Order',
+        status: 'error',
+        ediOrderId: order.id,
+        ediPoNumber: poNumber,
+        customerName: buyerName,
+        details: { error: errorMsg }
+      });
+    } catch (e) { /* ignore logging errors */ }
+
+    return { success: false, error: errorMsg };
   }
 }
 
