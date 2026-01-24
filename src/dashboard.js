@@ -730,6 +730,154 @@ const dashboardHTML = `
     function showComparison(ediOrder, zohoDraft) {
       currentComparison = { edi: ediOrder, draft: zohoDraft };
       
+      // Show loading state
+      document.getElementById('compareModalBody').innerHTML = '<div style="text-align:center;padding:2rem;"><div class="spinner"></div><p>Loading detailed comparison...</p></div>';
+      document.getElementById('compareModal').classList.add('active');
+      
+      // Fetch detailed comparison from server
+      fetch('/compare-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ediOrderId: ediOrder.id, zohoSoId: zohoDraft.id })
+      })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.success) {
+          renderDetailedComparison(data.comparison);
+        } else {
+          // Fallback to basic comparison
+          renderBasicComparison(ediOrder, zohoDraft);
+        }
+      })
+      .catch(function(err) {
+        console.error('Comparison error:', err);
+        renderBasicComparison(ediOrder, zohoDraft);
+      });
+    }
+    
+    function renderDetailedComparison(comp) {
+      var html = '<div style="max-height:70vh;overflow-y:auto;">';
+      
+      // Summary banner
+      var bannerColor = comp.summary.flaggedForReview > 0 ? '#fff3cd' : '#d4edda';
+      var bannerText = comp.summary.flaggedForReview > 0 
+        ? '⚠️ ' + comp.summary.flaggedForReview + ' changes need review (EDI qty less than Zoho)'
+        : '✓ ' + comp.summary.totalChanges + ' changes to apply';
+      
+      html += '<div style="background:' + bannerColor + ';padding:0.75rem 1rem;border-radius:8px;margin-bottom:1rem;font-size:0.9rem;">' + bannerText + '</div>';
+      
+      // Side by side headers
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">';
+      
+      // EDI Order header
+      html += '<div style="background:#e8f5e9;border-radius:8px;padding:1rem;">' +
+        '<h4 style="margin:0 0 0.75rem;color:#2e7d32;">📥 EDI Order (Confirmed)</h4>' +
+        '<div style="font-size:0.85rem;"><strong>PO#:</strong> ' + (comp.edi.poNumber || 'N/A') + '</div>' +
+        '<div style="font-size:0.85rem;"><strong>Customer:</strong> ' + (comp.edi.customer || 'N/A') + '</div>' +
+        '<div style="font-size:0.85rem;"><strong>Ship Date:</strong> ' + (comp.edi.shipDate || 'N/A') + '</div>' +
+        '<div style="font-size:0.85rem;"><strong>Cancel Date:</strong> ' + (comp.edi.cancelDate || 'N/A') + '</div>' +
+        '<div style="font-size:0.85rem;margin-top:0.5rem;"><strong>Items:</strong> ' + comp.edi.items.length + ' lines, ' + comp.edi.totalQty.toLocaleString() + ' units</div>' +
+        '<div style="font-size:1rem;font-weight:600;margin-top:0.5rem;">Total: $' + comp.edi.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2}) + '</div>' +
+      '</div>';
+      
+      // Zoho Order header
+      html += '<div style="background:#e3f2fd;border-radius:8px;padding:1rem;">' +
+        '<h4 style="margin:0 0 0.75rem;color:#1565c0;">📝 Zoho Draft #' + (comp.zoho.number || '') + '</h4>' +
+        '<div style="font-size:0.85rem;"><strong>Reference:</strong> ' + (comp.zoho.reference || '(blank)') + '</div>' +
+        '<div style="font-size:0.85rem;"><strong>Customer:</strong> ' + (comp.zoho.customer || 'N/A') + '</div>' +
+        '<div style="font-size:0.85rem;"><strong>Ship Date:</strong> ' + (comp.zoho.shipDate || 'N/A') + '</div>' +
+        '<div style="font-size:0.85rem;"><strong>Status:</strong> <span style="color:#1565c0;">' + (comp.zoho.status || 'draft') + '</span></div>' +
+        '<div style="font-size:0.85rem;margin-top:0.5rem;"><strong>Items:</strong> ' + comp.zoho.items.length + ' lines, ' + comp.zoho.totalQty.toLocaleString() + ' units</div>' +
+        '<div style="font-size:1rem;font-weight:600;margin-top:0.5rem;">Total: $' + comp.zoho.totalAmount.toLocaleString('en-US',{minimumFractionDigits:2}) + '</div>' +
+      '</div>';
+      
+      html += '</div>';
+      
+      // Changes section
+      if (comp.changes.length > 0) {
+        html += '<h4 style="margin:1rem 0 0.75rem;color:#1e3a5f;">Changes to Apply:</h4>';
+        html += '<div style="background:#f8f9fa;border-radius:8px;padding:0.75rem;">';
+        
+        comp.changes.forEach(function(change) {
+          var icon, color, bg;
+          if (change.flagForReview) {
+            icon = '⚠️'; color = '#856404'; bg = '#fff3cd';
+          } else if (change.action === 'add' || change.action === 'increase') {
+            icon = '➕'; color = '#155724'; bg = '#d4edda';
+          } else if (change.action === 'remove' || change.action === 'decrease') {
+            icon = '➖'; color = '#721c24'; bg = '#f8d7da';
+          } else {
+            icon = '✏️'; color = '#004085'; bg = '#cce5ff';
+          }
+          
+          var label = change.style 
+            ? change.field + ': ' + change.style 
+            : change.field;
+          
+          html += '<div style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem;background:' + bg + ';border-radius:6px;margin-bottom:0.5rem;">' +
+            '<span style="font-size:1.1rem;">' + icon + '</span>' +
+            '<div style="flex:1;">' +
+              '<div style="font-weight:500;color:' + color + ';">' + label + '</div>' +
+              '<div style="font-size:0.8rem;color:#666;">' + change.oldValue + ' → ' + change.newValue + 
+                (change.quantityDiff ? ' (' + (change.quantityDiff > 0 ? '+' : '') + change.quantityDiff + ' units)' : '') +
+              '</div>' +
+              (change.note ? '<div style="font-size:0.75rem;color:#856404;margin-top:0.25rem;">' + change.note + '</div>' : '') +
+            '</div>' +
+          '</div>';
+        });
+        
+        html += '</div>';
+      }
+      
+      // Line items comparison table
+      html += '<h4 style="margin:1.5rem 0 0.75rem;color:#1e3a5f;">Line Item Comparison:</h4>';
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">';
+      
+      // EDI Items
+      html += '<div style="max-height:250px;overflow-y:auto;"><table style="width:100%;font-size:0.75rem;border-collapse:collapse;">' +
+        '<thead style="background:#e8f5e9;position:sticky;top:0;"><tr><th style="padding:0.4rem;text-align:left;">Style</th><th style="padding:0.4rem;text-align:left;">Color</th><th style="padding:0.4rem;text-align:right;">Qty</th><th style="padding:0.4rem;text-align:right;">Price</th></tr></thead><tbody>';
+      comp.edi.items.forEach(function(item) {
+        html += '<tr><td style="padding:0.3rem;border-bottom:1px solid #eee;">' + item.style + '</td>' +
+          '<td style="padding:0.3rem;border-bottom:1px solid #eee;">' + (item.color || '—') + '</td>' +
+          '<td style="padding:0.3rem;text-align:right;border-bottom:1px solid #eee;">' + item.quantity + '</td>' +
+          '<td style="padding:0.3rem;text-align:right;border-bottom:1px solid #eee;">$' + item.price.toFixed(2) + '</td></tr>';
+      });
+      html += '</tbody></table></div>';
+      
+      // Zoho Items
+      html += '<div style="max-height:250px;overflow-y:auto;"><table style="width:100%;font-size:0.75rem;border-collapse:collapse;">' +
+        '<thead style="background:#e3f2fd;position:sticky;top:0;"><tr><th style="padding:0.4rem;text-align:left;">Style/Item</th><th style="padding:0.4rem;text-align:left;">Desc</th><th style="padding:0.4rem;text-align:right;">Qty</th><th style="padding:0.4rem;text-align:right;">Rate</th></tr></thead><tbody>';
+      if (comp.zoho.items.length > 0) {
+        comp.zoho.items.forEach(function(item) {
+          html += '<tr><td style="padding:0.3rem;border-bottom:1px solid #eee;">' + item.style + '</td>' +
+            '<td style="padding:0.3rem;border-bottom:1px solid #eee;">' + (item.description || '—').substring(0,20) + '</td>' +
+            '<td style="padding:0.3rem;text-align:right;border-bottom:1px solid #eee;">' + item.quantity + '</td>' +
+            '<td style="padding:0.3rem;text-align:right;border-bottom:1px solid #eee;">$' + item.price.toFixed(2) + '</td></tr>';
+        });
+      } else {
+        html += '<tr><td colspan="4" style="padding:1rem;text-align:center;color:#86868b;">No line items in Zoho draft</td></tr>';
+      }
+      html += '</tbody></table></div>';
+      
+      html += '</div>'; // end grid
+      html += '</div>'; // end scrollable
+      
+      // Store comparison data for update action
+      currentComparison.detailed = comp;
+      
+      document.getElementById('compareModalBody').innerHTML = html;
+      
+      // Update footer buttons
+      var footerHtml = '<button class="btn btn-secondary" onclick="closeCompareModal()">Cancel</button>';
+      if (comp.summary.flaggedForReview > 0) {
+        footerHtml += '<button class="btn" style="background:#ff9500;color:white;" onclick="updateZohoOrder(true)">⚠️ Update Zoho (Review Flagged)</button>';
+      } else {
+        footerHtml += '<button class="btn btn-success" onclick="updateZohoOrder(false)">✓ Update Zoho Draft</button>';
+      }
+      document.querySelector('#compareModal .modal-footer').innerHTML = footerHtml;
+    }
+    
+    function renderBasicComparison(ediOrder, zohoDraft) {
       var items = ediOrder.parsed_data && ediOrder.parsed_data.items ? ediOrder.parsed_data.items : [];
       var ediTotal = items.reduce(function(s,i) { return s + (i.quantityOrdered||0)*(i.unitPrice||0); }, 0);
       
@@ -747,12 +895,52 @@ const dashboardHTML = `
             '<div class="order-field"><div class="order-field-label">SO Number</div><div class="order-field-value">' + zohoDraft.number + '</div></div>' +
             '<div class="order-field"><div class="order-field-label">Customer</div><div class="order-field-value">' + zohoDraft.customer + '</div></div>' +
             '<div class="order-field"><div class="order-field-label">Reference</div><div class="order-field-value">' + (zohoDraft.reference||'—') + '</div></div>' +
-            '<div class="order-field"><div class="order-field-label">Total</div><div class="order-field-value' + (Math.abs(ediTotal - zohoDraft.total) > 1 ? ' diff-highlight' : '') + '">$' + (zohoDraft.total||0).toLocaleString('en-US',{minimumFractionDigits:2}) + '</div></div>' +
+            '<div class="order-field"><div class="order-field-label">Total</div><div class="order-field-value">$' + (zohoDraft.total||0).toLocaleString('en-US',{minimumFractionDigits:2}) + '</div></div>' +
           '</div>' +
-        '</div>' +
-        (Math.abs(ediTotal - zohoDraft.total) > 1 ? '<div class="warning-box" style="margin-top:1rem;">⚠️ Total amounts differ by $' + Math.abs(ediTotal - zohoDraft.total).toFixed(2) + '</div>' : '');
+        '</div>';
+    }
+    
+    async function updateZohoOrder(hasFlagged) {
+      if (!currentComparison || !currentComparison.detailed) {
+        toast('No comparison data available', 'error');
+        return;
+      }
       
-      document.getElementById('compareModal').classList.add('active');
+      var comp = currentComparison.detailed;
+      
+      if (hasFlagged) {
+        if (!confirm('Some changes are flagged for review (EDI quantities less than Zoho). Are you sure you want to proceed?')) {
+          return;
+        }
+      }
+      
+      toast('Updating Zoho order...', 'info');
+      
+      try {
+        var res = await fetch('/update-zoho-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ediOrderId: comp.edi.id,
+            zohoSoId: comp.zoho.id,
+            changes: comp.changes,
+            applyAll: true
+          })
+        });
+        
+        var data = await res.json();
+        
+        if (data.success) {
+          toast('Zoho order ' + data.zohoSoNumber + ' updated successfully! ' + data.appliedChanges + ' changes applied.', 'success');
+          closeCompareModal();
+          loadOrders();
+          loadZohoDrafts();
+        } else {
+          toast('Update failed: ' + (data.error || 'Unknown error'), 'error');
+        }
+      } catch(e) {
+        toast('Update failed: ' + e.message, 'error');
+      }
     }
     
     function closeCompareModal() {
@@ -762,10 +950,8 @@ const dashboardHTML = `
     
     async function replaceDraft() {
       if (!currentComparison) return;
-      toast('Replacing draft with EDI data...', 'info');
-      // TODO: Implement draft replacement API
-      toast('Draft replacement coming soon!', 'warning');
-      closeCompareModal();
+      // Use the new updateZohoOrder function
+      updateZohoOrder(false);
     }
     
     function createNewOrder() {
@@ -777,6 +963,62 @@ const dashboardHTML = `
     
     function autoMatchDrafts() {
       toast('Auto-matching coming soon!', 'info');
+    }
+    
+    // Activity Log - Show order changes
+    async function loadActivityLog() {
+      var container = document.getElementById('activityList');
+      container.innerHTML = '<div style="text-align:center;padding:2rem;"><div class="spinner"></div><p>Loading activity...</p></div>';
+      
+      try {
+        var res = await fetch('/order-changes');
+        var data = await res.json();
+        
+        if (data.success && data.changes.length > 0) {
+          var html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
+            '<thead style="background:#f5f5f7;"><tr>' +
+            '<th style="padding:0.75rem;text-align:left;">Date/Time</th>' +
+            '<th style="padding:0.75rem;text-align:left;">Zoho SO#</th>' +
+            '<th style="padding:0.75rem;text-align:left;">Change Type</th>' +
+            '<th style="padding:0.75rem;text-align:left;">Field</th>' +
+            '<th style="padding:0.75rem;text-align:left;">Style</th>' +
+            '<th style="padding:0.75rem;text-align:left;">Old Value</th>' +
+            '<th style="padding:0.75rem;text-align:left;">New Value</th>' +
+            '<th style="padding:0.75rem;text-align:center;">Review</th>' +
+            '</tr></thead><tbody>';
+          
+          data.changes.forEach(function(c) {
+            var typeColor = c.change_type === 'increase' || c.change_type === 'add' ? '#34c759' 
+              : c.change_type === 'decrease' || c.change_type === 'remove' ? '#ff3b30' 
+              : '#0088c2';
+            var reviewBadge = c.flagged_for_review 
+              ? '<span style="background:#fff3cd;color:#856404;padding:0.2rem 0.5rem;border-radius:4px;font-size:0.75rem;">⚠️ Review</span>' 
+              : '';
+            
+            html += '<tr style="border-bottom:1px solid #eee;">' +
+              '<td style="padding:0.5rem 0.75rem;">' + new Date(c.created_at).toLocaleString() + '</td>' +
+              '<td style="padding:0.5rem 0.75rem;"><a href="https://books.zoho.com/app/677681121#/salesorders/' + c.zoho_so_id + '" target="_blank">' + (c.zoho_so_number || c.zoho_so_id) + '</a></td>' +
+              '<td style="padding:0.5rem 0.75rem;color:' + typeColor + ';font-weight:500;">' + (c.change_type || '') + '</td>' +
+              '<td style="padding:0.5rem 0.75rem;">' + (c.field_name || '') + '</td>' +
+              '<td style="padding:0.5rem 0.75rem;">' + (c.style || '—') + '</td>' +
+              '<td style="padding:0.5rem 0.75rem;">' + (c.old_value || '—') + '</td>' +
+              '<td style="padding:0.5rem 0.75rem;">' + (c.new_value || '—') + '</td>' +
+              '<td style="padding:0.5rem 0.75rem;text-align:center;">' + reviewBadge + '</td>' +
+            '</tr>';
+            
+            if (c.notes) {
+              html += '<tr style="background:#f8f9fa;"><td colspan="8" style="padding:0.35rem 0.75rem 0.35rem 2rem;font-size:0.8rem;color:#6e6e73;">📝 ' + c.notes + '</td></tr>';
+            }
+          });
+          
+          html += '</tbody></table></div>';
+          container.innerHTML = html;
+        } else {
+          container.innerHTML = '<div class="empty-state">No activity recorded yet. Changes will appear here when you update Zoho orders.</div>';
+        }
+      } catch(e) {
+        container.innerHTML = '<div class="empty-state" style="color:#ff3b30;">Error loading activity: ' + e.message + '</div>';
+      }
     }
     
     function toggleSelect(id) { selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id); }
@@ -943,8 +1185,59 @@ const dashboardHTML = `
     async function deleteMapping(id) { try { await fetch('/customer-mappings/' + id, { method: 'DELETE' }); loadMappings(); } catch(e) {} }
     
     async function loadActivity() {
-      try { var res = await fetch('/processing-logs'); var logs = await res.json(); document.getElementById('activityList').innerHTML = logs.length ? logs.map(function(l) { return '<div class="mapping-item"><span style="flex:2">' + (l.action||'Action') + '</span><span style="flex:1">' + (l.customer_name||'') + '</span><span style="flex:1;color:#86868b">' + new Date(l.created_at).toLocaleString() + '</span></div>'; }).join('') : '<div class="empty-state">No activity yet.</div>'; }
-      catch(e) { document.getElementById('activityList').innerHTML = '<div class="empty-state">No activity yet.</div>'; }
+      // Load both processing logs and order changes
+      var container = document.getElementById('activityList');
+      
+      try {
+        // Try new order-changes endpoint first
+        var res = await fetch('/order-changes');
+        var data = await res.json();
+        
+        if (data.success && data.changes && data.changes.length > 0) {
+          var html = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
+            '<thead style="background:#f5f5f7;position:sticky;top:0;"><tr>' +
+            '<th style="padding:0.75rem;text-align:left;">Date/Time</th>' +
+            '<th style="padding:0.75rem;text-align:left;">Zoho SO#</th>' +
+            '<th style="padding:0.75rem;text-align:left;">Change</th>' +
+            '<th style="padding:0.75rem;text-align:left;">Field/Style</th>' +
+            '<th style="padding:0.75rem;text-align:left;">Old → New</th>' +
+            '<th style="padding:0.75rem;text-align:center;">Flag</th>' +
+            '</tr></thead><tbody>';
+          
+          data.changes.forEach(function(c) {
+            var typeIcon = c.change_type === 'increase' || c.change_type === 'add' ? '➕' 
+              : c.change_type === 'decrease' || c.change_type === 'remove' ? '➖' 
+              : '✏️';
+            var typeColor = c.change_type === 'increase' || c.change_type === 'add' ? '#34c759' 
+              : c.change_type === 'decrease' || c.change_type === 'remove' ? '#ff3b30' 
+              : '#0088c2';
+            var flagBadge = c.flagged_for_review 
+              ? '<span style="background:#fff3cd;color:#856404;padding:0.2rem 0.5rem;border-radius:4px;font-size:0.7rem;">⚠️</span>' 
+              : '';
+            
+            html += '<tr style="border-bottom:1px solid #eee;">' +
+              '<td style="padding:0.5rem 0.75rem;font-size:0.8rem;">' + new Date(c.created_at).toLocaleString() + '</td>' +
+              '<td style="padding:0.5rem 0.75rem;"><a href="https://books.zoho.com/app/677681121#/salesorders/' + c.zoho_so_id + '" target="_blank" style="color:#0088c2;">' + (c.zoho_so_number || '—') + '</a></td>' +
+              '<td style="padding:0.5rem 0.75rem;"><span style="color:' + typeColor + ';">' + typeIcon + ' ' + (c.change_type || '') + '</span></td>' +
+              '<td style="padding:0.5rem 0.75rem;">' + (c.style || c.field_name || '—') + '</td>' +
+              '<td style="padding:0.5rem 0.75rem;">' + (c.old_value || '—') + ' → ' + (c.new_value || '—') + (c.quantity_diff ? ' (' + (c.quantity_diff > 0 ? '+' : '') + c.quantity_diff + ')' : '') + '</td>' +
+              '<td style="padding:0.5rem 0.75rem;text-align:center;">' + flagBadge + '</td>' +
+            '</tr>';
+          });
+          
+          html += '</tbody></table></div>';
+          container.innerHTML = html;
+        } else {
+          // Fallback to old processing-logs
+          var res2 = await fetch('/processing-logs');
+          var logs = await res2.json();
+          container.innerHTML = logs.length ? logs.map(function(l) { 
+            return '<div class="mapping-item"><span style="flex:2">' + (l.action||'Action') + '</span><span style="flex:1">' + (l.customer_name||'') + '</span><span style="flex:1;color:#86868b">' + new Date(l.created_at).toLocaleString() + '</span></div>'; 
+          }).join('') : '<div class="empty-state">No activity yet. Changes will appear here when you update Zoho orders.</div>';
+        }
+      } catch(e) {
+        container.innerHTML = '<div class="empty-state">No activity yet.</div>';
+      }
     }
     
     async function loadReplacedDrafts() {
