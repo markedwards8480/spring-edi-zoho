@@ -1,8 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cron = require('node-cron');
-const { pool, initDatabase, updateOrderStatus, logProcessingActivity } = require('./db');
-const { processEDIOrders, processOrderToZoho } = require('./processor');
+const { initDatabase, pool } = require('./db');
+const { processEDIOrders } = require('./processor');
 const { setupOAuthRoutes } = require('./oauth');
 const logger = require('./logger');
 const dashboardHTML = require('./dashboard');
@@ -19,10 +19,63 @@ app.get('/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-// OAuth routes for Zoho authorization
+// OAuth routes
 setupOAuthRoutes(app);
 
-// Manual SFTP fetch trigger
+// ============================================================
+// STATUS & STATS
+// ============================================================
+
+app.get('/status', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE status = 'processed') as processed,
+        COUNT(*) FILTER (WHERE status = 'failed') as failed,
+        COUNT(*) FILTER (WHERE status = 'pending') as pending,
+        COUNT(*) FILTER (WHERE status = 'matched') as matched
+      FROM edi_orders
+      WHERE created_at > NOW() - INTERVAL '7 days'
+    `);
+    res.json({ last24Hours: result.rows[0], timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================
+// ORDERS CRUD
+// ============================================================
+
+app.get('/orders', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, filename, edi_order_number, edi_customer_name, status, 
+             zoho_so_id, zoho_so_number, error_message, created_at, 
+             processed_at, parsed_data, matched_draft_id, raw_edi
+      FROM edi_orders ORDER BY created_at DESC LIMIT 200
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/orders/:id', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM edi_orders WHERE id = $1', [req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Order not found' });
+    res.json(result.rows[0]);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================
+// SFTP FETCH
+// ============================================================
+
 app.post('/fetch-sftp', async (req, res) => {
   try {
     logger.info('Manual SFTP fetch triggered');
@@ -34,130 +87,153 @@ app.post('/fetch-sftp', async (req, res) => {
   }
 });
 
-// Legacy process endpoint (same as fetch-sftp)
 app.post('/process', async (req, res) => {
   try {
-    logger.info('Manual processing triggered');
     const result = await processEDIOrders();
     res.json({ success: true, result });
   } catch (error) {
-    logger.error('Manual processing failed', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Status endpoint
-app.get('/status', async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT 
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE status = 'processed') as processed,
-        COUNT(*) FILTER (WHERE status = 'failed') as failed,
-        COUNT(*) FILTER (WHERE status = 'pending' OR status = 'ready') as pending
-      FROM edi_orders
-      WHERE created_at > NOW() - INTERVAL '24 hours'
-    `);
-    res.json({ 
-      last24Hours: result.rows[0],
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+// ============================================================
+// MATCHING SYSTEM
+// ============================================================
 
-// Get all orders with full details
-app.get('/orders', async (req, res) => {
+app.post('/find-matches', async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT id, filename, edi_order_number, customer_po, status, 
-             zoho_so_id, zoho_so_number, error_message, created_at,
-             processed_at, edi_customer_name, parsed_data
-      FROM edi_orders
-      ORDER BY created_at DESC
-      LIMIT 200
-    `);
-    res.json(result.rows);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get single order details
-app.get('/orders/:id', async (req, res) => {
-  try {
-    const result = await pool.query(
-      'SELECT * FROM edi_orders WHERE id = $1',
-      [req.params.id]
-    );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-    res.json(result.rows[0]);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Process single order to Zoho
-app.post('/orders/:id/process', async (req, res) => {
-  try {
-    const orderId = parseInt(req.params.id);
-    const result = await pool.query('SELECT * FROM edi_orders WHERE id = $1', [orderId]);
+    const { orderIds } = req.body;
     
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Order not found' });
+    let orders;
+    if (orderIds && orderIds.length > 0) {
+      const result = await pool.query('SELECT * FROM edi_orders WHERE id = ANY($1)', [orderIds]);
+      orders = result.rows;
+    } else {
+      const result = await pool.query("SELECT * FROM edi_orders WHERE status = 'pending' ORDER BY created_at DESC LIMIT 100");
+      orders = result.rows;
     }
     
-    const order = result.rows[0];
-    const processResult = await processOrderToZoho(order);
+    if (orders.length === 0) {
+      return res.json({ success: true, matches: [], noMatches: [] });
+    }
     
-    res.json(processResult);
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
+    const matchResults = await zoho.findMatchingDrafts(orders);
+    
+    res.json({ success: true, matches: matchResults.matches, noMatches: matchResults.noMatches });
   } catch (error) {
-    logger.error('Process order failed', { error: error.message });
+    logger.error('Find matches failed', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Process multiple selected orders
-app.post('/process-selected', async (req, res) => {
-  const { orderIds } = req.body;
-  
-  if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
-    return res.status(400).json({ success: false, error: 'No orders selected' });
-  }
-
+app.post('/confirm-matches', async (req, res) => {
   try {
-    const results = { processed: 0, failed: 0, errors: [] };
+    const { matches, newOrders } = req.body;
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
     
-    for (const orderId of orderIds) {
+    let processed = 0, failed = 0;
+    const results = [];
+    
+    // Process matches (update existing drafts)
+    for (const match of (matches || [])) {
       try {
-        const orderResult = await pool.query('SELECT * FROM edi_orders WHERE id = $1', [orderId]);
+        const orderResult = await pool.query('SELECT * FROM edi_orders WHERE id = $1', [match.ediOrderId]);
         if (orderResult.rows.length === 0) continue;
         
-        const order = orderResult.rows[0];
-        const processResult = await processOrderToZoho(order);
+        const ediOrder = orderResult.rows[0];
+        const updated = await zoho.updateDraftWithEdiData(match.zohoDraftId, ediOrder);
         
-        if (processResult.success) {
-          results.processed++;
-        } else {
-          results.failed++;
-          results.errors.push({ orderId, error: processResult.error });
-        }
+        await pool.query(`
+          UPDATE edi_orders SET status = 'processed', zoho_so_id = $1, zoho_so_number = $2,
+          matched_draft_id = $3, processed_at = NOW() WHERE id = $4
+        `, [updated.salesorder_id, updated.salesorder_number, match.zohoDraftId, match.ediOrderId]);
+        
+        processed++;
+        results.push({ ediOrderId: match.ediOrderId, success: true, zohoId: updated.salesorder_id });
+        logger.info('Match confirmed', { ediOrderId: match.ediOrderId, zohoSoNumber: updated.salesorder_number });
       } catch (error) {
-        results.failed++;
-        results.errors.push({ orderId, error: error.message });
+        failed++;
+        results.push({ ediOrderId: match.ediOrderId, success: false, error: error.message });
+        logger.error('Failed to process match', { ediOrderId: match.ediOrderId, error: error.message });
       }
     }
     
-    res.json({ success: true, ...results });
+    // Process new orders
+    for (const newOrder of (newOrders || [])) {
+      try {
+        const orderResult = await pool.query('SELECT * FROM edi_orders WHERE id = $1', [newOrder.ediOrderId]);
+        if (orderResult.rows.length === 0) continue;
+        
+        const ediOrder = orderResult.rows[0];
+        const parsed = ediOrder.parsed_data || {};
+        
+        const mappingResult = await pool.query(
+          'SELECT zoho_customer_id FROM customer_mappings WHERE edi_customer_name = $1',
+          [ediOrder.edi_customer_name]
+        );
+        
+        if (mappingResult.rows.length === 0) {
+          failed++;
+          results.push({ ediOrderId: newOrder.ediOrderId, success: false, error: 'No customer mapping' });
+          continue;
+        }
+        
+        const created = await zoho.createBooksSalesOrder({
+          customerId: mappingResult.rows[0].zoho_customer_id,
+          poNumber: ediOrder.edi_order_number,
+          orderDate: parsed.dates?.orderDate,
+          shipDate: parsed.dates?.shipNotBefore,
+          items: parsed.items || []
+        });
+        
+        await pool.query(`
+          UPDATE edi_orders SET status = 'processed', zoho_so_id = $1, zoho_so_number = $2, processed_at = NOW()
+          WHERE id = $3
+        `, [created.salesorder_id, created.salesorder_number, newOrder.ediOrderId]);
+        
+        processed++;
+        results.push({ ediOrderId: newOrder.ediOrderId, success: true, zohoId: created.salesorder_id });
+      } catch (error) {
+        failed++;
+        results.push({ ediOrderId: newOrder.ediOrderId, success: false, error: error.message });
+      }
+    }
+    
+    res.json({ success: true, processed, failed, results });
+  } catch (error) {
+    logger.error('Confirm matches failed', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/update-draft', async (req, res) => {
+  try {
+    const { ediOrderId, zohoDraftId } = req.body;
+    const orderResult = await pool.query('SELECT * FROM edi_orders WHERE id = $1', [ediOrderId]);
+    if (orderResult.rows.length === 0) return res.status(404).json({ success: false, error: 'Not found' });
+    
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
+    const updated = await zoho.updateDraftWithEdiData(zohoDraftId, orderResult.rows[0]);
+    
+    await pool.query(`
+      UPDATE edi_orders SET status = 'processed', zoho_so_id = $1, zoho_so_number = $2,
+      matched_draft_id = $3, processed_at = NOW() WHERE id = $4
+    `, [updated.salesorder_id, updated.salesorder_number, zohoDraftId, ediOrderId]);
+    
+    res.json({ success: true, zohoOrder: updated });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Customer mappings endpoints
+// ============================================================
+// CUSTOMER MAPPINGS
+// ============================================================
+
 app.get('/customer-mappings', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM customer_mappings ORDER BY edi_customer_name');
@@ -167,204 +243,72 @@ app.get('/customer-mappings', async (req, res) => {
   }
 });
 
-app.post('/add-mapping', async (req, res) => {
-  const { ediCustomerName, zohoAccountName, zohoAccountId } = req.body;
+app.post('/customer-mappings', async (req, res) => {
   try {
-    await pool.query(
-      `INSERT INTO customer_mappings (edi_customer_name, zoho_account_name, zoho_account_id)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (edi_customer_name) DO UPDATE SET zoho_account_name = $2, zoho_account_id = $3`,
-      [ediCustomerName, zohoAccountName, zohoAccountId || null]
+    const { ediCustomerName, zohoCustomerId, zohoCustomerName } = req.body;
+    await pool.query(`
+      INSERT INTO customer_mappings (edi_customer_name, zoho_customer_id, zoho_customer_name)
+      VALUES ($1, $2, $3) ON CONFLICT (edi_customer_name) DO UPDATE SET zoho_customer_id = $2, zoho_customer_name = $3
+    `, [ediCustomerName, zohoCustomerId, zohoCustomerName]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================
+// RESET UTILITIES
+// ============================================================
+
+app.get('/reset-to-pending', async (req, res) => {
+  try {
+    const result = await pool.query(
+      "UPDATE edi_orders SET status = 'pending', zoho_so_id = NULL, zoho_so_number = NULL, matched_draft_id = NULL, processed_at = NULL WHERE status IN ('processed', 'failed', 'matched')"
     );
-    res.json({ success: true });
+    res.send('<h1>Reset Complete</h1><p>Reset ' + result.rowCount + ' orders.</p><a href="/">Back</a>');
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).send('Error: ' + error.message);
   }
 });
 
-app.delete('/customer-mappings/:id', async (req, res) => {
-  try {
-    await pool.query('DELETE FROM customer_mappings WHERE id = $1', [req.params.id]);
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Zoho customers search
-app.get('/zoho-customers', async (req, res) => {
-  try {
-    const ZohoClient = require('./zoho');
-    const zoho = new ZohoClient();
-    const customers = await zoho.getBooksCustomers();
-    res.json(customers);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Processing logs
-app.get('/processing-logs', async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT * FROM processing_logs 
-      ORDER BY created_at DESC 
-      LIMIT 100
-    `);
-    res.json(result.rows);
-  } catch (error) {
-    res.json([]);
-  }
-});
-
-// Reset orders to pending (POST)
 app.post('/reset-to-pending', async (req, res) => {
   try {
-    const result = await pool.query(`
-      UPDATE edi_orders 
-      SET status = 'pending', zoho_so_id = NULL, zoho_so_number = NULL, error_message = NULL 
-      WHERE status IN ('processed', 'failed')
-    `);
-    logger.info('Reset orders to pending', { count: result.rowCount });
+    const result = await pool.query(
+      "UPDATE edi_orders SET status = 'pending', zoho_so_id = NULL, zoho_so_number = NULL, matched_draft_id = NULL, processed_at = NULL WHERE status IN ('processed', 'failed', 'matched')"
+    );
     res.json({ success: true, count: result.rowCount });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Reset orders to pending (GET for browser access)
-app.get('/reset-to-pending', async (req, res) => {
-  try {
-    const result = await pool.query(`
-      UPDATE edi_orders 
-      SET status = 'pending', zoho_so_id = NULL, zoho_so_number = NULL, error_message = NULL 
-      WHERE status IN ('processed', 'failed')
-    `);
-    logger.info('Reset orders to pending (GET)', { count: result.rowCount });
-    res.send(`<html><body><h1>Reset Complete</h1><p>Reset ${result.rowCount} orders to pending status.</p><a href="/">Back to Dashboard</a></body></html>`);
-  } catch (error) {
-    res.status(500).send(`<html><body><h1>Error</h1><p>${error.message}</p></body></html>`);
-  }
-});
-
-// ============================================
-// EXPORT ROUTES - For backup before changes
-// ============================================
-
-// Export all order history as CSV
-app.get('/export-orders', async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT id, edi_order_number, customer_po, edi_customer_name, status,
-             zoho_so_id, zoho_so_number, created_at, processed_at, parsed_data
-      FROM edi_orders ORDER BY created_at DESC
-    `);
-    const orders = result.rows;
-    const headers = ['ID','PO Number','Customer','Status','Zoho SO ID','Zoho SO#','Line Items','Total Units','Total Value','Created','Processed'];
-    const rows = orders.map(o => {
-      const items = o.parsed_data?.items || [];
-      const units = items.reduce((s,i) => s + (i.quantityOrdered||0), 0);
-      const value = items.reduce((s,i) => s + (i.quantityOrdered||0)*(i.unitPrice||0), 0);
-      return [o.id, o.edi_order_number||'', o.edi_customer_name||'', o.status||'', o.zoho_so_id||'', o.zoho_so_number||'', items.length, units, value.toFixed(2), o.created_at||'', o.processed_at||''].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
-    });
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="edi-orders-${new Date().toISOString().split('T')[0]}.csv"`);
-    res.send([headers.join(','), ...rows].join('\n'));
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Export detailed line items as CSV
-app.get('/export-line-items', async (req, res) => {
-  try {
-    const result = await pool.query(`SELECT id, edi_order_number, edi_customer_name, status, zoho_so_number, parsed_data FROM edi_orders ORDER BY created_at DESC`);
-    const headers = ['Order ID','PO Number','Customer','Status','Zoho SO#','Line#','Style','Description','Color','Size','Qty','Unit Price','Amount'];
-    const rows = [];
-    result.rows.forEach(o => {
-      (o.parsed_data?.items || []).forEach((item, idx) => {
-        rows.push([o.id, o.edi_order_number||'', o.edi_customer_name||'', o.status||'', o.zoho_so_number||'', item.lineNumber||(idx+1), item.productIds?.sku||item.productIds?.vendorItemNumber||'', item.description||'', item.color||'', item.size||'', item.quantityOrdered||0, item.unitPrice||0, ((item.quantityOrdered||0)*(item.unitPrice||0)).toFixed(2)].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
-      });
-    });
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="edi-line-items-${new Date().toISOString().split('T')[0]}.csv"`);
-    res.send([headers.join(','), ...rows].join('\n'));
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ============================================
-// RE-PARSE ROUTES - Fix prices in existing orders
-// ============================================
-
-// Re-parse all existing orders with updated parser
-app.post('/reparse-orders', async (req, res) => {
-  const { parseSpringCSV } = require('./csv-parser');
-  try {
-    const result = await pool.query(`SELECT id, filename, raw_edi, edi_order_number FROM edi_orders WHERE raw_edi IS NOT NULL AND raw_edi != ''`);
-    let updated = 0, failed = 0;
-    for (const order of result.rows) {
-      try {
-        const newParsed = parseSpringCSV(order.raw_edi, order.filename || 'unknown.csv');
-        await pool.query(`UPDATE edi_orders SET parsed_data = $1 WHERE id = $2`, [JSON.stringify(newParsed), order.id]);
-        updated++;
-      } catch (e) { 
-        failed++; 
-        logger.error('Re-parse failed', { id: order.id, error: e.message }); 
-      }
-    }
-    logger.info('Re-parse complete', { updated, failed });
-    res.json({ success: true, message: `Re-parsed ${updated} orders, ${failed} failed`, updated, failed });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Preview what re-parse will change (GET for browser)
-app.get('/reparse-preview', async (req, res) => {
-  const { parseSpringCSV } = require('./csv-parser');
-  try {
-    const result = await pool.query(`SELECT id, filename, raw_edi, edi_order_number, parsed_data FROM edi_orders WHERE raw_edi IS NOT NULL LIMIT 5`);
-    const previews = result.rows.map(o => {
-      try {
-        const oldItem = o.parsed_data?.items?.[0] || {};
-        const newParsed = parseSpringCSV(o.raw_edi, o.filename || 'unknown.csv');
-        const newItem = newParsed.items?.[0] || {};
-        return { 
-          poNumber: o.edi_order_number, 
-          before: { price: oldItem.unitPrice, qty: oldItem.quantityOrdered }, 
-          after: { price: newItem.unitPrice, qty: newItem.quantityOrdered }, 
-          changed: oldItem.unitPrice !== newItem.unitPrice 
-        };
-      } catch (e) { return { poNumber: o.edi_order_number, error: e.message }; }
-    });
-    res.json({ previews });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// ============================================
+// ============================================================
 // SERVER STARTUP
-// ============================================
+// ============================================================
 
 async function startServer() {
   try {
-    // Initialize database
     await initDatabase();
     logger.info('Database initialized');
 
-    // Start the scheduled job
+    // Add columns if needed
+    try {
+      await pool.query(`
+        ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS matched_draft_id VARCHAR(255);
+        ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS zoho_so_number VARCHAR(255);
+        ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP;
+      `);
+    } catch (e) { /* ignore */ }
+
     const schedule = process.env.CRON_SCHEDULE || '*/15 * * * *';
     cron.schedule(schedule, async () => {
       logger.info('Scheduled job triggered');
-      try {
-        await processEDIOrders();
-      } catch (error) {
-        logger.error('Scheduled processing failed', { error: error.message });
-      }
+      try { await processEDIOrders(); } catch (error) { logger.error('Scheduled processing failed', { error: error.message }); }
     });
-    logger.info(`Cron job scheduled: ${schedule}`);
+    logger.info('Cron job scheduled: ' + schedule);
 
-    // Start Express server
     const port = process.env.PORT || 3000;
-    app.listen(port, () => {
-      logger.info(`Server running on port ${port}`);
-      logger.info('OAuth setup: Visit /oauth/start to authorize with Zoho');
-    });
+    app.listen(port, () => { logger.info('Server running on port ' + port); });
   } catch (error) {
     logger.error('Failed to start server', { error: error.message });
     process.exit(1);
