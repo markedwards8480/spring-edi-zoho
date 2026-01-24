@@ -966,3 +966,438 @@ async function startServer() {
 }
 
 startServer();
+
+// ============================================================
+// ORDER CHANGES AUDIT LOG
+// ============================================================
+
+// Create order_changes table if not exists
+async function ensureOrderChangesTable() {
+  const { pool } = require('./db');
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS order_changes (
+      id SERIAL PRIMARY KEY,
+      edi_order_id INTEGER,
+      zoho_so_id TEXT,
+      zoho_so_number TEXT,
+      change_type TEXT,
+      field_name TEXT,
+      old_value TEXT,
+      new_value TEXT,
+      style TEXT,
+      color TEXT,
+      size TEXT,
+      quantity_diff INTEGER,
+      notes TEXT,
+      flagged_for_review BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+}
+
+// Log a change
+async function logOrderChange(changeData) {
+  const { pool } = require('./db');
+  await ensureOrderChangesTable();
+  await pool.query(`
+    INSERT INTO order_changes 
+    (edi_order_id, zoho_so_id, zoho_so_number, change_type, field_name, old_value, new_value, style, color, size, quantity_diff, notes, flagged_for_review)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+  `, [
+    changeData.ediOrderId,
+    changeData.zohoSoId,
+    changeData.zohoSoNumber,
+    changeData.changeType,
+    changeData.fieldName,
+    changeData.oldValue,
+    changeData.newValue,
+    changeData.style || null,
+    changeData.color || null,
+    changeData.size || null,
+    changeData.quantityDiff || null,
+    changeData.notes || null,
+    changeData.flaggedForReview || false
+  ]);
+}
+
+// Get order change history
+app.get('/order-changes', async (req, res) => {
+  const { pool } = require('./db');
+  try {
+    await ensureOrderChangesTable();
+    const result = await pool.query(`
+      SELECT * FROM order_changes 
+      ORDER BY created_at DESC 
+      LIMIT 500
+    `);
+    res.json({ success: true, changes: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get changes for specific order
+app.get('/order-changes/:zohoSoId', async (req, res) => {
+  const { pool } = require('./db');
+  try {
+    await ensureOrderChangesTable();
+    const result = await pool.query(`
+      SELECT * FROM order_changes 
+      WHERE zoho_so_id = $1
+      ORDER BY created_at DESC
+    `, [req.params.zohoSoId]);
+    res.json({ success: true, changes: result.rows });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================
+// DETAILED COMPARISON ENDPOINT
+// ============================================================
+
+// Get detailed comparison between EDI order and Zoho order
+app.post('/compare-orders', async (req, res) => {
+  const { pool } = require('./db');
+  const { ediOrderId, zohoSoId } = req.body;
+  
+  try {
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
+    const token = await zoho.ensureValidToken();
+    const axios = require('axios');
+    
+    // Get EDI order from our DB
+    const ediResult = await pool.query(`
+      SELECT * FROM edi_orders WHERE id = $1
+    `, [ediOrderId]);
+    
+    if (!ediResult.rows.length) {
+      return res.status(404).json({ success: false, error: 'EDI order not found' });
+    }
+    
+    const ediOrder = ediResult.rows[0];
+    const ediData = ediOrder.parsed_data || {};
+    const ediItems = ediData.items || [];
+    
+    // Get Zoho order with full details
+    const zohoResponse = await axios({
+      method: 'GET',
+      url: `https://www.zohoapis.com/books/v3/salesorders/${zohoSoId}`,
+      headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
+      params: { organization_id: process.env.ZOHO_ORG_ID }
+    });
+    
+    const zohoOrder = zohoResponse.data?.salesorder;
+    if (!zohoOrder) {
+      return res.status(404).json({ success: false, error: 'Zoho order not found' });
+    }
+    
+    const zohoItems = zohoOrder.line_items || [];
+    
+    // Build detailed comparison
+    const comparison = {
+      edi: {
+        id: ediOrder.id,
+        poNumber: ediOrder.edi_order_number,
+        customer: ediOrder.edi_customer_name,
+        orderDate: ediData.dates?.orderDate,
+        shipDate: ediData.dates?.shipNotBefore,
+        cancelDate: ediData.dates?.shipNotAfter,
+        items: ediItems.map(i => ({
+          style: i.productIds?.vendorItemNumber || i.productIds?.buyerItemNumber || i.sku || '',
+          description: i.description || '',
+          color: i.color || '',
+          size: i.size || '',
+          quantity: i.quantityOrdered || 0,
+          price: i.unitPrice || 0,
+          amount: (i.quantityOrdered || 0) * (i.unitPrice || 0)
+        })),
+        totalQty: ediItems.reduce((s, i) => s + (i.quantityOrdered || 0), 0),
+        totalAmount: ediItems.reduce((s, i) => s + (i.quantityOrdered || 0) * (i.unitPrice || 0), 0)
+      },
+      zoho: {
+        id: zohoOrder.salesorder_id,
+        number: zohoOrder.salesorder_number,
+        reference: zohoOrder.reference_number,
+        customer: zohoOrder.customer_name,
+        customerId: zohoOrder.customer_id,
+        date: zohoOrder.date,
+        shipDate: zohoOrder.shipment_date,
+        status: zohoOrder.status,
+        items: zohoItems.map(i => ({
+          lineItemId: i.line_item_id,
+          itemId: i.item_id,
+          style: i.sku || i.name || '',
+          description: i.description || i.name || '',
+          color: '', // Zoho may not have color separately
+          size: '', // Zoho may not have size separately
+          quantity: i.quantity || 0,
+          price: i.rate || 0,
+          amount: i.item_total || 0
+        })),
+        totalQty: zohoItems.reduce((s, i) => s + (i.quantity || 0), 0),
+        totalAmount: parseFloat(zohoOrder.total) || 0
+      },
+      changes: []
+    };
+    
+    // Calculate changes needed
+    
+    // 1. Header changes
+    if (ediOrder.edi_order_number && ediOrder.edi_order_number !== zohoOrder.reference_number) {
+      comparison.changes.push({
+        type: 'header',
+        field: 'Reference/PO Number',
+        oldValue: zohoOrder.reference_number || '(blank)',
+        newValue: ediOrder.edi_order_number,
+        action: 'update'
+      });
+    }
+    
+    if (ediData.dates?.shipNotBefore && ediData.dates.shipNotBefore !== zohoOrder.shipment_date) {
+      comparison.changes.push({
+        type: 'header',
+        field: 'Ship Date',
+        oldValue: zohoOrder.shipment_date || '(blank)',
+        newValue: ediData.dates.shipNotBefore,
+        action: 'update'
+      });
+    }
+    
+    // 2. Line item changes
+    // Build maps by style for comparison
+    const ediByStyle = {};
+    ediItems.forEach(i => {
+      const key = (i.productIds?.vendorItemNumber || i.productIds?.buyerItemNumber || i.sku || '').toUpperCase();
+      if (key) {
+        if (!ediByStyle[key]) ediByStyle[key] = [];
+        ediByStyle[key].push(i);
+      }
+    });
+    
+    const zohoByStyle = {};
+    zohoItems.forEach(i => {
+      const key = (i.sku || i.name || '').toUpperCase();
+      if (key) {
+        if (!zohoByStyle[key]) zohoByStyle[key] = [];
+        zohoByStyle[key].push(i);
+      }
+    });
+    
+    // Find qty differences and missing items
+    const allStyles = new Set([...Object.keys(ediByStyle), ...Object.keys(zohoByStyle)]);
+    
+    allStyles.forEach(style => {
+      const ediForStyle = ediByStyle[style] || [];
+      const zohoForStyle = zohoByStyle[style] || [];
+      
+      const ediQty = ediForStyle.reduce((s, i) => s + (i.quantityOrdered || 0), 0);
+      const zohoQty = zohoForStyle.reduce((s, i) => s + (i.quantity || 0), 0);
+      
+      if (ediQty > 0 && zohoQty === 0) {
+        // Style in EDI but not in Zoho - need to add
+        comparison.changes.push({
+          type: 'line_item',
+          field: 'Add Line',
+          style: style,
+          oldValue: '0',
+          newValue: String(ediQty),
+          quantityDiff: ediQty,
+          action: 'add',
+          flagForReview: false
+        });
+      } else if (ediQty === 0 && zohoQty > 0) {
+        // Style in Zoho but not in EDI - flag for review
+        comparison.changes.push({
+          type: 'line_item',
+          field: 'Remove Line',
+          style: style,
+          oldValue: String(zohoQty),
+          newValue: '0',
+          quantityDiff: -zohoQty,
+          action: 'remove',
+          flagForReview: true,
+          note: 'Style in Zoho but not in EDI - verify with customer'
+        });
+      } else if (ediQty !== zohoQty) {
+        // Quantity difference
+        const diff = ediQty - zohoQty;
+        comparison.changes.push({
+          type: 'line_item',
+          field: 'Quantity',
+          style: style,
+          oldValue: String(zohoQty),
+          newValue: String(ediQty),
+          quantityDiff: diff,
+          action: diff > 0 ? 'increase' : 'decrease',
+          flagForReview: diff < 0, // Flag if EDI is LESS than Zoho
+          note: diff < 0 ? 'EDI quantity is LESS than Zoho - verify with customer' : null
+        });
+      }
+    });
+    
+    // Summary
+    comparison.summary = {
+      hasChanges: comparison.changes.length > 0,
+      totalChanges: comparison.changes.length,
+      headerChanges: comparison.changes.filter(c => c.type === 'header').length,
+      lineChanges: comparison.changes.filter(c => c.type === 'line_item').length,
+      flaggedForReview: comparison.changes.filter(c => c.flagForReview).length,
+      ediTotal: comparison.edi.totalAmount,
+      zohoTotal: comparison.zoho.totalAmount,
+      amountDiff: comparison.edi.totalAmount - comparison.zoho.totalAmount
+    };
+    
+    res.json({ success: true, comparison });
+    
+  } catch (error) {
+    logger.error('Compare orders failed', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================
+// UPDATE ZOHO ORDER ENDPOINT
+// ============================================================
+
+app.post('/update-zoho-order', async (req, res) => {
+  const { pool } = require('./db');
+  const { ediOrderId, zohoSoId, changes, applyAll } = req.body;
+  
+  try {
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
+    const token = await zoho.ensureValidToken();
+    const axios = require('axios');
+    
+    // Get current Zoho order
+    const zohoResponse = await axios({
+      method: 'GET',
+      url: `https://www.zohoapis.com/books/v3/salesorders/${zohoSoId}`,
+      headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
+      params: { organization_id: process.env.ZOHO_ORG_ID }
+    });
+    
+    const zohoOrder = zohoResponse.data?.salesorder;
+    if (!zohoOrder) {
+      return res.status(404).json({ success: false, error: 'Zoho order not found' });
+    }
+    
+    // Get EDI order
+    const ediResult = await pool.query(`SELECT * FROM edi_orders WHERE id = $1`, [ediOrderId]);
+    const ediOrder = ediResult.rows[0];
+    const ediData = ediOrder?.parsed_data || {};
+    
+    // Build update payload
+    const updatePayload = {};
+    const appliedChanges = [];
+    
+    // Apply header changes
+    if (changes.some(c => c.field === 'Reference/PO Number')) {
+      updatePayload.reference_number = ediOrder.edi_order_number;
+      appliedChanges.push({
+        changeType: 'header_update',
+        fieldName: 'reference_number',
+        oldValue: zohoOrder.reference_number,
+        newValue: ediOrder.edi_order_number
+      });
+    }
+    
+    if (changes.some(c => c.field === 'Ship Date')) {
+      updatePayload.shipment_date = ediData.dates?.shipNotBefore;
+      appliedChanges.push({
+        changeType: 'header_update',
+        fieldName: 'shipment_date',
+        oldValue: zohoOrder.shipment_date,
+        newValue: ediData.dates?.shipNotBefore
+      });
+    }
+    
+    // For line items, we need to rebuild the line_items array
+    // This is more complex - for now, update header fields only
+    // TODO: Implement line item updates
+    
+    // Make the update API call
+    if (Object.keys(updatePayload).length > 0) {
+      const updateResponse = await axios({
+        method: 'PUT',
+        url: `https://www.zohoapis.com/books/v3/salesorders/${zohoSoId}`,
+        headers: { 
+          'Authorization': `Zoho-oauthtoken ${token}`,
+          'Content-Type': 'application/json'
+        },
+        params: { organization_id: process.env.ZOHO_ORG_ID },
+        data: updatePayload
+      });
+      
+      if (updateResponse.data?.code !== 0) {
+        throw new Error(updateResponse.data?.message || 'Zoho update failed');
+      }
+    }
+    
+    // Log all changes to audit table
+    await ensureOrderChangesTable();
+    for (const change of appliedChanges) {
+      await logOrderChange({
+        ediOrderId: ediOrderId,
+        zohoSoId: zohoSoId,
+        zohoSoNumber: zohoOrder.salesorder_number,
+        changeType: change.changeType,
+        fieldName: change.fieldName,
+        oldValue: change.oldValue,
+        newValue: change.newValue,
+        style: change.style,
+        color: change.color,
+        size: change.size,
+        quantityDiff: change.quantityDiff,
+        notes: change.notes,
+        flaggedForReview: change.flagForReview
+      });
+    }
+    
+    // Log line item changes (even if not applied yet)
+    for (const change of changes.filter(c => c.type === 'line_item')) {
+      await logOrderChange({
+        ediOrderId: ediOrderId,
+        zohoSoId: zohoSoId,
+        zohoSoNumber: zohoOrder.salesorder_number,
+        changeType: change.action,
+        fieldName: 'line_item',
+        oldValue: change.oldValue,
+        newValue: change.newValue,
+        style: change.style,
+        quantityDiff: change.quantityDiff,
+        notes: change.note,
+        flaggedForReview: change.flagForReview || false
+      });
+    }
+    
+    // Mark EDI order as processed
+    await pool.query(`
+      UPDATE edi_orders 
+      SET status = 'processed', 
+          zoho_so_id = $2, 
+          zoho_so_number = $3,
+          processed_at = NOW()
+      WHERE id = $1
+    `, [ediOrderId, zohoSoId, zohoOrder.salesorder_number]);
+    
+    logger.info('Updated Zoho order', { 
+      zohoSoId, 
+      zohoSoNumber: zohoOrder.salesorder_number,
+      changesApplied: appliedChanges.length 
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'Zoho order updated successfully',
+      appliedChanges: appliedChanges.length,
+      zohoSoNumber: zohoOrder.salesorder_number
+    });
+    
+  } catch (error) {
+    logger.error('Update Zoho order failed', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
