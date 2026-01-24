@@ -331,8 +331,8 @@ const dashboardHTML = `
     function getOrderSyncStatus(o) {
       if (o.status === 'failed') return 'failed';
       if (o.status === 'pending') return 'pending';
-      if (o.status === 'processed' && o.zoho_so_number) return 'in_zoho';
-      if (o.status === 'processed' && !o.zoho_so_number) return 'not_synced';
+      if (o.status === 'processed' && o.zoho_so_id) return 'in_zoho';
+      if (o.status === 'processed' && !o.zoho_so_id) return 'not_synced';
       return 'pending';
     }
     
@@ -405,7 +405,7 @@ const dashboardHTML = `
         let statusBadge, zohoCell;
         if (syncStatus === 'in_zoho') {
           statusBadge = '<span class="status-badge status-processed">✓ In Zoho</span>';
-          zohoCell = '<span class="zoho-so">' + o.zoho_so_number + '</span>';
+          zohoCell = '<span class="zoho-so">' + o.zoho_so_id + '</span>';
         } else if (syncStatus === 'not_synced') {
           statusBadge = '<span class="status-badge status-not-synced">⚠️ Not Synced</span>';
           zohoCell = '<span class="no-zoho">—</span>';
@@ -471,7 +471,7 @@ const dashboardHTML = `
             <div class="icon">✓</div>
             <div>
               <div class="label">ZOHO BOOKS SALES ORDER</div>
-              <div class="value"><a href="https://books.zoho.com/app#/salesorders/\${o.zoho_so_id}" target="_blank">\${o.zoho_so_number}</a></div>
+              <div class="value"><a href="https://books.zoho.com/app#/salesorders/\${o.zoho_so_id}" target="_blank">\${o.zoho_so_id}</a></div>
             </div>
           </div>
         \`;
