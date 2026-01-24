@@ -49,7 +49,6 @@ const dashboardHTML = `
     .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 1.5rem; }
     .stat-card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: all 0.2s; cursor: pointer; }
     .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
-    .stat-card.active-filter { border: 2px solid #0088c2; }
     .stat-label { font-size: 0.7rem; color: #86868b; text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 0.5rem; }
     .stat-value { font-size: 2.5rem; font-weight: 700; color: #1e3a5f; }
     .stat-value.success { color: #34c759; }
@@ -77,6 +76,8 @@ const dashboardHTML = `
     .btn-warning:hover { background: #e68600; }
     .btn-danger { background: white; color: #ff3b30; border: 1px solid #ff3b30; }
     .btn-danger:hover { background: rgba(255, 59, 48, 0.08); }
+    .btn-info { background: #0088c2; color: white; }
+    .btn-info:hover { background: #006a99; }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     select { background: white; border: 1px solid #d2d2d7; color: #1e3a5f; padding: 0.5rem 0.75rem; border-radius: 8px; font-size: 0.875rem; font-family: inherit; }
     
@@ -91,7 +92,7 @@ const dashboardHTML = `
     .status-pending { background: rgba(255, 149, 0, 0.12); color: #ff9500; }
     .status-in-zoho { background: rgba(52, 199, 89, 0.12); color: #34c759; }
     .status-failed { background: rgba(255, 59, 48, 0.12); color: #ff3b30; }
-    .status-not-synced { background: rgba(134, 134, 139, 0.12); color: #86868b; }
+    .status-draft { background: rgba(0, 136, 194, 0.12); color: #0088c2; }
     
     .zoho-link { color: #0088c2; text-decoration: none; font-size: 0.8rem; }
     .zoho-link:hover { text-decoration: underline; }
@@ -99,7 +100,7 @@ const dashboardHTML = `
     
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; visibility: hidden; transition: all 0.2s; }
     .modal-overlay.active { opacity: 1; visibility: visible; }
-    .modal { background: white; border-radius: 18px; width: 95%; max-width: 1000px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+    .modal { background: white; border-radius: 18px; width: 95%; max-width: 1200px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
     .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; border-bottom: 1px solid rgba(0,0,0,0.06); }
     .modal-title { font-size: 1.25rem; font-weight: 600; color: #1e3a5f; }
     .modal-close { background: #f5f5f7; border: none; color: #86868b; font-size: 1.25rem; cursor: pointer; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
@@ -119,7 +120,9 @@ const dashboardHTML = `
     .zoho-link-box a { color: #0088c2; text-decoration: none; }
     .zoho-link-box a:hover { text-decoration: underline; }
     
-    .warning-box { background: rgba(134,134,139,0.08); border: 1px solid rgba(134,134,139,0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; color: #86868b; }
+    .info-box { background: rgba(0, 136, 194, 0.08); border: 1px solid rgba(0, 136, 194, 0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; }
+    .warning-box { background: rgba(255, 149, 0, 0.08); border: 1px solid rgba(255, 149, 0, 0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; color: #ff9500; }
+    .error-box { background: rgba(255, 59, 48, 0.08); border: 1px solid rgba(255, 59, 48, 0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; color: #ff3b30; }
     
     .line-items-container { max-height: 280px; overflow-y: auto; border: 1px solid rgba(0,0,0,0.06); border-radius: 12px; }
     .line-items-table { width: 100%; font-size: 0.8125rem; }
@@ -137,13 +140,20 @@ const dashboardHTML = `
     .mapping-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: #f5f5f7; border-radius: 12px; margin-bottom: 0.5rem; }
     .mapping-arrow { color: #0088c2; font-size: 1.25rem; margin: 0 1rem; }
     
-    .activity-item { display: flex; gap: 1rem; padding: 1rem; border-left: 3px solid #d2d2d7; margin-left: 1rem; margin-bottom: 0.5rem; background: white; border-radius: 0 12px 12px 0; }
-    .activity-item.success { border-left-color: #34c759; }
-    .activity-item.error { border-left-color: #ff3b30; }
-    .activity-time { font-size: 0.75rem; color: #86868b; min-width: 140px; }
-    .activity-content { flex: 1; }
-    .activity-title { font-weight: 500; color: #1e3a5f; }
-    .activity-details { font-size: 0.8125rem; color: #6e6e73; margin-top: 0.25rem; }
+    .draft-card { background: white; border: 1px solid rgba(0,0,0,0.08); border-radius: 12px; padding: 1.5rem; margin-bottom: 1rem; }
+    .draft-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    .draft-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
+    .draft-card-title { font-size: 1.1rem; font-weight: 600; color: #1e3a5f; }
+    .draft-card-meta { font-size: 0.8rem; color: #86868b; }
+    .draft-card-body { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+    .draft-card-actions { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(0,0,0,0.06); display: flex; gap: 0.5rem; }
+    
+    .comparison-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+    .comparison-column { background: #f5f5f7; border-radius: 12px; padding: 1.5rem; }
+    .comparison-column h3 { margin-bottom: 1rem; color: #1e3a5f; }
+    .comparison-column.edi { border: 2px solid #34c759; }
+    .comparison-column.draft { border: 2px solid #0088c2; }
+    .diff-highlight { background: rgba(255, 149, 0, 0.2); padding: 0.25rem 0.5rem; border-radius: 4px; }
     
     .toast-container { position: fixed; bottom: 2rem; right: 2rem; z-index: 2000; }
     .toast { background: white; border-radius: 12px; padding: 1rem 1.5rem; margin-top: 0.5rem; min-width: 300px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); border-left: 4px solid #1e3a5f; }
@@ -152,7 +162,6 @@ const dashboardHTML = `
     
     .empty-state { text-align: center; padding: 3rem; color: #86868b; }
     .checkbox { width: 18px; height: 18px; accent-color: #0088c2; }
-    .error-box { background: rgba(255, 59, 48, 0.08); border: 1px solid rgba(255, 59, 48, 0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; color: #ff3b30; }
   </style>
 </head>
 <body>
@@ -174,6 +183,7 @@ const dashboardHTML = `
     <nav class="sidebar">
       <div class="nav-title">Orders</div>
       <div class="nav-item active" onclick="showTab('orders', this)">📦 EDI Orders <span class="nav-badge" id="pendingBadge">0</span></div>
+      <div class="nav-item" onclick="showTab('draftMatch', this)">🔀 Match Drafts</div>
       <div class="nav-item" onclick="showTab('mappings', this)">🔗 Customer Mappings</div>
       <div class="nav-title">History</div>
       <div class="nav-item" onclick="showTab('activity', this)">📋 Activity Log</div>
@@ -184,24 +194,25 @@ const dashboardHTML = `
     
     <main class="content">
       <div class="stats-grid">
-        <div class="stat-card" onclick="filterByStatus('')" id="cardTotal">
-          <div class="stat-label">Total Orders (24h)</div>
+        <div class="stat-card" onclick="filterByStatus('')">
+          <div class="stat-label">Total Orders</div>
           <div class="stat-value" id="statTotal">0</div>
         </div>
-        <div class="stat-card" onclick="filterByStatus('in_zoho')" id="cardProcessed">
+        <div class="stat-card" onclick="filterByStatus('in_zoho')">
           <div class="stat-label">Sent to Zoho</div>
           <div class="stat-value success" id="statProcessed">0</div>
         </div>
-        <div class="stat-card" onclick="filterByStatus('pending')" id="cardPending">
+        <div class="stat-card" onclick="filterByStatus('pending')">
           <div class="stat-label">Ready to Send</div>
           <div class="stat-value warning" id="statPending">0</div>
         </div>
-        <div class="stat-card" onclick="filterByStatus('failed')" id="cardFailed">
-          <div class="stat-label">Send Failed</div>
+        <div class="stat-card" onclick="filterByStatus('failed')">
+          <div class="stat-label">Failed</div>
           <div class="stat-value danger" id="statFailed">0</div>
         </div>
       </div>
       
+      <!-- EDI Orders Tab -->
       <div id="tabOrders">
         <div class="filter-bar">
           <span class="filter-label">🔍</span>
@@ -213,31 +224,24 @@ const dashboardHTML = `
             <option value="">All Status</option>
             <option value="pending">Ready to Send</option>
             <option value="in_zoho">Sent to Zoho</option>
-            <option value="not_synced">Sent (Unlinked)</option>
-            <option value="failed">Send Failed</option>
+            <option value="failed">Failed</option>
           </select>
-          <span class="filter-label">From:</span>
-          <input type="date" id="filterDateFrom" onchange="applyFilters()">
-          <span class="filter-label">To:</span>
-          <input type="date" id="filterDateTo" onchange="applyFilters()">
           <span class="clear-filters" onclick="clearFilters()">Clear Filters</span>
         </div>
         
         <div class="action-bar">
           <button class="btn btn-primary" onclick="fetchSFTP()">📥 Fetch from SFTP</button>
+          <button class="btn btn-info" onclick="syncWithZoho()">🔄 Sync with Zoho</button>
           <button class="btn btn-secondary" onclick="processOrders()">⚡ Process Orders</button>
           <select id="limitSelect"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select>
           <button class="btn btn-success" onclick="processSelected()">✓ Process Selected</button>
-          <button class="btn btn-secondary" onclick="retryFailed()">🔄 Retry Failed</button>
+          <button class="btn btn-warning" onclick="exportToCSV()">📊 Export</button>
           <button class="btn btn-secondary" onclick="loadOrders()">↻ Refresh</button>
-          <button class="btn btn-warning" onclick="exportToCSV()">📊 Export to Excel</button>
-          <button class="btn btn-danger" onclick="resetAll()">Reset All</button>
         </div>
         
         <div class="table-container">
           <div class="table-info">
             <span id="tableInfo">Showing 0 orders</span>
-            <span style="font-size: 0.75rem;">Click "Export to Excel" to download for your team</span>
           </div>
           <table>
             <thead>
@@ -258,28 +262,47 @@ const dashboardHTML = `
         </div>
       </div>
       
+      <!-- Draft Matching Tab -->
+      <div id="tabDraftMatch" style="display:none;">
+        <h2 style="margin-bottom: 1rem; color: #1e3a5f;">Match EDI Orders to Zoho Drafts</h2>
+        <p style="color: #86868b; margin-bottom: 1.5rem;">Compare incoming EDI orders with existing draft orders in Zoho Books. Replace drafts with confirmed EDI data.</p>
+        
+        <div class="action-bar">
+          <button class="btn btn-primary" onclick="loadDrafts()">📥 Load Zoho Drafts</button>
+          <button class="btn btn-secondary" onclick="autoMatchDrafts()">🔀 Auto-Match</button>
+        </div>
+        
+        <div id="draftsContainer">
+          <div class="empty-state">Click "Load Zoho Drafts" to see draft orders available for matching.</div>
+        </div>
+      </div>
+      
+      <!-- Customer Mappings Tab -->
       <div id="tabMappings" style="display:none;">
         <h2 style="margin-bottom: 1.5rem; color: #1e3a5f;">Customer Mappings</h2>
         <div class="mapping-form">
           <input type="text" id="ediName" placeholder="EDI Customer Name (e.g. Fred Meyer)">
           <input type="text" id="zohoName" placeholder="Zoho Customer Name">
-          <button class="btn btn-primary" onclick="addMapping()">Add</button>
+          <button class="btn btn-primary" onclick="addMapping()">Add Mapping</button>
         </div>
         <div id="mappingsList"></div>
       </div>
       
+      <!-- Activity Log Tab -->
       <div id="tabActivity" style="display:none;">
         <h2 style="margin-bottom: 1.5rem; color: #1e3a5f;">Activity Log</h2>
-        <div id="activityList"></div>
+        <div id="activityList"><div class="empty-state">No activity yet.</div></div>
       </div>
       
+      <!-- Replaced Drafts Tab -->
       <div id="tabDrafts" style="display:none;">
         <h2 style="margin-bottom: 1.5rem; color: #1e3a5f;">Replaced Drafts Archive</h2>
-        <div id="draftsList"><p class="empty-state">No replaced drafts yet.</p></div>
+        <div id="draftsList"><div class="empty-state">No replaced drafts yet.</div></div>
       </div>
     </main>
   </div>
   
+  <!-- Order Detail Modal -->
   <div class="modal-overlay" id="orderModal">
     <div class="modal">
       <div class="modal-header">
@@ -294,6 +317,22 @@ const dashboardHTML = `
     </div>
   </div>
   
+  <!-- Comparison Modal -->
+  <div class="modal-overlay" id="compareModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 class="modal-title">Compare: EDI Order vs Draft</h2>
+        <button class="modal-close" onclick="closeCompareModal()">×</button>
+      </div>
+      <div class="modal-body" id="compareModalBody"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeCompareModal()">Cancel</button>
+        <button class="btn btn-warning" onclick="createNewOrder()">Create as New Order</button>
+        <button class="btn btn-success" onclick="replaceDraft()">Replace Draft with EDI</button>
+      </div>
+    </div>
+  </div>
+  
   <div class="toast-container" id="toasts"></div>
   
   <script>
@@ -302,14 +341,21 @@ const dashboardHTML = `
     let selectedIds = new Set();
     let currentOrder = null;
     let customers = new Set();
+    let zohoDrafts = [];
+    let currentComparison = null;
     
     document.addEventListener('DOMContentLoaded', function() { loadOrders(); loadStats(); });
     
     function showTab(tab, el) {
       document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
       el.classList.add('active');
-      ['tabOrders','tabMappings','tabActivity','tabDrafts'].forEach(function(t) { document.getElementById(t).style.display = 'none'; });
-      document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).style.display = 'block';
+      ['tabOrders','tabDraftMatch','tabMappings','tabActivity','tabDrafts'].forEach(function(t) { 
+        var elem = document.getElementById(t);
+        if (elem) elem.style.display = 'none'; 
+      });
+      var targetTab = document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1));
+      if (targetTab) targetTab.style.display = 'block';
+      
       if (tab === 'mappings') loadMappings();
       if (tab === 'activity') loadActivity();
       if (tab === 'drafts') loadReplacedDrafts();
@@ -323,7 +369,7 @@ const dashboardHTML = `
         orders.forEach(function(o) { if (o.edi_customer_name) customers.add(o.edi_customer_name); });
         populateCustomerFilter();
         applyFilters();
-        loadStats();
+        updateStats();
       } catch (e) { toast('Failed to load orders', 'error'); }
     }
     
@@ -338,17 +384,27 @@ const dashboardHTML = `
     function getOrderSyncStatus(o) {
       if (o.status === 'failed') return 'failed';
       if (o.status === 'pending') return 'pending';
-      if (o.status === 'processed' && o.zoho_so_id) return 'in_zoho';
-      if (o.status === 'processed' && !o.zoho_so_id) return 'not_synced';
+      if (o.status === 'processed') return 'in_zoho';
       return 'pending';
+    }
+    
+    function updateStats() {
+      var total = orders.length;
+      var processed = orders.filter(function(o) { return o.status === 'processed'; }).length;
+      var pending = orders.filter(function(o) { return o.status === 'pending'; }).length;
+      var failed = orders.filter(function(o) { return o.status === 'failed'; }).length;
+      
+      document.getElementById('statTotal').textContent = total;
+      document.getElementById('statProcessed').textContent = processed;
+      document.getElementById('statPending').textContent = pending;
+      document.getElementById('statFailed').textContent = failed;
+      document.getElementById('pendingBadge').textContent = pending;
     }
     
     function applyFilters() {
       var searchPO = document.getElementById('searchPO').value.toLowerCase();
       var customer = document.getElementById('filterCustomer').value;
       var status = document.getElementById('filterStatus').value;
-      var dateFrom = document.getElementById('filterDateFrom').value;
-      var dateTo = document.getElementById('filterDateTo').value;
       
       filteredOrders = orders.filter(function(o) {
         if (searchPO && !(o.edi_order_number || '').toLowerCase().includes(searchPO)) return false;
@@ -357,36 +413,21 @@ const dashboardHTML = `
           var syncStatus = getOrderSyncStatus(o);
           if (status !== syncStatus) return false;
         }
-        if (dateFrom) {
-          var orderDate = new Date(o.created_at).toISOString().split('T')[0];
-          if (orderDate < dateFrom) return false;
-        }
-        if (dateTo) {
-          var orderDate = new Date(o.created_at).toISOString().split('T')[0];
-          if (orderDate > dateTo) return false;
-        }
         return true;
       });
       
       renderOrders();
-      document.querySelectorAll('.stat-card').forEach(function(c) { c.classList.remove('active-filter'); });
     }
     
     function clearFilters() {
       document.getElementById('searchPO').value = '';
       document.getElementById('filterCustomer').value = '';
       document.getElementById('filterStatus').value = '';
-      document.getElementById('filterDateFrom').value = '';
-      document.getElementById('filterDateTo').value = '';
       applyFilters();
     }
     
     function filterByStatus(status) {
       document.getElementById('filterStatus').value = status;
-      document.getElementById('searchPO').value = '';
-      document.getElementById('filterCustomer').value = '';
-      document.getElementById('filterDateFrom').value = '';
-      document.getElementById('filterDateTo').value = '';
       applyFilters();
     }
     
@@ -407,15 +448,12 @@ const dashboardHTML = `
         var statusBadge, zohoCell;
         if (syncStatus === 'in_zoho') {
           statusBadge = '<span class="status-badge status-in-zoho">✓ Sent to Zoho</span>';
-          zohoCell = '<a href="https://books.zoho.com/app/677681121#/salesorders/' + o.zoho_so_id + '" target="_blank" class="zoho-link">View in Zoho ↗</a>';
-        } else if (syncStatus === 'not_synced') {
-          statusBadge = '<span class="status-badge status-not-synced">⚠️ Sent (Unlinked)</span>';
-          zohoCell = '<span class="no-zoho">—</span>';
+          zohoCell = o.zoho_so_id ? '<a href="https://books.zoho.com/app/677681121#/salesorders/' + o.zoho_so_id + '" target="_blank" class="zoho-link">View ↗</a>' : '<span class="no-zoho">—</span>';
         } else if (syncStatus === 'failed') {
-          statusBadge = '<span class="status-badge status-failed">❌ Send Failed</span>';
+          statusBadge = '<span class="status-badge status-failed">❌ Failed</span>';
           zohoCell = '<span class="no-zoho">—</span>';
         } else {
-          statusBadge = '<span class="status-badge status-pending">⏳ Ready to Send</span>';
+          statusBadge = '<span class="status-badge status-pending">⏳ Ready</span>';
           zohoCell = '<span class="no-zoho">—</span>';
         }
         
@@ -433,66 +471,141 @@ const dashboardHTML = `
       }).join('');
     }
     
-    // EXPORT TO CSV/EXCEL FUNCTION
-    function exportToCSV() {
-      // Filter to only processed orders (sent to Zoho)
-      var exportOrders = orders.filter(function(o) { 
-        return o.status === 'processed'; 
-      });
-      
-      if (exportOrders.length === 0) {
-        toast('No processed orders to export', 'error');
+    // SYNC WITH ZOHO - Mark orders that are already in Zoho
+    async function syncWithZoho() {
+      toast('Syncing with Zoho Books...', 'info');
+      try {
+        var res = await fetch('/sync-with-zoho', { method: 'POST' });
+        var data = await res.json();
+        if (data.success) {
+          toast('Matched ' + data.matched + ' orders already in Zoho!', 'success');
+          loadOrders();
+        } else {
+          toast('Sync failed: ' + (data.error || 'Unknown error'), 'error');
+        }
+      } catch(e) {
+        toast('Sync failed: ' + e.message, 'error');
+      }
+    }
+    
+    // LOAD ZOHO DRAFTS
+    async function loadDrafts() {
+      toast('Loading Zoho drafts...', 'info');
+      try {
+        var res = await fetch('/zoho-drafts');
+        var data = await res.json();
+        if (data.success) {
+          zohoDrafts = data.drafts;
+          renderDrafts();
+          toast('Loaded ' + data.count + ' draft orders', 'success');
+        } else {
+          toast('Failed to load drafts: ' + data.error, 'error');
+        }
+      } catch(e) {
+        toast('Failed to load drafts', 'error');
+      }
+    }
+    
+    function renderDrafts() {
+      var container = document.getElementById('draftsContainer');
+      if (!zohoDrafts.length) {
+        container.innerHTML = '<div class="empty-state">No draft orders found in Zoho Books.</div>';
         return;
       }
       
-      // Build CSV content
-      var headers = ['PO Number', 'Customer', 'Zoho SO ID', 'Status', 'Items', 'Amount', 'EDI Received', 'Processed At'];
-      var rows = [headers.join(',')];
-      
-      exportOrders.forEach(function(o) {
-        var items = o.parsed_data && o.parsed_data.items ? o.parsed_data.items : [];
-        var amt = items.reduce(function(s,i) { return s + (i.quantityOrdered||0)*(i.unitPrice||0); }, 0);
-        var syncStatus = o.zoho_so_id ? 'Sent to Zoho' : 'Sent (Unlinked)';
-        
-        var row = [
-          '"' + (o.edi_order_number || '') + '"',
-          '"' + (o.edi_customer_name || '') + '"',
-          '"' + (o.zoho_so_id || '') + '"',
-          '"' + syncStatus + '"',
-          items.length,
-          '"$' + amt.toFixed(2) + '"',
-          '"' + new Date(o.created_at).toLocaleString() + '"',
-          '"' + (o.processed_at ? new Date(o.processed_at).toLocaleString() : '') + '"'
-        ];
-        rows.push(row.join(','));
-      });
-      
-      var csv = rows.join('\\n');
-      
-      // Download the file
-      var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      var link = document.createElement('a');
-      var url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', 'zoho-orders-export-' + new Date().toISOString().split('T')[0] + '.csv');
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      toast('Exported ' + exportOrders.length + ' orders to CSV', 'success');
+      container.innerHTML = zohoDrafts.map(function(d) {
+        return '<div class="draft-card">' +
+          '<div class="draft-card-header">' +
+            '<div>' +
+              '<div class="draft-card-title">' + d.customer + '</div>' +
+              '<div class="draft-card-meta">SO# ' + d.number + (d.reference ? ' | Ref: ' + d.reference : '') + '</div>' +
+            '</div>' +
+            '<span class="status-badge status-draft">Draft</span>' +
+          '</div>' +
+          '<div class="draft-card-body">' +
+            '<div class="order-field"><div class="order-field-label">Date</div><div class="order-field-value">' + d.date + '</div></div>' +
+            '<div class="order-field"><div class="order-field-label">Total</div><div class="order-field-value">$' + (d.total||0).toLocaleString('en-US',{minimumFractionDigits:2}) + '</div></div>' +
+            '<div class="order-field"><div class="order-field-label">Reference</div><div class="order-field-value">' + (d.reference||'—') + '</div></div>' +
+          '</div>' +
+          '<div class="draft-card-actions">' +
+            '<button class="btn btn-secondary" onclick="findMatchingEDI(\\'' + d.id + '\\')">🔍 Find Matching EDI</button>' +
+            '<a href="https://books.zoho.com/app/677681121#/salesorders/' + d.id + '" target="_blank" class="btn btn-secondary">View in Zoho ↗</a>' +
+          '</div>' +
+        '</div>';
+      }).join('');
     }
     
-    async function loadStats() {
-      try {
-        var res = await fetch('/status');
-        var d = (await res.json()).last24Hours;
-        document.getElementById('statTotal').textContent = d.total||0;
-        document.getElementById('statProcessed').textContent = d.processed||0;
-        document.getElementById('statPending').textContent = d.pending||0;
-        document.getElementById('statFailed').textContent = d.failed||0;
-        document.getElementById('pendingBadge').textContent = d.pending||0;
-      } catch(e) {}
+    function findMatchingEDI(draftId) {
+      var draft = zohoDrafts.find(function(d) { return d.id === draftId; });
+      if (!draft) return;
+      
+      // Find pending EDI orders for the same customer
+      var matches = orders.filter(function(o) {
+        return o.status === 'pending' && 
+               o.edi_customer_name && 
+               draft.customer && 
+               o.edi_customer_name.toLowerCase().includes(draft.customer.split(' ')[0].toLowerCase());
+      });
+      
+      if (matches.length === 0) {
+        toast('No matching EDI orders found for ' + draft.customer, 'warning');
+        return;
+      }
+      
+      // For now, show the first match in comparison modal
+      showComparison(matches[0], draft);
+    }
+    
+    function showComparison(ediOrder, zohoDraft) {
+      currentComparison = { edi: ediOrder, draft: zohoDraft };
+      
+      var items = ediOrder.parsed_data && ediOrder.parsed_data.items ? ediOrder.parsed_data.items : [];
+      var ediTotal = items.reduce(function(s,i) { return s + (i.quantityOrdered||0)*(i.unitPrice||0); }, 0);
+      
+      document.getElementById('compareModalBody').innerHTML = 
+        '<div class="comparison-grid">' +
+          '<div class="comparison-column edi">' +
+            '<h3>📥 EDI Order (Confirmed)</h3>' +
+            '<div class="order-field"><div class="order-field-label">PO Number</div><div class="order-field-value">' + ediOrder.edi_order_number + '</div></div>' +
+            '<div class="order-field"><div class="order-field-label">Customer</div><div class="order-field-value">' + ediOrder.edi_customer_name + '</div></div>' +
+            '<div class="order-field"><div class="order-field-label">Items</div><div class="order-field-value">' + items.length + '</div></div>' +
+            '<div class="order-field"><div class="order-field-label">Total</div><div class="order-field-value">$' + ediTotal.toLocaleString('en-US',{minimumFractionDigits:2}) + '</div></div>' +
+          '</div>' +
+          '<div class="comparison-column draft">' +
+            '<h3>📝 Zoho Draft</h3>' +
+            '<div class="order-field"><div class="order-field-label">SO Number</div><div class="order-field-value">' + zohoDraft.number + '</div></div>' +
+            '<div class="order-field"><div class="order-field-label">Customer</div><div class="order-field-value">' + zohoDraft.customer + '</div></div>' +
+            '<div class="order-field"><div class="order-field-label">Reference</div><div class="order-field-value">' + (zohoDraft.reference||'—') + '</div></div>' +
+            '<div class="order-field"><div class="order-field-label">Total</div><div class="order-field-value' + (Math.abs(ediTotal - zohoDraft.total) > 1 ? ' diff-highlight' : '') + '">$' + (zohoDraft.total||0).toLocaleString('en-US',{minimumFractionDigits:2}) + '</div></div>' +
+          '</div>' +
+        '</div>' +
+        (Math.abs(ediTotal - zohoDraft.total) > 1 ? '<div class="warning-box" style="margin-top:1rem;">⚠️ Total amounts differ by $' + Math.abs(ediTotal - zohoDraft.total).toFixed(2) + '</div>' : '');
+      
+      document.getElementById('compareModal').classList.add('active');
+    }
+    
+    function closeCompareModal() {
+      document.getElementById('compareModal').classList.remove('active');
+      currentComparison = null;
+    }
+    
+    async function replaceDraft() {
+      if (!currentComparison) return;
+      toast('Replacing draft with EDI data...', 'info');
+      // TODO: Implement draft replacement API
+      toast('Draft replacement coming soon!', 'warning');
+      closeCompareModal();
+    }
+    
+    function createNewOrder() {
+      if (!currentComparison) return;
+      // Process the EDI order as a new order
+      processOrderDirect(currentComparison.edi.id);
+      closeCompareModal();
+    }
+    
+    function autoMatchDrafts() {
+      toast('Auto-matching coming soon!', 'info');
     }
     
     function toggleSelect(id) { selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id); }
@@ -517,32 +630,20 @@ const dashboardHTML = `
       var syncStatus = getOrderSyncStatus(o);
       
       var zohoSection = '';
-      if (syncStatus === 'in_zoho') {
+      if (syncStatus === 'in_zoho' && o.zoho_so_id) {
         zohoSection = '<div class="zoho-link-box">' +
           '<div class="icon">✓</div>' +
           '<div>' +
             '<div class="label">SENT TO ZOHO BOOKS</div>' +
-            '<div class="value"><a href="https://books.zoho.com/app/677681121#/salesorders/' + o.zoho_so_id + '" target="_blank">View Sales Order in Zoho ↗</a></div>' +
+            '<div class="value"><a href="https://books.zoho.com/app/677681121#/salesorders/' + o.zoho_so_id + '" target="_blank">View Sales Order ' + (o.zoho_so_number||'') + ' ↗</a></div>' +
           '</div>' +
         '</div>';
-      } else if (syncStatus === 'not_synced') {
-        zohoSection = '<div class="warning-box">' +
-          '<strong>⚠️ Sent (Unlinked)</strong> - This order was processed but we lost the Zoho reference. Check Zoho Books manually using the PO#.' +
-        '</div>';
       }
-      
-      var statusText, statusClass;
-      if (syncStatus === 'in_zoho') { statusText = '✓ Sent to Zoho'; statusClass = 'status-in-zoho'; }
-      else if (syncStatus === 'not_synced') { statusText = '⚠️ Sent (Unlinked)'; statusClass = 'status-not-synced'; }
-      else if (syncStatus === 'failed') { statusText = '❌ Send Failed'; statusClass = 'status-failed'; }
-      else { statusText = '⏳ Ready to Send'; statusClass = 'status-pending'; }
       
       var poNumber = (p.header && p.header.poNumber) ? p.header.poNumber : (o.edi_order_number || 'N/A');
       var orderDate = (p.dates && p.dates.orderDate) ? p.dates.orderDate : 'N/A';
       var shipNotBefore = (p.dates && p.dates.shipNotBefore) ? p.dates.shipNotBefore : '';
       var shipNotAfter = (p.dates && p.dates.shipNotAfter) ? p.dates.shipNotAfter : '';
-      var cancelDate = (p.dates && p.dates.cancelDate) ? p.dates.cancelDate : '-';
-      var paymentTerms = (p.header && p.header.paymentTerms) ? p.header.paymentTerms : 'N/A';
       var shipToInfo = [ship.name, ship.city, ship.state].filter(Boolean).join(', ') || 'N/A';
       
       document.getElementById('modalBody').innerHTML = zohoSection +
@@ -550,21 +651,20 @@ const dashboardHTML = `
           '<div class="order-field"><div class="order-field-label">PO Number</div><div class="order-field-value">' + poNumber + '</div></div>' +
           '<div class="order-field"><div class="order-field-label">Customer</div><div class="order-field-value">' + (o.edi_customer_name||'Unknown') + '</div></div>' +
           '<div class="order-field"><div class="order-field-label">Order Date</div><div class="order-field-value">' + orderDate + '</div></div>' +
-          '<div class="order-field"><div class="order-field-label">Status</div><div class="order-field-value"><span class="status-badge ' + statusClass + '">' + statusText + '</span></div></div>' +
+          '<div class="order-field"><div class="order-field-label">Status</div><div class="order-field-value"><span class="status-badge status-' + (syncStatus === 'in_zoho' ? 'in-zoho' : syncStatus) + '">' + (syncStatus === 'in_zoho' ? '✓ In Zoho' : syncStatus === 'failed' ? '❌ Failed' : '⏳ Ready') + '</span></div></div>' +
         '</div>' +
         '<div class="order-header">' +
           '<div class="order-field"><div class="order-field-label">Ship To</div><div class="order-field-value" style="font-size:0.85rem">' + shipToInfo + '</div></div>' +
           '<div class="order-field"><div class="order-field-label">Ship Window</div><div class="order-field-value">' + shipNotBefore + ' to ' + shipNotAfter + '</div></div>' +
-          '<div class="order-field"><div class="order-field-label">Cancel Date</div><div class="order-field-value">' + cancelDate + '</div></div>' +
-          '<div class="order-field"><div class="order-field-label">Terms</div><div class="order-field-value">' + paymentTerms + '</div></div>' +
+          '<div class="order-field" style="grid-column: span 2"><div class="order-field-label">Line Items</div><div class="order-field-value">' + items.length + ' items, ' + totalQty.toLocaleString() + ' units</div></div>' +
         '</div>' +
         (o.error_message ? '<div class="error-box"><strong>Error:</strong> ' + o.error_message + '</div>' : '') +
-        '<h3 style="margin:1rem 0;color:#1e3a5f">Line Items (' + items.length + ')</h3>' +
+        '<h3 style="margin:1rem 0;color:#1e3a5f">Line Items</h3>' +
         '<div class="line-items-container">' +
           '<table class="line-items-table">' +
             '<thead><tr><th>Style</th><th>Description</th><th>Color</th><th>Size</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead>' +
             '<tbody>' + (items.length ? items.map(function(i) { 
-              var style = (i.productIds && (i.productIds.vendorItemNumber || i.productIds.buyerItemNumber)) || '';
+              var style = (i.productIds && (i.productIds.vendorItemNumber || i.productIds.buyerItemNumber)) || i.sku || '';
               return '<tr>' +
                 '<td>' + style + '</td>' +
                 '<td>' + (i.description||'') + '</td>' +
@@ -574,7 +674,7 @@ const dashboardHTML = `
                 '<td>$' + (i.unitPrice||0).toFixed(2) + '</td>' +
                 '<td>$' + ((i.quantityOrdered||0)*(i.unitPrice||0)).toFixed(2) + '</td>' +
               '</tr>'; 
-            }).join('') : '<tr><td colspan="7" style="text-align:center;color:#86868b;padding:2rem;">No line items parsed</td></tr>') + '</tbody>' +
+            }).join('') : '<tr><td colspan="7" class="empty-state">No line items</td></tr>') + '</tbody>' +
           '</table>' +
         '</div>' +
         '<div class="summary-row">' +
@@ -584,35 +684,28 @@ const dashboardHTML = `
         '</div>';
       
       var btn = document.getElementById('processBtn');
-      if (syncStatus === 'in_zoho') {
-        btn.disabled = true;
-        btn.textContent = 'Already Sent to Zoho';
-      } else if (syncStatus === 'not_synced') {
-        btn.disabled = true;
-        btn.textContent = 'Already Processed';
-      } else {
-        btn.disabled = false;
-        btn.textContent = 'Send to Zoho';
-      }
+      btn.disabled = syncStatus === 'in_zoho';
+      btn.textContent = syncStatus === 'in_zoho' ? 'Already in Zoho' : 'Send to Zoho';
     }
     
     function closeModal() { document.getElementById('orderModal').classList.remove('active'); currentOrder = null; }
     
     async function processCurrentOrder() {
       if (!currentOrder) return;
-      try {
-        document.getElementById('processBtn').disabled = true;
-        document.getElementById('processBtn').textContent = 'Sending...';
-        await processOrderDirect(currentOrder.id);
-      } catch(e) { toast('Error: ' + e.message, 'error'); }
-      finally { var btn = document.getElementById('processBtn'); if (btn) { btn.disabled = false; btn.textContent = 'Send to Zoho'; } }
+      document.getElementById('processBtn').disabled = true;
+      document.getElementById('processBtn').textContent = 'Sending...';
+      await processOrderDirect(currentOrder.id);
+      document.getElementById('processBtn').disabled = false;
+      document.getElementById('processBtn').textContent = 'Send to Zoho';
     }
     
     async function processOrderDirect(orderId) {
-      var res = await fetch('/process-selected', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ orderIds: [orderId] }) });
-      var data = await res.json();
-      if (data.processed > 0) { toast('Order sent to Zoho successfully!', 'success'); closeModal(); loadOrders(); }
-      else { toast('Error: ' + (data.error || 'Processing failed'), 'error'); }
+      try {
+        var res = await fetch('/process-selected', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ orderIds: [orderId] }) });
+        var data = await res.json();
+        if (data.processed > 0) { toast('Order sent to Zoho!', 'success'); closeModal(); loadOrders(); }
+        else { toast('Error: ' + (data.error || 'Failed'), 'error'); }
+      } catch(e) { toast('Error: ' + e.message, 'error'); }
     }
     
     async function fetchSFTP() {
@@ -623,30 +716,49 @@ const dashboardHTML = `
     
     async function processOrders() {
       var limit = document.getElementById('limitSelect').value;
-      try { var res = await fetch('/process-limit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ limit: parseInt(limit) }) }); var data = await res.json(); toast('Sent: ' + data.processed + ', Failed: ' + data.failed, data.failed ? 'error' : 'success'); loadOrders(); }
+      try { var res = await fetch('/process-limit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ limit: parseInt(limit) }) }); var data = await res.json(); toast('Processed: ' + data.processed + ', Failed: ' + data.failed, data.failed ? 'error' : 'success'); loadOrders(); }
       catch(e) { toast('Processing failed', 'error'); }
     }
     
     async function processSelected() {
       if (!selectedIds.size) { toast('No orders selected', 'error'); return; }
-      try { var res = await fetch('/process-selected', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ orderIds: Array.from(selectedIds) }) }); var data = await res.json(); toast('Sent: ' + data.processed, 'success'); selectedIds.clear(); loadOrders(); }
+      try { var res = await fetch('/process-selected', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ orderIds: Array.from(selectedIds) }) }); var data = await res.json(); toast('Processed: ' + data.processed, 'success'); selectedIds.clear(); loadOrders(); }
       catch(e) { toast('Failed', 'error'); }
     }
     
-    async function retryFailed() {
-      try { var res = await fetch('/retry-failed', { method: 'POST' }); var data = await res.json(); toast('Reset ' + data.count + ' failed orders', 'success'); loadOrders(); }
-      catch(e) { toast('Failed', 'error'); }
-    }
-    
-    async function resetAll() {
-      if (!confirm('Reset ALL orders to pending?')) return;
-      try { await fetch('/reset-to-pending'); toast('All orders reset', 'success'); loadOrders(); }
-      catch(e) { toast('Failed', 'error'); }
+    function exportToCSV() {
+      var exportOrders = orders.filter(function(o) { return o.status === 'processed'; });
+      if (!exportOrders.length) { exportOrders = orders; }
+      
+      var headers = ['PO Number', 'Customer', 'Zoho SO ID', 'Zoho SO Number', 'Status', 'Items', 'Amount', 'Date'];
+      var rows = [headers.join(',')];
+      
+      exportOrders.forEach(function(o) {
+        var items = o.parsed_data && o.parsed_data.items ? o.parsed_data.items : [];
+        var amt = items.reduce(function(s,i) { return s + (i.quantityOrdered||0)*(i.unitPrice||0); }, 0);
+        rows.push([
+          '"' + (o.edi_order_number || '') + '"',
+          '"' + (o.edi_customer_name || '') + '"',
+          '"' + (o.zoho_so_id || '') + '"',
+          '"' + (o.zoho_so_number || '') + '"',
+          '"' + o.status + '"',
+          items.length,
+          '"$' + amt.toFixed(2) + '"',
+          '"' + new Date(o.created_at).toLocaleDateString() + '"'
+        ].join(','));
+      });
+      
+      var blob = new Blob([rows.join('\\n')], { type: 'text/csv' });
+      var link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'edi-orders-' + new Date().toISOString().split('T')[0] + '.csv';
+      link.click();
+      toast('Exported ' + exportOrders.length + ' orders', 'success');
     }
     
     async function loadMappings() {
-      try { var res = await fetch('/customer-mappings'); var mappings = await res.json(); document.getElementById('mappingsList').innerHTML = mappings.length ? mappings.map(function(m) { return '<div class="mapping-item"><span style="flex:1">' + m.edi_customer_name + '</span><span class="mapping-arrow">→</span><span style="flex:1">' + m.zoho_account_name + '</span><button class="btn btn-danger" style="padding:0.25rem 0.75rem;font-size:0.75rem" onclick="deleteMapping(' + m.id + ')">Delete</button></div>'; }).join('') : '<p class="empty-state">No mappings yet.</p>'; }
-      catch(e) {}
+      try { var res = await fetch('/customer-mappings'); var mappings = await res.json(); document.getElementById('mappingsList').innerHTML = mappings.length ? mappings.map(function(m) { return '<div class="mapping-item"><span style="flex:1">' + m.edi_customer_name + '</span><span class="mapping-arrow">→</span><span style="flex:1">' + m.zoho_account_name + '</span><button class="btn btn-danger" style="padding:0.25rem 0.75rem;font-size:0.75rem" onclick="deleteMapping(' + m.id + ')">Delete</button></div>'; }).join('') : '<div class="empty-state">No mappings yet.</div>'; }
+      catch(e) { document.getElementById('mappingsList').innerHTML = '<div class="empty-state">No mappings yet.</div>'; }
     }
     
     async function addMapping() {
@@ -660,13 +772,17 @@ const dashboardHTML = `
     async function deleteMapping(id) { try { await fetch('/customer-mappings/' + id, { method: 'DELETE' }); loadMappings(); } catch(e) {} }
     
     async function loadActivity() {
-      try { var res = await fetch('/processing-logs?limit=50'); var logs = await res.json(); document.getElementById('activityList').innerHTML = logs.length ? logs.map(function(l) { return '<div class="activity-item ' + l.status + '"><div class="activity-time">' + new Date(l.created_at).toLocaleString() + '</div><div class="activity-content"><div class="activity-title">' + (l.action||'Action') + '</div><div class="activity-details">' + (l.details||'') + '</div></div></div>'; }).join('') : '<p class="empty-state">No activity yet.</p>'; }
-      catch(e) { document.getElementById('activityList').innerHTML = '<p class="empty-state">No activity yet.</p>'; }
+      try { var res = await fetch('/processing-logs'); var logs = await res.json(); document.getElementById('activityList').innerHTML = logs.length ? logs.map(function(l) { return '<div class="mapping-item"><span style="flex:2">' + (l.action||'Action') + '</span><span style="flex:1">' + (l.customer_name||'') + '</span><span style="flex:1;color:#86868b">' + new Date(l.created_at).toLocaleString() + '</span></div>'; }).join('') : '<div class="empty-state">No activity yet.</div>'; }
+      catch(e) { document.getElementById('activityList').innerHTML = '<div class="empty-state">No activity yet.</div>'; }
     }
     
     async function loadReplacedDrafts() {
-      try { var res = await fetch('/replaced-drafts'); var drafts = await res.json(); document.getElementById('draftsList').innerHTML = drafts.length ? drafts.map(function(d) { return '<div class="mapping-item"><div style="flex:1"><strong>' + d.original_so_number + '</strong><div style="font-size:0.75rem;color:#86868b">Replaced by PO# ' + d.edi_po_number + ' on ' + new Date(d.replaced_at).toLocaleDateString() + '</div></div><button class="btn btn-secondary" style="padding:0.25rem 0.75rem;font-size:0.75rem">Details</button></div>'; }).join('') : '<p class="empty-state">No replaced drafts yet.</p>'; }
-      catch(e) {}
+      try { var res = await fetch('/replaced-drafts'); var drafts = await res.json(); document.getElementById('draftsList').innerHTML = drafts.length ? drafts.map(function(d) { return '<div class="mapping-item"><span>' + d.original_so_number + '</span><span style="color:#86868b">→ PO# ' + d.edi_po_number + '</span><span style="color:#86868b">' + new Date(d.replaced_at).toLocaleDateString() + '</span></div>'; }).join('') : '<div class="empty-state">No replaced drafts yet.</div>'; }
+      catch(e) { document.getElementById('draftsList').innerHTML = '<div class="empty-state">No replaced drafts yet.</div>'; }
+    }
+    
+    async function loadStats() {
+      try { var res = await fetch('/status'); var d = (await res.json()).last24Hours; } catch(e) {}
     }
     
     function toast(msg, type) { type = type || 'info'; var t = document.createElement('div'); t.className = 'toast ' + type; t.textContent = msg; document.getElementById('toasts').appendChild(t); setTimeout(function() { t.remove(); }, 4000); }
