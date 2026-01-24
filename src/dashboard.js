@@ -471,20 +471,112 @@ const dashboardHTML = `
       }).join('');
     }
     
-    // SYNC WITH ZOHO - Mark orders that are already in Zoho
+    // SYNC WITH ZOHO - Find matches and show for review
     async function syncWithZoho() {
-      toast('Syncing with Zoho Books...', 'info');
+      toast('Searching Zoho for matches...', 'info');
       try {
         var res = await fetch('/sync-with-zoho', { method: 'POST' });
         var data = await res.json();
         if (data.success) {
-          toast('Matched ' + data.matched + ' orders already in Zoho!', 'success');
-          loadOrders();
+          if (data.matches && data.matches.length > 0) {
+            showMatchReview(data.matches, data.noMatch);
+          } else {
+            toast('No matches found in Zoho', 'warning');
+          }
         } else {
           toast('Sync failed: ' + (data.error || 'Unknown error'), 'error');
         }
       } catch(e) {
         toast('Sync failed: ' + e.message, 'error');
+      }
+    }
+    
+    let pendingMatches = [];
+    
+    function showMatchReview(matches, noMatch) {
+      pendingMatches = matches;
+      
+      var html = '<div class="info-box" style="margin-bottom:1rem;">' +
+        '<strong>Found ' + matches.length + ' EDI orders matching Zoho orders</strong><br>' +
+        '<span style="color:#86868b;">' + (noMatch ? noMatch.length : 0) + ' EDI orders have no match in Zoho (new orders)</span>' +
+        '</div>' +
+        '<div style="margin-bottom:1rem;">' +
+          '<button class="btn btn-success" onclick="confirmAllMatches()">✓ Confirm All ' + matches.length + ' Matches</button> ' +
+          '<button class="btn btn-secondary" onclick="closeMatchReview()">Cancel</button>' +
+        '</div>' +
+        '<div class="table-container"><table>' +
+        '<thead><tr><th><input type="checkbox" checked onchange="toggleAllMatches(this)"></th><th>PO #</th><th>EDI Customer</th><th>EDI Total</th><th>Zoho SO#</th><th>Zoho Total</th><th>Diff</th><th>Zoho Status</th></tr></thead>' +
+        '<tbody>';
+      
+      matches.forEach(function(m, idx) {
+        var diffClass = m.totalDiff > 1 ? ' style="color:#ff9500;font-weight:bold;"' : '';
+        html += '<tr>' +
+          '<td><input type="checkbox" class="match-checkbox" data-idx="' + idx + '" checked></td>' +
+          '<td><strong>' + m.poNumber + '</strong></td>' +
+          '<td>' + (m.ediCustomer || '') + '</td>' +
+          '<td>$' + (m.ediTotal || 0).toLocaleString('en-US', {minimumFractionDigits:2}) + '</td>' +
+          '<td>' + m.zohoSoNumber + '</td>' +
+          '<td>$' + (m.zohoTotal || 0).toLocaleString('en-US', {minimumFractionDigits:2}) + '</td>' +
+          '<td' + diffClass + '>$' + (m.totalDiff || 0).toFixed(2) + '</td>' +
+          '<td><span class="status-badge status-' + (m.zohoStatus === 'draft' ? 'draft' : 'in-zoho') + '">' + (m.zohoStatus || '') + '</span></td>' +
+        '</tr>';
+      });
+      
+      html += '</tbody></table></div>';
+      
+      document.getElementById('modalBody').innerHTML = html;
+      document.getElementById('processBtn').style.display = 'none';
+      document.querySelector('.modal-title').textContent = 'Review Zoho Matches';
+      document.getElementById('orderModal').classList.add('active');
+    }
+    
+    function toggleAllMatches(checkbox) {
+      document.querySelectorAll('.match-checkbox').forEach(function(cb) {
+        cb.checked = checkbox.checked;
+      });
+    }
+    
+    function closeMatchReview() {
+      document.getElementById('orderModal').classList.remove('active');
+      document.getElementById('processBtn').style.display = '';
+      pendingMatches = [];
+    }
+    
+    async function confirmAllMatches() {
+      var selectedMatches = [];
+      document.querySelectorAll('.match-checkbox:checked').forEach(function(cb) {
+        var idx = parseInt(cb.dataset.idx);
+        var m = pendingMatches[idx];
+        selectedMatches.push({
+          ediOrderId: m.ediOrderId,
+          zohoSoId: m.zohoSoId,
+          zohoSoNumber: m.zohoSoNumber
+        });
+      });
+      
+      if (selectedMatches.length === 0) {
+        toast('No matches selected', 'error');
+        return;
+      }
+      
+      toast('Confirming ' + selectedMatches.length + ' matches...', 'info');
+      
+      try {
+        var res = await fetch('/confirm-matches', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ matches: selectedMatches })
+        });
+        var data = await res.json();
+        if (data.success) {
+          toast('Confirmed ' + data.confirmed + ' matches!', 'success');
+          closeMatchReview();
+          loadOrders();
+        } else {
+          toast('Error: ' + data.error, 'error');
+        }
+      } catch(e) {
+        toast('Error: ' + e.message, 'error');
       }
     }
     
