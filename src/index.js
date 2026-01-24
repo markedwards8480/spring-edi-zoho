@@ -444,12 +444,12 @@ app.get('/replaced-drafts', async (req, res) => {
   }
 });
 
-// Sync with Zoho - FIND matches but DON'T auto-update - return for review
+// Sync with Zoho - FIND matches with detailed scoring for review
 app.post('/sync-with-zoho', async (req, res) => {
   const { pool } = require('./db');
   
   try {
-    logger.info('Starting Zoho sync - finding potential matches');
+    logger.info('Starting Zoho sync - finding potential matches with scoring');
     
     const ZohoClient = require('./zoho');
     const zoho = new ZohoClient();
@@ -470,12 +470,13 @@ app.post('/sync-with-zoho', async (req, res) => {
     // Combine customer names to search for
     const searchNames = [...new Set([...ediCustomers, ...mappedNames])].filter(Boolean);
     
-    // Fetch Zoho orders only for these customers
+    // Fetch Zoho orders only for these customers (include line items)
     let allZohoOrders = [];
     
     for (const customerName of searchNames) {
       try {
-        const response = await axios({
+        // First get the list of orders
+        const listResponse = await axios({
           method: 'GET',
           url: 'https://www.zohoapis.com/books/v3/salesorders',
           headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
@@ -486,25 +487,35 @@ app.post('/sync-with-zoho', async (req, res) => {
           }
         });
         
-        const orders = response.data?.salesorders || [];
-        allZohoOrders = allZohoOrders.concat(orders);
+        const orders = listResponse.data?.salesorders || [];
+        
+        // For each order, get full details including line items
+        for (const order of orders.slice(0, 50)) { // Limit to 50 per customer for performance
+          try {
+            const detailResponse = await axios({
+              method: 'GET',
+              url: `https://www.zohoapis.com/books/v3/salesorders/${order.salesorder_id}`,
+              headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
+              params: { organization_id: process.env.ZOHO_ORG_ID }
+            });
+            if (detailResponse.data?.salesorder) {
+              allZohoOrders.push(detailResponse.data.salesorder);
+            }
+          } catch (e) {
+            // If detail fetch fails, use basic info
+            allZohoOrders.push(order);
+          }
+        }
+        
         logger.info(`Fetched ${orders.length} orders for customer: ${customerName}`);
       } catch (err) {
         logger.warn(`Could not fetch orders for ${customerName}: ${err.message}`);
       }
     }
     
-    logger.info(`Fetched ${allZohoOrders.length} total orders from Zoho Books for EDI customers`);
+    logger.info(`Fetched ${allZohoOrders.length} total orders from Zoho Books`);
     
-    // Build a map of reference_number (PO#) -> Zoho order
-    const zohoByPO = {};
-    for (const zo of allZohoOrders) {
-      if (zo.reference_number) {
-        zohoByPO[zo.reference_number] = zo;
-      }
-    }
-    
-    // Get all pending EDI orders with their details
+    // Get all pending EDI orders with full details
     const ediResult = await pool.query(`
       SELECT id, edi_order_number, edi_customer_name, parsed_data, created_at
       FROM edi_orders 
@@ -514,55 +525,187 @@ app.post('/sync-with-zoho', async (req, res) => {
     const matches = [];
     const noMatch = [];
     
+    // Smart matching function
+    function calculateMatchScore(ediOrder, zohoOrder) {
+      const result = {
+        matches: [],
+        warnings: [],
+        mismatches: [],
+        score: 0,
+        maxScore: 100
+      };
+      
+      const ediPO = ediOrder.edi_order_number || '';
+      const zohoPO = zohoOrder.reference_number || '';
+      const ediCustomer = (ediOrder.edi_customer_name || '').toLowerCase();
+      const zohoCustomer = (zohoOrder.customer_name || '').toLowerCase();
+      const ediItems = ediOrder.parsed_data?.items || [];
+      const zohoItems = zohoOrder.line_items || [];
+      
+      // 1. PO Number Match (30 points)
+      if (ediPO && zohoPO && ediPO === zohoPO) {
+        result.score += 30;
+        result.matches.push({ field: 'PO Number', edi: ediPO, zoho: zohoPO });
+      } else if (ediPO && zohoPO) {
+        result.mismatches.push({ field: 'PO Number', edi: ediPO, zoho: zohoPO });
+      }
+      
+      // 2. Customer Match (20 points)
+      if (ediCustomer && zohoCustomer) {
+        if (ediCustomer === zohoCustomer || 
+            ediCustomer.includes(zohoCustomer.split(' ')[0].toLowerCase()) || 
+            zohoCustomer.includes(ediCustomer.split(' ')[0].toLowerCase())) {
+          result.score += 20;
+          result.matches.push({ field: 'Customer', edi: ediOrder.edi_customer_name, zoho: zohoOrder.customer_name });
+        } else {
+          result.mismatches.push({ field: 'Customer', edi: ediOrder.edi_customer_name, zoho: zohoOrder.customer_name });
+        }
+      }
+      
+      // 3. Ship Date Match (10 points)
+      const ediShipDate = ediOrder.parsed_data?.dates?.shipNotBefore || '';
+      const zohoShipDate = zohoOrder.shipment_date || zohoOrder.date || '';
+      if (ediShipDate && zohoShipDate) {
+        const ediD = ediShipDate.substring(0, 10);
+        const zohoD = zohoShipDate.substring(0, 10);
+        if (ediD === zohoD) {
+          result.score += 10;
+          result.matches.push({ field: 'Ship Date', edi: ediShipDate, zoho: zohoShipDate });
+        } else {
+          const diffDays = Math.abs((new Date(ediD) - new Date(zohoD)) / (1000*60*60*24));
+          if (diffDays <= 7) {
+            result.score += 5;
+            result.warnings.push({ field: 'Ship Date', edi: ediShipDate, zoho: zohoShipDate, diff: `${Math.round(diffDays)} days` });
+          } else {
+            result.mismatches.push({ field: 'Ship Date', edi: ediShipDate, zoho: zohoShipDate });
+          }
+        }
+      }
+      
+      // 4. Cancel Date Match (10 points)
+      const ediCancelDate = ediOrder.parsed_data?.dates?.shipNotAfter || '';
+      const zohoCancelDate = zohoOrder.cf_cancel_date || '';
+      if (ediCancelDate && zohoCancelDate) {
+        if (ediCancelDate.substring(0,10) === zohoCancelDate.substring(0,10)) {
+          result.score += 10;
+          result.matches.push({ field: 'Cancel Date', edi: ediCancelDate, zoho: zohoCancelDate });
+        } else {
+          result.warnings.push({ field: 'Cancel Date', edi: ediCancelDate, zoho: zohoCancelDate });
+        }
+      }
+      
+      // 5. Total Amount Match (15 points)
+      const ediTotal = ediItems.reduce((s, i) => s + (i.quantityOrdered||0) * (i.unitPrice||0), 0);
+      const zohoTotal = parseFloat(zohoOrder.total) || 0;
+      if (ediTotal > 0 && zohoTotal > 0) {
+        const diff = Math.abs(ediTotal - zohoTotal);
+        const pctDiff = (diff / Math.max(ediTotal, zohoTotal)) * 100;
+        if (pctDiff < 1) {
+          result.score += 15;
+          result.matches.push({ field: 'Total Amount', edi: '$' + ediTotal.toFixed(2), zoho: '$' + zohoTotal.toFixed(2) });
+        } else if (pctDiff < 10) {
+          result.score += 8;
+          result.warnings.push({ field: 'Total Amount', edi: '$' + ediTotal.toFixed(2), zoho: '$' + zohoTotal.toFixed(2), diff: '$' + diff.toFixed(2) });
+        } else {
+          result.mismatches.push({ field: 'Total Amount', edi: '$' + ediTotal.toFixed(2), zoho: '$' + zohoTotal.toFixed(2), diff: '$' + diff.toFixed(2) });
+        }
+      }
+      
+      // 6. Line Items / Styles Match (15 points)
+      if (ediItems.length > 0 && zohoItems.length > 0) {
+        const ediStyles = new Set(ediItems.map(i => (i.productIds?.vendorItemNumber || i.productIds?.buyerItemNumber || i.sku || '').toUpperCase()).filter(Boolean));
+        const zohoStyles = new Set(zohoItems.map(i => (i.sku || i.name || '').toUpperCase()).filter(Boolean));
+        const matched = [...ediStyles].filter(s => zohoStyles.has(s)).length;
+        const total = Math.max(ediStyles.size, zohoStyles.size);
+        
+        if (total > 0) {
+          const matchPct = matched / total;
+          if (matchPct >= 0.9) {
+            result.score += 15;
+            result.matches.push({ field: 'Styles', edi: ediStyles.size + ' styles', zoho: zohoStyles.size + ' styles', detail: matched + ' matched' });
+          } else if (matchPct >= 0.5) {
+            result.score += 8;
+            result.warnings.push({ field: 'Styles', edi: ediStyles.size + ' styles', zoho: zohoStyles.size + ' styles', detail: matched + ' of ' + total + ' matched' });
+          } else {
+            result.mismatches.push({ field: 'Styles', edi: ediStyles.size + ' styles', zoho: zohoStyles.size + ' styles', detail: 'Only ' + matched + ' matched' });
+          }
+        }
+      }
+      
+      result.percentage = Math.round((result.score / result.maxScore) * 100);
+      result.confidence = result.percentage >= 70 ? 'high' : result.percentage >= 40 ? 'medium' : 'low';
+      
+      return result;
+    }
+    
+    // Find best matches for each EDI order
     for (const edi of ediResult.rows) {
-      const poNumber = edi.edi_order_number;
-      const zohoOrder = zohoByPO[poNumber];
+      let bestMatch = null;
+      let bestScore = null;
       
-      // Calculate EDI total
-      const items = edi.parsed_data?.items || [];
-      const ediTotal = items.reduce((s, i) => s + (i.quantityOrdered || 0) * (i.unitPrice || 0), 0);
+      for (const zoho of allZohoOrders) {
+        const score = calculateMatchScore(edi, zoho);
+        
+        // Only consider if PO matches OR score is reasonably high
+        const poMatches = edi.edi_order_number && zoho.reference_number && 
+                          edi.edi_order_number === zoho.reference_number;
+        
+        if (poMatches || score.percentage >= 40) {
+          if (!bestScore || score.percentage > bestScore.percentage) {
+            bestMatch = zoho;
+            bestScore = score;
+          }
+        }
+      }
       
-      if (zohoOrder) {
-        // Found a match - add to matches array for review
+      const ediItems = edi.parsed_data?.items || [];
+      const ediTotal = ediItems.reduce((s, i) => s + (i.quantityOrdered||0) * (i.unitPrice||0), 0);
+      
+      if (bestMatch && bestScore && bestScore.percentage >= 30) {
         matches.push({
           ediOrderId: edi.id,
-          poNumber: poNumber,
+          poNumber: edi.edi_order_number,
           ediCustomer: edi.edi_customer_name,
           ediTotal: ediTotal,
-          ediItems: items.length,
-          ediDate: edi.created_at,
-          zohoSoId: zohoOrder.salesorder_id,
-          zohoSoNumber: zohoOrder.salesorder_number,
-          zohoCustomer: zohoOrder.customer_name,
-          zohoTotal: zohoOrder.total,
-          zohoStatus: zohoOrder.status,
-          zohoDate: zohoOrder.date,
-          totalDiff: Math.abs(ediTotal - (zohoOrder.total || 0))
+          ediItemCount: ediItems.length,
+          ediItems: ediItems.slice(0, 10), // First 10 items for preview
+          ediDates: edi.parsed_data?.dates || {},
+          zohoSoId: bestMatch.salesorder_id,
+          zohoSoNumber: bestMatch.salesorder_number,
+          zohoCustomer: bestMatch.customer_name,
+          zohoTotal: parseFloat(bestMatch.total) || 0,
+          zohoStatus: bestMatch.status,
+          zohoDate: bestMatch.date,
+          zohoItemCount: (bestMatch.line_items || []).length,
+          zohoItems: (bestMatch.line_items || []).slice(0, 10),
+          matchScore: bestScore
         });
       } else {
         noMatch.push({
           ediOrderId: edi.id,
-          poNumber: poNumber,
+          poNumber: edi.edi_order_number,
           ediCustomer: edi.edi_customer_name,
           ediTotal: ediTotal,
-          ediItems: items.length
+          ediItemCount: ediItems.length
         });
       }
     }
     
+    // Sort matches by score descending
+    matches.sort((a, b) => b.matchScore.percentage - a.matchScore.percentage);
+    
     logger.info(`Found ${matches.length} matches, ${noMatch.length} without matches`);
     
-    // Return matches for review - DO NOT auto-update
     res.json({
       success: true,
       zohoOrdersFound: allZohoOrders.length,
       matches: matches,
       noMatch: noMatch,
-      message: `Found ${matches.length} EDI orders that match Zoho orders. Review and confirm below.`
+      message: `Found ${matches.length} potential matches. Review the match scores below.`
     });
     
   } catch (error) {
-    logger.error('Zoho sync failed', { error: error.message });
+    logger.error('Zoho sync failed', { error: error.message, stack: error.stack });
     res.status(500).json({ success: false, error: error.message });
   }
 });
