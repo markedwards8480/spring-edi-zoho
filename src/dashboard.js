@@ -961,8 +961,177 @@ const dashboardHTML = `
       closeCompareModal();
     }
     
-    function autoMatchDrafts() {
-      toast('Auto-matching coming soon!', 'info');
+    async function autoMatchDrafts() {
+      if (!zohoDrafts || zohoDrafts.length === 0) {
+        toast('No Zoho drafts loaded. Click "Load Zoho Drafts" first.', 'warning');
+        return;
+      }
+      
+      toast('Auto-matching ' + zohoDrafts.length + ' drafts with EDI orders...', 'info');
+      
+      var pendingEDI = orders.filter(function(o) { return o.status === 'pending'; });
+      
+      if (pendingEDI.length === 0) {
+        toast('No pending EDI orders to match', 'warning');
+        return;
+      }
+      
+      var matches = [];
+      var noMatch = [];
+      
+      // For each Zoho draft, find the best matching EDI order
+      zohoDrafts.forEach(function(draft) {
+        var bestMatch = null;
+        var bestScore = 0;
+        
+        pendingEDI.forEach(function(edi) {
+          var score = calculateQuickMatchScore(edi, draft);
+          if (score > bestScore) {
+            bestScore = score;
+            bestMatch = edi;
+          }
+        });
+        
+        if (bestMatch && bestScore >= 30) {
+          matches.push({
+            draft: draft,
+            edi: bestMatch,
+            score: bestScore,
+            confidence: bestScore >= 70 ? 'high' : bestScore >= 50 ? 'medium' : 'low'
+          });
+        } else {
+          noMatch.push(draft);
+        }
+      });
+      
+      // Sort by score descending
+      matches.sort(function(a, b) { return b.score - a.score; });
+      
+      // Show results in modal
+      showAutoMatchResults(matches, noMatch);
+    }
+    
+    function calculateQuickMatchScore(edi, draft) {
+      var score = 0;
+      
+      // PO Number match (40 points)
+      var ediPO = (edi.edi_order_number || '').toUpperCase();
+      var draftRef = (draft.reference || '').toUpperCase();
+      if (ediPO && draftRef && ediPO === draftRef) {
+        score += 40;
+      }
+      
+      // Customer name match (25 points)
+      var ediCust = (edi.edi_customer_name || '').toLowerCase();
+      var draftCust = (draft.customer || '').toLowerCase();
+      if (ediCust && draftCust) {
+        if (ediCust === draftCust) {
+          score += 25;
+        } else if (ediCust.includes(draftCust.split(' ')[0]) || draftCust.includes(ediCust.split(' ')[0])) {
+          score += 20;
+        }
+      }
+      
+      // Total amount match (20 points)
+      var items = edi.parsed_data?.items || [];
+      var ediTotal = items.reduce(function(s, i) { return s + (i.quantityOrdered||0) * (i.unitPrice||0); }, 0);
+      var draftTotal = draft.total || 0;
+      if (ediTotal > 0 && draftTotal > 0) {
+        var pctDiff = Math.abs(ediTotal - draftTotal) / Math.max(ediTotal, draftTotal) * 100;
+        if (pctDiff < 1) score += 20;
+        else if (pctDiff < 5) score += 15;
+        else if (pctDiff < 15) score += 10;
+      }
+      
+      // Item count similarity (15 points)
+      var draftItems = draft.itemCount || 0;
+      var ediItems = items.length;
+      if (ediItems > 0 && draftItems > 0) {
+        var itemDiff = Math.abs(ediItems - draftItems) / Math.max(ediItems, draftItems) * 100;
+        if (itemDiff < 10) score += 15;
+        else if (itemDiff < 30) score += 10;
+      }
+      
+      return score;
+    }
+    
+    function showAutoMatchResults(matches, noMatch) {
+      var html = '<div style="max-height:70vh;overflow-y:auto;">';
+      
+      // Summary
+      html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;">' +
+        '<div style="background:#d4edda;padding:1rem;border-radius:8px;text-align:center;">' +
+          '<div style="font-size:2rem;font-weight:700;color:#155724;">' + matches.filter(function(m){return m.confidence==='high';}).length + '</div>' +
+          '<div style="font-size:0.8rem;color:#155724;">High Confidence</div>' +
+        '</div>' +
+        '<div style="background:#fff3cd;padding:1rem;border-radius:8px;text-align:center;">' +
+          '<div style="font-size:2rem;font-weight:700;color:#856404;">' + matches.filter(function(m){return m.confidence==='medium';}).length + '</div>' +
+          '<div style="font-size:0.8rem;color:#856404;">Medium Confidence</div>' +
+        '</div>' +
+        '<div style="background:#f8d7da;padding:1rem;border-radius:8px;text-align:center;">' +
+          '<div style="font-size:2rem;font-weight:700;color:#721c24;">' + noMatch.length + '</div>' +
+          '<div style="font-size:0.8rem;color:#721c24;">No Match Found</div>' +
+        '</div>' +
+      '</div>';
+      
+      if (matches.length > 0) {
+        html += '<h4 style="margin-bottom:0.75rem;color:#1e3a5f;">Matched Drafts (' + matches.length + ')</h4>';
+        
+        matches.forEach(function(m, idx) {
+          var confColor = m.confidence === 'high' ? '#155724' : m.confidence === 'medium' ? '#856404' : '#721c24';
+          var confBg = m.confidence === 'high' ? '#d4edda' : m.confidence === 'medium' ? '#fff3cd' : '#f8d7da';
+          
+          var items = m.edi.parsed_data?.items || [];
+          var ediTotal = items.reduce(function(s,i){ return s + (i.quantityOrdered||0)*(i.unitPrice||0); }, 0);
+          
+          html += '<div style="background:white;border:1px solid #e0e0e0;border-radius:8px;padding:1rem;margin-bottom:0.75rem;border-left:4px solid ' + confColor + ';">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">' +
+              '<div>' +
+                '<strong>' + (m.draft.customer || 'Unknown') + '</strong><br>' +
+                '<span style="font-size:0.85rem;color:#6e6e73;">Zoho #' + m.draft.number + ' → EDI PO# ' + m.edi.edi_order_number + '</span>' +
+              '</div>' +
+              '<div style="text-align:right;">' +
+                '<span style="background:' + confBg + ';color:' + confColor + ';padding:0.25rem 0.75rem;border-radius:20px;font-size:0.8rem;font-weight:600;">' + m.score + '% Match</span>' +
+              '</div>' +
+            '</div>' +
+            '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;font-size:0.85rem;color:#6e6e73;">' +
+              '<div>Zoho: $' + (m.draft.total||0).toLocaleString('en-US',{minimumFractionDigits:2}) + '</div>' +
+              '<div>EDI: $' + ediTotal.toLocaleString('en-US',{minimumFractionDigits:2}) + '</div>' +
+            '</div>' +
+            '<div style="margin-top:0.75rem;">' +
+              '<button class="btn btn-secondary" style="font-size:0.8rem;padding:0.35rem 0.75rem;" onclick="showComparisonFromMatch(' + m.edi.id + ', \\'' + m.draft.id + '\\')">View Details & Update</button>' +
+            '</div>' +
+          '</div>';
+        });
+      }
+      
+      if (noMatch.length > 0) {
+        html += '<h4 style="margin:1.5rem 0 0.75rem;color:#1e3a5f;">Drafts Without Matches (' + noMatch.length + ')</h4>';
+        html += '<div style="background:#f8f9fa;padding:0.75rem;border-radius:8px;font-size:0.85rem;">';
+        noMatch.slice(0, 10).forEach(function(d) {
+          html += '<div style="padding:0.35rem 0;border-bottom:1px solid #eee;">' + d.customer + ' - #' + d.number + ' - $' + (d.total||0).toLocaleString('en-US',{minimumFractionDigits:2}) + '</div>';
+        });
+        if (noMatch.length > 10) {
+          html += '<div style="padding:0.5rem 0;color:#86868b;">... and ' + (noMatch.length - 10) + ' more</div>';
+        }
+        html += '</div>';
+      }
+      
+      html += '</div>';
+      
+      document.getElementById('modalBody').innerHTML = html;
+      document.querySelector('.modal-footer').innerHTML = '<button class="btn btn-secondary" onclick="closeModal()">Close</button>';
+      document.querySelector('.modal-title').textContent = 'Auto-Match Results';
+      document.getElementById('orderModal').classList.add('active');
+    }
+    
+    function showComparisonFromMatch(ediId, draftId) {
+      var edi = orders.find(function(o) { return o.id === ediId; });
+      var draft = zohoDrafts.find(function(d) { return d.id === draftId; });
+      if (edi && draft) {
+        closeModal();
+        showComparison(edi, draft);
+      }
     }
     
     // Activity Log - Show order changes
