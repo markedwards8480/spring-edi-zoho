@@ -1,5 +1,5 @@
-// Complete Dashboard with Enhanced Order Details Modal
-// Shows all CSV fields organized by category including UOM (AS/EA)
+// Dashboard with Mark Edwards Apparel Light Theme
+// Shows pack/pricing details with proper UOM handling
 
 const dashboardHTML = `
 <!DOCTYPE html>
@@ -8,124 +8,157 @@ const dashboardHTML = `
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Spring EDI Integration | Mark Edwards Apparel</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Inter', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f7; color: #1e3a5f; min-height: 100vh; }
     
-    .header { background: #1e293b; border-bottom: 1px solid #334155; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+    /* Header */
+    .header { background: linear-gradient(135deg, #1e3a5f 0%, #2d5a7f 100%); color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
     .logo { display: flex; align-items: center; gap: 1rem; }
-    .logo-icon { width: 40px; height: 40px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; color: white; }
+    .logo-icon { width: 40px; height: 40px; background: white; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #1e3a5f; font-size: 0.875rem; }
     .logo-text { font-size: 1.25rem; font-weight: 600; }
-    .logo-sub { font-size: 0.75rem; color: #64748b; }
-    .status-indicator { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 20px; font-size: 0.875rem; }
-    .status-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; animation: pulse 2s infinite; }
+    .logo-sub { font-size: 0.75rem; opacity: 0.8; }
+    .status-indicator { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; opacity: 0.9; }
+    .status-dot { width: 8px; height: 8px; background: #34c759; border-radius: 50%; animation: pulse 2s infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     
+    /* Layout */
     .main-container { display: flex; min-height: calc(100vh - 70px); }
-    .sidebar { width: 220px; background: #1e293b; border-right: 1px solid #334155; padding: 1.5rem 0; }
-    .nav-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; padding: 0 1.5rem; margin-bottom: 0.75rem; margin-top: 1.5rem; }
+    .sidebar { width: 220px; background: white; border-right: 1px solid rgba(0,0,0,0.06); padding: 1.5rem 0; }
+    .nav-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; padding: 0 1.5rem; margin-bottom: 0.75rem; margin-top: 1.5rem; }
     .nav-title:first-child { margin-top: 0; }
-    .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1.5rem; color: #94a3b8; cursor: pointer; transition: all 0.2s; border-left: 3px solid transparent; font-size: 0.9rem; }
-    .nav-item:hover { background: rgba(59, 130, 246, 0.1); color: #e2e8f0; }
-    .nav-item.active { background: rgba(59, 130, 246, 0.15); color: #3b82f6; border-left-color: #3b82f6; }
-    .nav-badge { margin-left: auto; background: #f59e0b; color: #0f172a; padding: 0.15rem 0.5rem; border-radius: 10px; font-size: 0.7rem; font-weight: 600; }
+    .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1.5rem; color: #6e6e73; cursor: pointer; transition: all 0.15s; border-left: 3px solid transparent; font-size: 0.875rem; }
+    .nav-item:hover { background: #f5f5f7; color: #1e3a5f; }
+    .nav-item.active { background: rgba(0,136,194,0.08); color: #0088c2; border-left-color: #0088c2; }
+    .nav-badge { margin-left: auto; background: #ff9500; color: white; padding: 0.15rem 0.5rem; border-radius: 10px; font-size: 0.7rem; font-weight: 600; }
     
+    /* Content */
     .content { flex: 1; padding: 2rem; overflow-y: auto; }
+    
+    /* Stats */
     .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2rem; }
-    .stat-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; }
-    .stat-card.primary { border-color: #3b82f6; background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(59,130,246,0.05)); }
-    .stat-card.success { border-color: #22c55e; }
-    .stat-card.warning { border-color: #f59e0b; }
-    .stat-card.danger { border-color: #ef4444; }
-    .stat-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.5rem; }
-    .stat-value { font-size: 2rem; font-weight: 700; }
-    .stat-card.primary .stat-value { color: #3b82f6; }
-    .stat-card.success .stat-value { color: #22c55e; }
-    .stat-card.warning .stat-value { color: #f59e0b; }
-    .stat-card.danger .stat-value { color: #ef4444; }
+    .stat-card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: all 0.2s; }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+    .stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; margin-bottom: 0.5rem; }
+    .stat-value { font-size: 2rem; font-weight: 700; color: #1e3a5f; }
+    .stat-card.success .stat-value { color: #34c759; }
+    .stat-card.warning .stat-value { color: #ff9500; }
+    .stat-card.danger .stat-value { color: #ff3b30; }
     
+    /* Toolbar */
     .toolbar { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: center; flex-wrap: wrap; }
-    .search-box { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 0.6rem 1rem; color: #e2e8f0; width: 250px; }
-    .search-box:focus { outline: none; border-color: #3b82f6; }
-    .btn { padding: 0.6rem 1.25rem; border-radius: 8px; font-weight: 500; cursor: pointer; transition: all 0.2s; border: none; font-size: 0.875rem; display: inline-flex; align-items: center; gap: 0.5rem; }
-    .btn-primary { background: #3b82f6; color: white; }
-    .btn-primary:hover { background: #2563eb; }
-    .btn-secondary { background: #334155; color: #e2e8f0; }
-    .btn-secondary:hover { background: #475569; }
-    .btn-success { background: #22c55e; color: white; }
-    .btn-success:hover { background: #16a34a; }
+    .search-box { background: white; border: 1px solid #d2d2d7; border-radius: 8px; padding: 0.5rem 0.75rem; color: #1e3a5f; width: 250px; font-size: 0.875rem; }
+    .search-box:focus { outline: none; border-color: #1e3a5f; }
+    .btn { padding: 0.5rem 1rem; border-radius: 8px; font-weight: 500; cursor: pointer; transition: all 0.15s; border: none; font-size: 0.875rem; display: inline-flex; align-items: center; gap: 0.5rem; }
+    .btn-primary { background: #1e3a5f; color: white; }
+    .btn-primary:hover { background: #2d5a7f; }
+    .btn-secondary { background: white; color: #1e3a5f; border: 1px solid #d2d2d7; }
+    .btn-secondary:hover { background: #f5f5f7; }
+    .btn-success { background: #34c759; color: white; }
+    .btn-success:hover { background: #2db54d; }
     
-    .filter-select { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 0.6rem 1rem; color: #e2e8f0; }
+    .filter-select { background: white; border: 1px solid #d2d2d7; border-radius: 8px; padding: 0.5rem 0.75rem; color: #1e3a5f; font-size: 0.875rem; }
     
+    /* Table */
+    .table-container { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
     .orders-table { width: 100%; border-collapse: collapse; }
-    .orders-table th { text-align: left; padding: 1rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; border-bottom: 1px solid #334155; }
-    .orders-table td { padding: 1rem; border-bottom: 1px solid #1e293b; }
-    .orders-table tr:hover { background: rgba(59, 130, 246, 0.05); }
+    .orders-table th { text-align: left; padding: 1rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; border-bottom: 1px solid rgba(0,0,0,0.06); background: #f5f5f7; }
+    .orders-table td { padding: 1rem; border-bottom: 1px solid rgba(0,0,0,0.06); font-size: 0.875rem; }
+    .orders-table tr:hover { background: rgba(0,136,194,0.04); }
+    .orders-table tr:last-child td { border-bottom: none; }
     
-    .status-badge { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 500; }
-    .status-pending { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
-    .status-processed { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
-    .status-failed { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+    /* Status badges */
+    .status-badge { padding: 0.25rem 0.75rem; border-radius: 980px; font-size: 0.75rem; font-weight: 500; }
+    .status-pending { background: rgba(255,149,0,0.12); color: #ff9500; }
+    .status-processed { background: rgba(52,199,89,0.12); color: #34c759; }
+    .status-failed { background: rgba(255,59,48,0.12); color: #ff3b30; }
     
-    .checkbox { width: 18px; height: 18px; accent-color: #3b82f6; cursor: pointer; }
+    .checkbox { width: 18px; height: 18px; accent-color: #0088c2; cursor: pointer; }
     
-    /* Modal Styles */
-    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-    .modal { background: #1e293b; border-radius: 16px; max-width: 1200px; width: 95%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; border: 1px solid #334155; }
-    .modal-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; }
-    .modal-header h2 { font-size: 1.25rem; font-weight: 600; }
-    .modal-close { background: none; border: none; color: #64748b; font-size: 1.5rem; cursor: pointer; }
-    .modal-close:hover { color: #e2e8f0; }
+    /* Modal */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal { background: white; border-radius: 18px; max-width: 1100px; width: 95%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+    .modal-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
+    .modal-header h2 { font-size: 1.25rem; font-weight: 600; color: #1e3a5f; display: flex; align-items: center; gap: 0.75rem; }
+    .modal-close { background: #f5f5f7; border: none; color: #86868b; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 1.25rem; display: flex; align-items: center; justify-content: center; }
+    .modal-close:hover { background: #e5e5e5; color: #1e3a5f; }
     
-    .modal-tabs { display: flex; border-bottom: 1px solid #334155; background: #0f172a; }
-    .modal-tab { padding: 1rem 1.5rem; cursor: pointer; color: #64748b; border-bottom: 2px solid transparent; transition: all 0.2s; font-size: 0.875rem; }
-    .modal-tab:hover { color: #e2e8f0; background: rgba(59, 130, 246, 0.05); }
-    .modal-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+    .modal-tabs { display: flex; border-bottom: 1px solid rgba(0,0,0,0.06); background: #f5f5f7; padding: 0 1rem; }
+    .modal-tab { padding: 1rem 1.25rem; cursor: pointer; color: #86868b; border-bottom: 2px solid transparent; transition: all 0.15s; font-size: 0.875rem; font-weight: 500; margin-bottom: -1px; }
+    .modal-tab:hover { color: #1e3a5f; }
+    .modal-tab.active { color: #0088c2; border-bottom-color: #0088c2; background: white; border-radius: 8px 8px 0 0; }
     
     .modal-body { flex: 1; overflow-y: auto; padding: 1.5rem; }
-    .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid #334155; display: flex; justify-content: flex-end; gap: 1rem; }
+    .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid rgba(0,0,0,0.06); display: flex; justify-content: flex-end; gap: 1rem; background: #f5f5f7; }
     
     .tab-content { display: none; }
     .tab-content.active { display: block; }
     
+    /* Info boxes */
     .info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-    .info-box { background: #0f172a; border-radius: 8px; padding: 1rem; }
-    .info-label { font-size: 0.7rem; text-transform: uppercase; color: #64748b; margin-bottom: 0.25rem; }
-    .info-value { font-size: 1rem; font-weight: 500; }
+    .info-box { background: #f5f5f7; border-radius: 12px; padding: 1rem; }
+    .info-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; margin-bottom: 0.25rem; }
+    .info-value { font-size: 1rem; font-weight: 600; color: #1e3a5f; }
     
     .summary-boxes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-    .summary-box { background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(59,130,246,0.05)); border: 1px solid #334155; border-radius: 8px; padding: 1.25rem; text-align: center; }
-    .summary-box.green { background: linear-gradient(135deg, rgba(34,197,94,0.1), rgba(34,197,94,0.05)); border-color: rgba(34,197,94,0.3); }
-    .summary-number { font-size: 2rem; font-weight: 700; color: #3b82f6; }
-    .summary-box.green .summary-number { color: #22c55e; }
-    .summary-label { font-size: 0.75rem; color: #64748b; }
+    .summary-box { background: #f5f5f7; border-radius: 12px; padding: 1.25rem; text-align: center; }
+    .summary-box.highlight { background: linear-gradient(135deg, rgba(0,136,194,0.1), rgba(0,136,194,0.05)); }
+    .summary-box.green { background: linear-gradient(135deg, rgba(52,199,89,0.1), rgba(52,199,89,0.05)); }
+    .summary-number { font-size: 2rem; font-weight: 700; color: #1e3a5f; }
+    .summary-box.highlight .summary-number { color: #0088c2; }
+    .summary-box.green .summary-number { color: #34c759; }
+    .summary-label { font-size: 0.75rem; color: #86868b; margin-top: 0.25rem; }
     
-    .line-items-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
-    .line-items-table th { text-align: left; padding: 0.75rem; background: #0f172a; font-size: 0.7rem; text-transform: uppercase; color: #64748b; }
-    .line-items-table td { padding: 0.75rem; border-bottom: 1px solid #334155; }
+    /* Pack details box */
+    .pack-details { background: #f5f5f7; border-radius: 12px; padding: 1.25rem; margin-top: 1rem; }
+    .pack-details h4 { margin: 0 0 1rem 0; color: #1e3a5f; font-size: 0.875rem; font-weight: 600; }
+    .pack-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
+    .pack-item { }
+    .pack-item-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.02em; color: #86868b; margin-bottom: 0.25rem; }
+    .pack-item-value { font-size: 1.1rem; font-weight: 600; color: #1e3a5f; }
+    .pack-item-value.success { color: #34c759; }
+    .pack-item-value.warning { color: #ff9500; }
+    .pack-item-value.muted { color: #86868b; font-style: italic; font-weight: 400; font-size: 0.875rem; }
     
+    /* Alert boxes */
+    .alert { border-radius: 12px; padding: 1rem; margin-top: 1rem; font-size: 0.875rem; }
+    .alert-warning { background: rgba(255,149,0,0.1); border: 1px solid rgba(255,149,0,0.3); color: #1e3a5f; }
+    .alert-success { background: rgba(52,199,89,0.1); border: 1px solid rgba(52,199,89,0.3); color: #1e3a5f; }
+    .alert-info { background: rgba(0,136,194,0.1); border: 1px solid rgba(0,136,194,0.3); color: #1e3a5f; }
+    
+    /* Line items table */
+    .line-items-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+    .line-items-table th { text-align: left; padding: 0.75rem; background: #f5f5f7; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; }
+    .line-items-table td { padding: 0.75rem; border-bottom: 1px solid rgba(0,0,0,0.06); }
+    .line-items-table tr:last-child td { border-bottom: none; }
+    
+    /* UOM badges */
+    .uom-badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.65rem; font-weight: 600; }
+    .uom-ea { background: #34c759; color: white; }
+    .uom-as { background: #ff9500; color: white; }
+    .uom-st { background: #0088c2; color: white; }
+    
+    /* Data tables */
     .data-section { margin-bottom: 2rem; }
-    .data-section h3 { font-size: 1rem; margin-bottom: 1rem; color: #3b82f6; display: flex; align-items: center; gap: 0.5rem; }
-    .data-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-    .data-table th { text-align: left; padding: 0.5rem; background: #0f172a; font-size: 0.7rem; text-transform: uppercase; color: #64748b; }
-    .data-table td { padding: 0.5rem; border-bottom: 1px solid #1e293b; }
-    .data-table td:first-child { font-family: monospace; font-size: 0.75rem; color: #94a3b8; max-width: 350px; word-break: break-all; }
-    .data-table tr.has-value { background: rgba(59, 130, 246, 0.05); }
-    .data-table .empty-value { color: #475569; font-style: italic; }
+    .data-section h3 { font-size: 0.9375rem; margin-bottom: 1rem; color: #1e3a5f; font-weight: 600; }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; background: white; border-radius: 8px; overflow: hidden; }
+    .data-table th { text-align: left; padding: 0.5rem 0.75rem; background: #f5f5f7; font-size: 0.65rem; text-transform: uppercase; color: #86868b; }
+    .data-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(0,0,0,0.06); }
+    .data-table td:first-child { font-family: ui-monospace, monospace; font-size: 0.75rem; color: #86868b; max-width: 300px; word-break: break-all; }
+    .data-table tr.has-value { background: rgba(0,136,194,0.04); }
+    .data-table tr.has-value td:first-child { color: #1e3a5f; }
+    .empty-value { color: #d2d2d7; font-style: italic; }
     
-    .raw-search { width: 100%; padding: 0.75rem; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0; margin-bottom: 1rem; }
-    .raw-search:focus { outline: none; border-color: #3b82f6; }
+    .raw-search { width: 100%; padding: 0.75rem; background: #f5f5f7; border: 1px solid #d2d2d7; border-radius: 8px; color: #1e3a5f; margin-bottom: 1rem; font-size: 0.875rem; }
+    .raw-search:focus { outline: none; border-color: #0088c2; }
     
-    .uom-badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; margin-left: 0.5rem; }
-    .uom-as { background: #f59e0b; color: #0f172a; }
-    .uom-ea { background: #22c55e; color: #0f172a; }
-    
-    .toast { position: fixed; bottom: 2rem; right: 2rem; background: #1e293b; border: 1px solid #334155; padding: 1rem 1.5rem; border-radius: 8px; display: none; z-index: 2000; }
+    /* Toast */
+    .toast { position: fixed; bottom: 2rem; right: 2rem; background: #1e3a5f; color: white; padding: 1rem 1.5rem; border-radius: 12px; display: none; z-index: 2000; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
     .toast.show { display: block; }
     
-    .empty-state { text-align: center; padding: 3rem; color: #64748b; }
+    .empty-state { text-align: center; padding: 3rem; color: #86868b; }
     
+    /* Responsive */
     @media (max-width: 1200px) {
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
       .info-grid { grid-template-columns: repeat(2, 1fr); }
@@ -163,14 +196,12 @@ const dashboardHTML = `
       <div class="nav-title">History</div>
       <div class="nav-item" onclick="showTab('activity', this)">📊 Activity Log</div>
       <div class="nav-item" onclick="showTab('replaced', this)">🗂 Replaced Drafts</div>
-      <div class="nav-title">Help</div>
-      <div class="nav-item" onclick="window.open('/documentation', '_blank')">📖 Documentation</div>
     </div>
     
     <div class="content">
       <!-- Stats -->
       <div class="stats-grid">
-        <div class="stat-card primary">
+        <div class="stat-card">
           <div class="stat-label">Total Orders</div>
           <div class="stat-value" id="statTotal">0</div>
         </div>
@@ -206,7 +237,7 @@ const dashboardHTML = `
           <button class="btn btn-success" onclick="syncSelected()">✓ Sync with Zoho</button>
         </div>
         
-        <div style="background: #1e293b; border-radius: 12px; border: 1px solid #334155; overflow: hidden;">
+        <div class="table-container">
           <table class="orders-table">
             <thead>
               <tr>
@@ -225,29 +256,29 @@ const dashboardHTML = `
             </tbody>
           </table>
         </div>
-        <div style="margin-top:1rem;color:#64748b;font-size:0.8rem;" id="orderCount">Showing 0 of 0 orders</div>
+        <div style="margin-top:1rem;color:#86868b;font-size:0.8125rem;" id="orderCount">Showing 0 of 0 orders</div>
       </div>
       
-      <!-- Other tabs (placeholder) -->
+      <!-- Other tabs -->
       <div id="tabMappings" style="display:none">
-        <h2 style="margin-bottom:1rem">Customer Mappings</h2>
-        <p style="color:#64748b">Map EDI customer names to Zoho Books customers.</p>
+        <h2 style="margin-bottom:1rem;font-weight:600">Customer Mappings</h2>
+        <p style="color:#86868b">Map EDI customer names to Zoho Books customers.</p>
         <div id="mappingsContent" style="margin-top:1.5rem"></div>
       </div>
       
       <div id="tabActivity" style="display:none">
-        <h2 style="margin-bottom:1rem">Activity Log</h2>
+        <h2 style="margin-bottom:1rem;font-weight:600">Activity Log</h2>
         <div id="activityContent"></div>
       </div>
       
       <div id="tabDrafts" style="display:none">
-        <h2 style="margin-bottom:1rem">Match Drafts</h2>
-        <p style="color:#64748b">Match incoming EDI orders to existing draft sales orders in Zoho.</p>
+        <h2 style="margin-bottom:1rem;font-weight:600">Match Drafts</h2>
+        <p style="color:#86868b">Match incoming EDI orders to existing draft sales orders in Zoho.</p>
       </div>
       
       <div id="tabReplaced" style="display:none">
-        <h2 style="margin-bottom:1rem">Replaced Drafts</h2>
-        <p style="color:#64748b">History of draft orders that were replaced by EDI orders.</p>
+        <h2 style="margin-bottom:1rem;font-weight:600">Replaced Drafts</h2>
+        <p style="color:#86868b">History of draft orders that were replaced by EDI orders.</p>
       </div>
     </div>
   </div>
@@ -320,7 +351,7 @@ const dashboardHTML = `
           <td>$\${amt.toLocaleString('en-US',{minimumFractionDigits:2})}</td>
           <td><span class="status-badge status-\${st}">\${st === 'processed' ? '✓ Sent' : st === 'failed' ? '✗ Failed' : '⏳ Ready'}</span></td>
           <td>\${new Date(o.created_at).toLocaleDateString()}</td>
-          <td><button class="btn btn-secondary" style="padding:0.35rem 0.75rem;font-size:0.8rem" onclick="viewOrder(\${o.id})">View</button></td>
+          <td><button class="btn btn-secondary" style="padding:0.35rem 0.75rem;font-size:0.8125rem" onclick="viewOrder(\${o.id})">View</button></td>
         </tr>\`;
       }).join('');
       
@@ -430,16 +461,32 @@ const dashboardHTML = `
       const totalUnits = items.reduce((s, i) => s + (i.quantityOrdered || 0), 0);
       const totalValue = items.reduce((s, i) => s + ((i.quantityOrdered || 0) * (i.unitPrice || 0)), 0);
       
-      // Get UOM from first item
+      // Get key values from raw fields
       const uom = currentRawFields['po_item_po_item_uom'] || items[0]?.unitOfMeasure || 'EA';
-      const uomBadge = uom === 'AS' ? '<span class="uom-badge uom-as">AS - Prepack</span>' : '<span class="uom-badge uom-ea">EA - Each</span>';
+      const packPrice = parseFloat(currentRawFields['po_item_po_item_unit_price']) || 0;
+      const itemPrice = parseFloat(currentRawFields['product_pack_product_pack_unit_price']) || 0;
+      const packQty = parseInt(currentRawFields['product_pack_product_pack_product_qty']) || 0;
+      const totalItems = parseInt(currentRawFields['product_pack_product_pack_product_qty_calculated']) || 0;
+      const retailPrice = parseFloat(currentRawFields['po_item_attributes_retail_price']) || 0;
+      const lineAmount = parseFloat(currentRawFields['po_item_attributes_amount']) || 0;
+      
+      // Determine UOM display
+      const uomLabel = uom === 'AS' ? 'Prepack' : uom === 'EA' ? 'Each' : uom === 'ST' ? 'Set' : uom;
+      const uomClass = uom === 'AS' ? 'uom-as' : uom === 'EA' ? 'uom-ea' : uom === 'ST' ? 'uom-st' : '';
+      
+      // Check if item price is available
+      const hasItemPrice = itemPrice > 0;
+      const hasPackQty = packQty > 0;
       
       const html = \`
         <div class="modal-overlay" onclick="closeModal()">
           <div class="modal" onclick="event.stopPropagation()">
             <div class="modal-header">
-              <h2>Order Details - \${o.edi_order_number || 'N/A'} \${uomBadge}</h2>
-              <button class="modal-close" onclick="closeModal()">&times;</button>
+              <h2>
+                Order Details - \${o.edi_order_number || 'N/A'}
+                <span class="uom-badge \${uomClass}">\${uom} - \${uomLabel}</span>
+              </h2>
+              <button class="modal-close" onclick="closeModal()">×</button>
             </div>
             
             <div class="modal-tabs">
@@ -464,23 +511,22 @@ const dashboardHTML = `
                   </div>
                   <div class="info-box">
                     <div class="info-label">Order Date</div>
-                    <div class="info-value">\${parsed.dates?.orderDate || currentRawFields['po_po_created'] || 'N/A'}</div>
+                    <div class="info-value">\${parsed.dates?.orderDate || currentRawFields['po_po_created']?.split(' ')[0] || 'N/A'}</div>
                   </div>
                   <div class="info-box">
                     <div class="info-label">Unit of Measure</div>
                     <div class="info-value">
-                      <span class="uom-badge \${uom === 'AS' ? 'uom-as' : uom === 'EA' ? 'uom-ea' : ''}" style="\${uom === 'ST' ? 'background:#8b5cf6;color:white' : ''}">\${uom}</span>
-                      \${uom === 'AS' ? 'Prepack' : uom === 'EA' ? 'Each' : uom === 'ST' ? 'Set' : ''}
+                      <span class="uom-badge \${uomClass}">\${uom}</span> \${uomLabel}
                     </div>
                   </div>
                 </div>
                 
                 <div class="summary-boxes">
-                  <div class="summary-box">
+                  <div class="summary-box highlight">
                     <div class="summary-number">\${items.length}</div>
                     <div class="summary-label">Line Items</div>
                   </div>
-                  <div class="summary-box">
+                  <div class="summary-box highlight">
                     <div class="summary-number">\${totalUnits.toLocaleString()}</div>
                     <div class="summary-label">Units Ordered</div>
                   </div>
@@ -490,113 +536,113 @@ const dashboardHTML = `
                   </div>
                 </div>
                 
-                <!-- Pack/Price Details Box -->
-                <div style="background:#0f172a;border-radius:8px;padding:1.25rem;margin-top:1rem;">
-                  <h4 style="margin:0 0 1rem 0;color:#3b82f6;font-size:0.9rem;">📦 Pack & Pricing Details</h4>
-                  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;font-size:0.875rem;">
-                    <div>
-                      <div style="color:#64748b;font-size:0.75rem;margin-bottom:0.25rem;">Unit Price (per \${uom})</div>
-                      <div style="font-weight:600;font-size:1.1rem;">$\${currentRawFields['po_item_po_item_unit_price'] || '0'}</div>
+                <!-- Pack & Pricing Details -->
+                <div class="pack-details">
+                  <h4>📦 Pack & Pricing Details</h4>
+                  <div class="pack-grid">
+                    <div class="pack-item">
+                      <div class="pack-item-label">Unit Price (per \${uom})</div>
+                      <div class="pack-item-value">$\${packPrice.toFixed(2)}</div>
                     </div>
-                    \${currentRawFields['product_pack_product_pack_unit_price'] ? \`
-                    <div>
-                      <div style="color:#64748b;font-size:0.75rem;margin-bottom:0.25rem;">Item Price (per each)</div>
-                      <div style="font-weight:600;font-size:1.1rem;color:#22c55e;">$\${currentRawFields['product_pack_product_pack_unit_price']}</div>
+                    <div class="pack-item">
+                      <div class="pack-item-label">Item Price (per each)</div>
+                      \${hasItemPrice 
+                        ? \`<div class="pack-item-value success">$\${itemPrice.toFixed(2)}</div>\`
+                        : \`<div class="pack-item-value muted">Not provided in EDI</div>\`
+                      }
                     </div>
-                    \` : ''}
-                    \${currentRawFields['product_pack_product_pack_product_qty'] ? \`
-                    <div>
-                      <div style="color:#64748b;font-size:0.75rem;margin-bottom:0.25rem;">Items per Pack</div>
-                      <div style="font-weight:600;font-size:1.1rem;">\${currentRawFields['product_pack_product_pack_product_qty']}</div>
+                    <div class="pack-item">
+                      <div class="pack-item-label">Items per Pack</div>
+                      \${hasPackQty 
+                        ? \`<div class="pack-item-value">\${packQty}</div>\`
+                        : \`<div class="pack-item-value muted">Not provided in EDI</div>\`
+                      }
                     </div>
-                    \` : ''}
-                    \${currentRawFields['product_pack_product_pack_product_qty_calculated'] ? \`
-                    <div>
-                      <div style="color:#64748b;font-size:0.75rem;margin-bottom:0.25rem;">Total Items</div>
-                      <div style="font-weight:600;font-size:1.1rem;">\${currentRawFields['product_pack_product_pack_product_qty_calculated']}</div>
-                    </div>
-                    \` : ''}
-                    \${currentRawFields['po_item_attributes_retail_price'] ? \`
-                    <div>
-                      <div style="color:#64748b;font-size:0.75rem;margin-bottom:0.25rem;">Retail Price</div>
-                      <div style="font-weight:600;font-size:1.1rem;color:#f59e0b;">$\${currentRawFields['po_item_attributes_retail_price']}</div>
+                    \${totalItems > 0 ? \`
+                    <div class="pack-item">
+                      <div class="pack-item-label">Total Items</div>
+                      <div class="pack-item-value">\${totalItems.toLocaleString()}</div>
                     </div>
                     \` : ''}
-                    <div>
-                      <div style="color:#64748b;font-size:0.75rem;margin-bottom:0.25rem;">Line Amount</div>
-                      <div style="font-weight:600;font-size:1.1rem;">$\${currentRawFields['po_item_attributes_amount'] || totalValue.toFixed(2)}</div>
+                    \${retailPrice > 0 ? \`
+                    <div class="pack-item">
+                      <div class="pack-item-label">Retail Price</div>
+                      <div class="pack-item-value warning">$\${retailPrice.toFixed(2)}</div>
+                    </div>
+                    \` : ''}
+                    <div class="pack-item">
+                      <div class="pack-item-label">Line Amount</div>
+                      <div class="pack-item-value">$\${lineAmount > 0 ? lineAmount.toLocaleString('en-US', {minimumFractionDigits: 2}) : totalValue.toFixed(2)}</div>
                     </div>
                   </div>
                 </div>
                 
-                \${uom === 'AS' && !currentRawFields['product_pack_product_pack_unit_price'] ? '<div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:1rem;margin-top:1rem;"><strong>⚠️ Prepack Order:</strong> This is a prepack/assortment order. The unit price shown ($' + (currentRawFields['po_item_po_item_unit_price'] || '0') + ') is for the entire prepack bundle, not individual items. Individual item pricing is not available in this EDI data.</div>' : ''}
+                \${(uom === 'AS' && !hasItemPrice) ? \`
+                <div class="alert alert-warning">
+                  <strong>⚠️ Prepack Order:</strong> This is a prepack/assortment order. The unit price ($\${packPrice.toFixed(2)}) is for the entire prepack bundle. Individual item pricing and pack size are not provided in this EDI file.
+                </div>
+                \` : ''}
                 
-                \${o.zoho_so_number ? '<div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:1rem;margin-top:1rem;"><strong>✓ Zoho Sales Order:</strong> ' + o.zoho_so_number + '</div>' : ''}
+                \${o.zoho_so_number ? \`
+                <div class="alert alert-success">
+                  <strong>✓ Zoho Sales Order:</strong> \${o.zoho_so_number}
+                </div>
+                \` : ''}
               </div>
               
               <!-- Items Tab -->
               <div class="tab-content" id="tab-items">
                 <!-- UOM Legend -->
-                <div style="background:#0f172a;border-radius:8px;padding:1rem;margin-bottom:1rem;display:flex;gap:2rem;flex-wrap:wrap;font-size:0.8rem;">
+                <div style="background:#f5f5f7;border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;gap:1.5rem;flex-wrap:wrap;font-size:0.8125rem;">
                   <div><span class="uom-badge uom-ea">EA</span> Each - Individual items</div>
                   <div><span class="uom-badge uom-as">AS</span> Assortment - Prepack bundle</div>
-                  <div><span class="uom-badge" style="background:#8b5cf6;color:white">ST</span> Set - Multiple items per unit</div>
+                  <div><span class="uom-badge uom-st">ST</span> Set - Multiple items per unit</div>
                 </div>
                 
-                <!-- Pack Info Summary (if available) -->
-                \${currentRawFields['product_pack_product_pack_product_qty'] ? \`
-                <div style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);border-radius:8px;padding:1rem;margin-bottom:1rem;">
-                  <strong>📦 Pack Breakdown:</strong><br>
-                  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-top:0.75rem;">
-                    <div>Pack Size: <strong>\${currentRawFields['product_pack_product_pack_product_qty'] || 'N/A'}</strong> items per pack</div>
-                    <div>Item Price: <strong>$\${currentRawFields['product_pack_product_pack_unit_price'] || 'N/A'}</strong> per item</div>
-                    <div>Pack Price: <strong>$\${currentRawFields['po_item_po_item_unit_price'] || 'N/A'}</strong> per pack</div>
-                    <div>Total Items: <strong>\${currentRawFields['product_pack_product_pack_product_qty_calculated'] || 'N/A'}</strong></div>
-                  </div>
+                \${(hasPackQty || hasItemPrice) ? \`
+                <div class="alert alert-info" style="margin-bottom:1rem;">
+                  <strong>📦 Pack Info:</strong>
+                  \${hasPackQty ? \`Pack contains <strong>\${packQty}</strong> items. \` : ''}
+                  \${hasItemPrice ? \`Item price: <strong>$\${itemPrice.toFixed(2)}</strong> per each. \` : ''}
+                  \${(hasPackQty && hasItemPrice) ? \`Pack price: <strong>$\${packPrice.toFixed(2)}</strong> (\${packQty} × $\${itemPrice.toFixed(2)} = $\${(packQty * itemPrice).toFixed(2)})\` : ''}
                 </div>
                 \` : ''}
                 
-                <table class="line-items-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Style/SKU</th>
-                      <th>Description</th>
-                      <th>Color</th>
-                      <th>Size</th>
-                      <th>UOM</th>
-                      <th style="text-align:right">Qty Ordered</th>
-                      <th style="text-align:right">Unit Price</th>
-                      <th style="text-align:right">Line Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    \${items.map((item, idx) => {
-                      const itemUom = item.unitOfMeasure || uom;
-                      const uomClass = itemUom === 'AS' ? 'uom-as' : itemUom === 'EA' ? 'uom-ea' : '';
-                      const uomStyle = itemUom === 'ST' ? 'background:#8b5cf6;color:white' : '';
-                      return \`
+                <div class="table-container">
+                  <table class="line-items-table">
+                    <thead>
                       <tr>
-                        <td>\${item.lineNumber || idx + 1}</td>
-                        <td><strong>\${item.productIds?.sku || item.productIds?.vendorItemNumber || item.productIds?.buyerItemNumber || 'N/A'}</strong></td>
-                        <td>\${item.description || ''}</td>
-                        <td>\${item.color || ''}</td>
-                        <td>\${item.size || ''}</td>
-                        <td><span class="uom-badge \${uomClass}" style="\${uomStyle}">\${itemUom}</span></td>
-                        <td style="text-align:right">\${item.quantityOrdered || 0}</td>
-                        <td style="text-align:right">$\${(item.unitPrice || 0).toFixed(2)}</td>
-                        <td style="text-align:right"><strong>$\${((item.quantityOrdered || 0) * (item.unitPrice || 0)).toFixed(2)}</strong></td>
+                        <th>#</th>
+                        <th>Style/SKU</th>
+                        <th>Description</th>
+                        <th>Color</th>
+                        <th>Size</th>
+                        <th>UOM</th>
+                        <th style="text-align:right">Qty</th>
+                        <th style="text-align:right">Unit Price</th>
+                        <th style="text-align:right">Amount</th>
                       </tr>
-                    \`;}).join('')}
-                  </tbody>
-                </table>
-                
-                <!-- Pricing Note -->
-                <div style="margin-top:1rem;padding:1rem;background:#0f172a;border-radius:8px;font-size:0.85rem;color:#94a3b8;">
-                  <strong>💡 Understanding Prices:</strong><br>
-                  • <strong>EA</strong> (Each): Unit price is per individual item<br>
-                  • <strong>AS</strong> (Assortment): Unit price is for the entire prepack bundle<br>
-                  • <strong>ST</strong> (Set): Unit price is per set (check Pack Breakdown for items per set)
+                    </thead>
+                    <tbody>
+                      \${items.map((item, idx) => {
+                        const itemUom = item.unitOfMeasure || uom;
+                        const iuomClass = itemUom === 'AS' ? 'uom-as' : itemUom === 'EA' ? 'uom-ea' : itemUom === 'ST' ? 'uom-st' : '';
+                        return \`
+                        <tr>
+                          <td>\${item.lineNumber || idx + 1}</td>
+                          <td><strong>\${item.productIds?.sku || item.productIds?.vendorItemNumber || item.productIds?.buyerItemNumber || 'N/A'}</strong></td>
+                          <td>\${item.description || ''}</td>
+                          <td>\${item.color || ''}</td>
+                          <td>\${item.size || ''}</td>
+                          <td><span class="uom-badge \${iuomClass}">\${itemUom}</span></td>
+                          <td style="text-align:right">\${item.quantityOrdered || 0}</td>
+                          <td style="text-align:right">$\${(item.unitPrice || 0).toFixed(2)}</td>
+                          <td style="text-align:right"><strong>$\${((item.quantityOrdered || 0) * (item.unitPrice || 0)).toFixed(2)}</strong></td>
+                        </tr>
+                        \`;
+                      }).join('')}
+                    </tbody>
+                  </table>
                 </div>
               </div>
               
@@ -604,7 +650,7 @@ const dashboardHTML = `
               <div class="tab-content" id="tab-pricing">
                 <div class="data-section">
                   <h3>💰 Price Fields</h3>
-                  <p style="color:#64748b;margin-bottom:1rem;font-size:0.875rem">All fields containing "price", "amount", "cost", or "rate" from the raw CSV.</p>
+                  <p style="color:#86868b;margin-bottom:1rem;font-size:0.8125rem">All fields containing "price", "amount", "cost", or "rate" from the raw CSV.</p>
                   <table class="data-table">
                     <thead><tr><th>Field Name</th><th>Value</th></tr></thead>
                     <tbody>
@@ -633,16 +679,17 @@ const dashboardHTML = `
                 <div class="info-grid" style="grid-template-columns: 1fr 1fr;">
                   <div class="info-box">
                     <div class="info-label">Ship To</div>
-                    <div class="info-value">
+                    <div class="info-value" style="font-size:0.9375rem;line-height:1.5;">
                       <strong>\${currentRawFields['ship_to_location_tp_location_name'] || 'N/A'}</strong><br>
                       \${currentRawFields['ship_to_location_tp_location_address'] || ''}<br>
+                      \${currentRawFields['ship_to_location_tp_location_address2'] ? currentRawFields['ship_to_location_tp_location_address2'] + '<br>' : ''}
                       \${currentRawFields['ship_to_location_tp_location_city'] || ''}, \${currentRawFields['ship_to_location_tp_location_state_province'] || ''} \${currentRawFields['ship_to_location_tp_location_postal'] || ''}<br>
-                      <span style="color:#64748b;font-size:0.8rem">Code: \${currentRawFields['ship_to_location_tp_location_code'] || 'N/A'}</span>
+                      <span style="color:#86868b;font-size:0.75rem">Code: \${currentRawFields['ship_to_location_tp_location_code'] || 'N/A'}</span>
                     </div>
                   </div>
                   <div class="info-box">
                     <div class="info-label">Shipping Dates</div>
-                    <div class="info-value">
+                    <div class="info-value" style="font-size:0.9375rem;line-height:1.8;">
                       <strong>Ship Open:</strong> \${currentRawFields['po_po_ship_open_date'] || 'N/A'}<br>
                       <strong>Ship Close:</strong> \${currentRawFields['po_po_ship_close_date'] || 'N/A'}<br>
                       <strong>Must Arrive:</strong> \${currentRawFields['po_attributes_must_arrive_by_date'] || 'N/A'}
@@ -672,7 +719,7 @@ const dashboardHTML = `
                     <tbody>
                       \${Object.entries(currentRawFields).map(([k, v], idx) => \`
                         <tr class="raw-row \${v ? 'has-value' : ''}" data-field="\${k.toLowerCase()}" data-value="\${(v || '').toLowerCase()}">
-                          <td style="color:#64748b">\${idx}</td>
+                          <td style="color:#86868b">\${idx}</td>
                           <td>\${k}</td>
                           <td>\${v || '<span class="empty-value">(empty)</span>'}</td>
                         </tr>
@@ -737,14 +784,14 @@ const dashboardHTML = `
         const res = await fetch('/customer-mappings');
         const mappings = await res.json();
         document.getElementById('mappingsContent').innerHTML = mappings.length ? 
-          '<table class="orders-table"><thead><tr><th>EDI Customer</th><th>Zoho Customer</th><th>Actions</th></tr></thead><tbody>' +
+          '<div class="table-container"><table class="orders-table"><thead><tr><th>EDI Customer</th><th>Zoho Customer</th><th>Actions</th></tr></thead><tbody>' +
           mappings.map(m => '<tr><td>' + m.edi_customer_name + '</td><td>' + m.zoho_customer_name + '</td><td><button class="btn btn-secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="deleteMapping(' + m.id + ')">Delete</button></td></tr>').join('') +
-          '</tbody></table>' : '<p style="color:#64748b">No mappings configured.</p>';
-      } catch (e) { document.getElementById('mappingsContent').innerHTML = '<p style="color:#ef4444">Failed to load mappings</p>'; }
+          '</tbody></table></div>' : '<p style="color:#86868b">No mappings configured.</p>';
+      } catch (e) { document.getElementById('mappingsContent').innerHTML = '<p style="color:#ff3b30">Failed to load mappings</p>'; }
     }
     
     async function loadActivity() {
-      document.getElementById('activityContent').innerHTML = '<p style="color:#64748b">Activity log coming soon...</p>';
+      document.getElementById('activityContent').innerHTML = '<p style="color:#86868b">Activity log coming soon...</p>';
     }
     
     function toast(msg) {
