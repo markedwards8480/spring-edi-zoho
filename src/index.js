@@ -444,6 +444,157 @@ app.get('/replaced-drafts', async (req, res) => {
   }
 });
 
+// Sync with Zoho - find orders already in Zoho and mark them as processed
+app.post('/sync-with-zoho', async (req, res) => {
+  const { pool } = require('./db');
+  
+  try {
+    logger.info('Starting Zoho sync - finding orders already in Zoho');
+    
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
+    const token = await zoho.ensureValidToken();
+    const axios = require('axios');
+    
+    // Get unique customers from our EDI orders
+    const customersResult = await pool.query(`
+      SELECT DISTINCT edi_customer_name FROM edi_orders WHERE edi_customer_name IS NOT NULL
+    `);
+    const ediCustomers = customersResult.rows.map(r => r.edi_customer_name);
+    logger.info(`Found ${ediCustomers.length} unique EDI customers: ${ediCustomers.join(', ')}`);
+    
+    // Also get mapped Zoho customer names
+    const mappingsResult = await pool.query(`SELECT zoho_account_name FROM customer_mappings`);
+    const mappedNames = mappingsResult.rows.map(r => r.zoho_account_name);
+    
+    // Combine customer names to search for
+    const searchNames = [...new Set([...ediCustomers, ...mappedNames])].filter(Boolean);
+    
+    // Fetch Zoho orders only for these customers
+    let allZohoOrders = [];
+    
+    for (const customerName of searchNames) {
+      try {
+        const response = await axios({
+          method: 'GET',
+          url: 'https://www.zohoapis.com/books/v3/salesorders',
+          headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
+          params: {
+            organization_id: process.env.ZOHO_ORG_ID,
+            customer_name: customerName,
+            per_page: 200
+          }
+        });
+        
+        const orders = response.data?.salesorders || [];
+        allZohoOrders = allZohoOrders.concat(orders);
+        logger.info(`Fetched ${orders.length} orders for customer: ${customerName}`);
+      } catch (err) {
+        logger.warn(`Could not fetch orders for ${customerName}: ${err.message}`);
+      }
+    }
+    
+    logger.info(`Fetched ${allZohoOrders.length} total orders from Zoho Books for EDI customers`);
+    
+    // Build a map of reference_number (PO#) -> Zoho order
+    const zohoByPO = {};
+    for (const zo of allZohoOrders) {
+      if (zo.reference_number) {
+        zohoByPO[zo.reference_number] = zo;
+      }
+    }
+    
+    // Get all pending EDI orders
+    const ediResult = await pool.query(`
+      SELECT id, edi_order_number FROM edi_orders WHERE status = 'pending'
+    `);
+    
+    let matched = 0;
+    let notFound = 0;
+    const matchedOrders = [];
+    
+    for (const edi of ediResult.rows) {
+      const poNumber = edi.edi_order_number;
+      const zohoOrder = zohoByPO[poNumber];
+      
+      if (zohoOrder) {
+        // Found a match - update our database
+        await pool.query(`
+          UPDATE edi_orders 
+          SET status = 'processed', 
+              zoho_so_id = $2, 
+              zoho_so_number = $3,
+              processed_at = NOW()
+          WHERE id = $1
+        `, [edi.id, zohoOrder.salesorder_id, zohoOrder.salesorder_number]);
+        
+        matched++;
+        matchedOrders.push({
+          poNumber,
+          zohoSoNumber: zohoOrder.salesorder_number,
+          zohoStatus: zohoOrder.status,
+          total: zohoOrder.total
+        });
+      } else {
+        notFound++;
+      }
+    }
+    
+    logger.info(`Zoho sync complete: ${matched} matched, ${notFound} not found in Zoho`);
+    
+    res.json({
+      success: true,
+      zohoOrdersFound: allZohoOrders.length,
+      matched,
+      notFound,
+      matchedOrders: matchedOrders.slice(0, 20) // Show first 20 matches
+    });
+    
+  } catch (error) {
+    logger.error('Zoho sync failed', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get draft orders from Zoho for matching
+app.get('/zoho-drafts', async (req, res) => {
+  try {
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
+    const token = await zoho.ensureValidToken();
+    const axios = require('axios');
+    
+    const response = await axios({
+      method: 'GET',
+      url: 'https://www.zohoapis.com/books/v3/salesorders',
+      headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
+      params: {
+        organization_id: process.env.ZOHO_ORG_ID,
+        status: 'draft',
+        per_page: 200
+      }
+    });
+    
+    const drafts = response.data?.salesorders || [];
+    
+    res.json({
+      success: true,
+      count: drafts.length,
+      drafts: drafts.map(d => ({
+        id: d.salesorder_id,
+        number: d.salesorder_number,
+        reference: d.reference_number,
+        customer: d.customer_name,
+        date: d.date,
+        total: d.total,
+        status: d.status
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Retry failed orders endpoint
 app.post('/retry-failed', async (req, res) => {
   const { pool } = require('./db');
