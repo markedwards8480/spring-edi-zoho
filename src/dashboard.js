@@ -1,556 +1,712 @@
+// Modern Dashboard HTML with Draft Matching
 const dashboardHTML = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Spring EDI Integration - Mark Edwards Apparel</title>
+  <title>Spring EDI Integration | Mark Edwards Apparel</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f7; color: #1e3a5f; min-height: 100vh; }
-    .header { background: linear-gradient(135deg, #1e3a5f 0%, #2d5a7f 100%); color: white; padding: 1.25rem 2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-    .header-content { max-width: 1400px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
-    .header h1 { font-size: 1.25rem; font-weight: 600; display: flex; align-items: center; gap: 0.75rem; }
-    .header-logo { width: 32px; height: 32px; background: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #1e3a5f; font-size: 0.75rem; }
-    .header-status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; opacity: 0.9; }
-    .status-dot { width: 8px; height: 8px; background: #34c759; border-radius: 50%; animation: pulse 2s infinite; }
+    body { font-family: 'Inter', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+    
+    .header { background: #1e293b; border-bottom: 1px solid #334155; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+    .logo { display: flex; align-items: center; gap: 1rem; }
+    .logo-icon { width: 40px; height: 40px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; color: white; }
+    .logo-text { font-size: 1.25rem; font-weight: 600; }
+    .status-indicator { display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 20px; font-size: 0.875rem; }
+    .status-dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; animation: pulse 2s infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-    .container { max-width: 1400px; margin: 0 auto; padding: 1.5rem; }
-    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-    .stat-card { background: white; border-radius: 10px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-    .stat-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; margin-bottom: 0.25rem; }
-    .stat-value { font-size: 1.5rem; font-weight: 700; color: #1e3a5f; }
-    .stat-card.success .stat-value { color: #34c759; }
-    .stat-card.error .stat-value { color: #ff3b30; }
-    .stat-card.pending .stat-value { color: #ff9500; }
-    .section { background: white; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 1.5rem; overflow: hidden; }
-    .section-header { padding: 0.75rem 1rem; border-bottom: 1px solid rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
-    .section-title { font-size: 0.9rem; font-weight: 600; }
-    .section-body { padding: 1rem; }
-    .btn { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: all 0.15s; border: none; }
-    .btn-primary { background: #1e3a5f; color: white; }
-    .btn-primary:hover { background: #2d5a7f; }
-    .btn-primary:disabled { background: #86868b; cursor: not-allowed; }
-    .btn-secondary { background: white; color: #1e3a5f; border: 1px solid #d2d2d7; }
-    .btn-secondary:hover { background: #f5f5f7; }
-    .btn-sm { padding: 0.2rem 0.4rem; font-size: 0.65rem; }
-    .actions-bar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
     
-    /* Orders Table */
-    .orders-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
-    .orders-table th { text-align: left; padding: 0.5rem; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; font-weight: 600; border-bottom: 1px solid rgba(0,0,0,0.06); }
-    .orders-table td { padding: 0.5rem; border-bottom: 1px solid rgba(0,0,0,0.06); vertical-align: middle; }
-    .orders-table tr:hover { background: #f5f5f7; cursor: pointer; }
-    .orders-table .po-link { color: #1e3a5f; text-decoration: none; font-weight: 500; }
-    .orders-table .po-link:hover { text-decoration: underline; }
+    .main-container { display: flex; min-height: calc(100vh - 70px); }
+    .sidebar { width: 220px; background: #1e293b; border-right: 1px solid #334155; padding: 1.5rem 0; }
+    .nav-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #64748b; padding: 0 1.5rem; margin-bottom: 0.75rem; }
+    .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1.5rem; color: #94a3b8; cursor: pointer; transition: all 0.2s; border-left: 3px solid transparent; }
+    .nav-item:hover { background: rgba(59, 130, 246, 0.1); color: #e2e8f0; }
+    .nav-item.active { background: rgba(59, 130, 246, 0.15); color: #3b82f6; border-left-color: #3b82f6; }
+    .nav-badge { margin-left: auto; background: #f59e0b; color: white; font-size: 0.7rem; padding: 0.15rem 0.5rem; border-radius: 10px; }
     
-    .badge { display: inline-flex; padding: 0.15rem 0.4rem; border-radius: 980px; font-size: 0.6rem; font-weight: 500; }
-    .badge-success { background: rgba(52, 199, 89, 0.1); color: #34c759; }
-    .badge-error { background: rgba(255, 59, 48, 0.1); color: #ff3b30; }
-    .badge-pending { background: rgba(255, 149, 0, 0.1); color: #ff9500; }
+    .content { flex: 1; padding: 2rem; overflow-y: auto; }
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2rem; }
+    .stat-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; }
+    .stat-label { font-size: 0.8rem; color: #64748b; text-transform: uppercase; margin-bottom: 0.5rem; }
+    .stat-value { font-size: 2.5rem; font-weight: 700; }
+    .stat-value.success { color: #22c55e; }
+    .stat-value.warning { color: #f59e0b; }
+    .stat-value.danger { color: #ef4444; }
     
-    .customer-cell { font-size: 0.7rem; }
-    .edi-customer { font-weight: 500; }
-    .zoho-match { font-size: 0.6rem; color: #86868b; }
+    .action-bar { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: center; }
+    .btn { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.75rem 1.25rem; border-radius: 8px; font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: all 0.2s; border: none; font-family: inherit; }
+    .btn-primary { background: linear-gradient(135deg, #3b82f6, #2563eb); color: white; }
+    .btn-primary:hover { background: linear-gradient(135deg, #2563eb, #1d4ed8); }
+    .btn-secondary { background: #334155; color: #e2e8f0; border: 1px solid #475569; }
+    .btn-secondary:hover { background: #475569; }
+    .btn-success { background: linear-gradient(135deg, #22c55e, #16a34a); color: white; }
+    .btn-danger { background: transparent; color: #ef4444; border: 1px solid #ef4444; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     
-    select.customer-select { font-size: 0.65rem; padding: 0.2rem; border: 1px solid #d2d2d7; border-radius: 4px; max-width: 120px; }
+    select { background: #334155; border: 1px solid #475569; color: #e2e8f0; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem; }
     
-    /* Tabs */
-    .tabs { display: flex; gap: 0; border-bottom: 1px solid rgba(0,0,0,0.06); }
-    .tab { padding: 0.6rem 1rem; cursor: pointer; font-size: 0.8rem; font-weight: 500; color: #86868b; border-bottom: 2px solid transparent; margin-bottom: -1px; }
-    .tab.active { color: #1e3a5f; border-bottom-color: #1e3a5f; }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
+    .tabs { display: flex; border-bottom: 1px solid #334155; margin-bottom: 1.5rem; }
+    .tab { padding: 1rem 1.5rem; color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 500; }
+    .tab:hover { color: #e2e8f0; }
+    .tab.active { color: #3b82f6; border-bottom-color: #3b82f6; }
     
-    /* Modal */
-    .modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
-    .modal-overlay.show { display: flex; }
-    .modal { background: white; border-radius: 12px; max-width: 900px; width: 95%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; }
-    .modal-header { padding: 1rem 1.5rem; border-bottom: 1px solid rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
-    .modal-title { font-size: 1.1rem; font-weight: 600; }
-    .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #86868b; }
+    .table-container { background: #1e293b; border: 1px solid #334155; border-radius: 12px; overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #0f172a; padding: 1rem; text-align: left; font-size: 0.75rem; text-transform: uppercase; color: #64748b; }
+    td { padding: 1rem; border-top: 1px solid #334155; font-size: 0.875rem; }
+    tr:hover { background: rgba(59, 130, 246, 0.05); }
+    
+    .status-badge { display: inline-flex; padding: 0.35rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 500; }
+    .status-pending { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+    .status-processed { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+    .status-failed { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+    
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.75); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; visibility: hidden; transition: all 0.3s; }
+    .modal-overlay.active { opacity: 1; visibility: visible; }
+    .modal { background: #1e293b; border: 1px solid #334155; border-radius: 16px; width: 95%; max-width: 1100px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; border-bottom: 1px solid #334155; }
+    .modal-title { font-size: 1.25rem; font-weight: 600; }
+    .modal-close { background: none; border: none; color: #64748b; font-size: 1.5rem; cursor: pointer; }
     .modal-body { padding: 1.5rem; overflow-y: auto; flex: 1; }
-    .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid rgba(0,0,0,0.1); display: flex; justify-content: flex-end; gap: 0.5rem; }
+    .modal-footer { padding: 1.5rem; border-top: 1px solid #334155; display: flex; justify-content: flex-end; gap: 1rem; }
     
-    /* Order Details */
-    .order-header-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
-    .order-field { background: #f5f5f7; padding: 0.75rem; border-radius: 8px; }
-    .order-field-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; margin-bottom: 0.25rem; }
-    .order-field-value { font-size: 0.85rem; font-weight: 500; }
+    .order-header { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+    .order-field { background: #0f172a; padding: 1rem; border-radius: 8px; }
+    .order-field-label { font-size: 0.7rem; color: #64748b; text-transform: uppercase; margin-bottom: 0.25rem; }
+    .order-field-value { font-size: 0.95rem; font-weight: 500; }
     
-    .line-items-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; margin-top: 1rem; }
-    .line-items-table th { background: #f5f5f7; padding: 0.5rem; text-align: left; font-size: 0.6rem; text-transform: uppercase; font-weight: 600; color: #86868b; }
-    .line-items-table td { padding: 0.5rem; border-bottom: 1px solid rgba(0,0,0,0.06); }
-    .line-items-table tfoot td { font-weight: 600; background: #f5f5f7; }
+    .draft-section { background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .draft-section h3 { margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+    .draft-card { background: #1e293b; border: 2px solid #334155; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; cursor: pointer; }
+    .draft-card:hover { border-color: #3b82f6; }
+    .draft-card.selected { border-color: #22c55e; background: rgba(34, 197, 94, 0.05); }
+    .draft-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+    .match-score { padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+    .match-score.high { background: #22c55e; color: white; }
+    .match-score.medium { background: #f59e0b; color: white; }
+    .match-score.low { background: #ef4444; color: white; }
     
-    .order-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(0,0,0,0.1); }
+    .comparison-table { width: 100%; font-size: 0.8rem; margin-top: 1rem; }
+    .comparison-table th { padding: 0.75rem; background: #0f172a; }
+    .comparison-table td { padding: 0.75rem; border-top: 1px solid #334155; }
+    .diff-positive { color: #22c55e; }
+    .diff-negative { color: #ef4444; }
+    .diff-row { background: rgba(245, 158, 11, 0.1); }
+    
+    .match-options { background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; margin-top: 1.5rem; }
+    .match-option { display: flex; align-items: flex-start; gap: 1rem; padding: 1rem; border: 2px solid #334155; border-radius: 8px; margin-bottom: 1rem; cursor: pointer; }
+    .match-option:hover { border-color: #475569; }
+    .match-option.selected { border-color: #3b82f6; background: rgba(59, 130, 246, 0.05); }
+    .match-option input[type="radio"] { margin-top: 0.25rem; accent-color: #3b82f6; }
+    .match-option-title { font-weight: 600; margin-bottom: 0.25rem; }
+    .match-option-desc { font-size: 0.8rem; color: #64748b; }
+    
+    .summary-row { display: flex; justify-content: space-around; padding: 1rem; background: #0f172a; border-radius: 8px; margin-top: 1rem; }
     .summary-item { text-align: center; }
-    .summary-value { font-size: 1.25rem; font-weight: 700; color: #1e3a5f; }
-    .summary-label { font-size: 0.65rem; color: #86868b; text-transform: uppercase; }
+    .summary-value { font-size: 1.5rem; font-weight: 700; }
+    .summary-label { font-size: 0.75rem; color: #64748b; }
     
-    .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .line-items-container { max-height: 250px; overflow-y: auto; border: 1px solid #334155; border-radius: 8px; }
+    .line-items-table { width: 100%; font-size: 0.8rem; }
+    .line-items-table th { position: sticky; top: 0; background: #0f172a; }
     
-    .toast { position: fixed; bottom: 2rem; right: 2rem; background: #1e3a5f; color: white; padding: 0.75rem 1.25rem; border-radius: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: none; font-size: 0.8rem; z-index: 1001; }
-    .toast.show { display: flex; animation: slideIn 0.3s ease; }
-    @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .mapping-form { display: flex; gap: 1rem; margin-bottom: 1.5rem; }
+    .mapping-form input { flex: 1; background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.875rem; }
+    .mapping-item { display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: #0f172a; border-radius: 8px; margin-bottom: 0.5rem; }
     
-    .empty-state { text-align: center; padding: 2rem; color: #86868b; }
+    .activity-item { display: flex; gap: 1rem; padding: 1rem; border-left: 2px solid #334155; margin-left: 1rem; }
+    .activity-item.success { border-color: #22c55e; }
+    .activity-item.error { border-color: #ef4444; }
+    .activity-time { font-size: 0.75rem; color: #64748b; min-width: 140px; }
+    .activity-content { flex: 1; }
+    .activity-title { font-weight: 500; }
+    .activity-details { font-size: 0.8rem; color: #94a3b8; }
     
-    @media (max-width: 768px) {
-      .stats-grid { grid-template-columns: repeat(2, 1fr); }
-      .order-header-grid { grid-template-columns: 1fr; }
-    }
+    .toast-container { position: fixed; bottom: 2rem; right: 2rem; z-index: 2000; }
+    .toast { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 1rem 1.5rem; margin-top: 0.5rem; min-width: 300px; }
+    .toast.success { border-left: 4px solid #22c55e; }
+    .toast.error { border-left: 4px solid #ef4444; }
+    
+    .empty-state { text-align: center; padding: 3rem; color: #64748b; }
+    .checkbox { width: 18px; height: 18px; accent-color: #3b82f6; }
+    .error-box { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; color: #ef4444; }
   </style>
 </head>
 <body>
   <header class="header">
-    <div class="header-content">
-      <h1><div class="header-logo">ME</div>Spring EDI Integration</h1>
-      <div class="header-status"><span class="status-dot"></span>System Online</div>
+    <div class="logo">
+      <div class="logo-icon">ME</div>
+      <div>
+        <div class="logo-text">Spring EDI Integration</div>
+        <div style="font-size: 0.75rem; color: #64748b;">Mark Edwards Apparel</div>
+      </div>
+    </div>
+    <div class="status-indicator">
+      <div class="status-dot"></div>
+      <span>System Online</span>
     </div>
   </header>
-
-  <main class="container">
-    <div class="stats-grid">
-      <div class="stat-card"><div class="stat-label">Total Orders (24h)</div><div class="stat-value" id="stat-total">-</div></div>
-      <div class="stat-card success"><div class="stat-label">Processed</div><div class="stat-value" id="stat-processed">-</div></div>
-      <div class="stat-card pending"><div class="stat-label">Pending</div><div class="stat-value" id="stat-pending">-</div></div>
-      <div class="stat-card error"><div class="stat-label">Failed</div><div class="stat-value" id="stat-failed">-</div></div>
-    </div>
-
-    <div class="section">
-      <div class="section-header">
-        <h2 class="section-title">Actions</h2>
+  
+  <div class="main-container">
+    <nav class="sidebar">
+      <div style="margin-bottom: 2rem;">
+        <div class="nav-title">Orders</div>
+        <div class="nav-item active" onclick="showTab('orders', this)">📦 EDI Orders <span class="nav-badge" id="pendingBadge">0</span></div>
+        <div class="nav-item" onclick="showTab('mappings', this)">🔗 Customer Mappings</div>
       </div>
-      <div class="section-body">
-        <div class="actions-bar">
-          <button class="btn btn-primary" id="btn-fetch" onclick="fetchSFTP()">Fetch from SFTP</button>
-          <button class="btn btn-primary" id="btn-process" onclick="triggerProcessLimit()">Process Orders</button>
-          <select id="process-limit" style="padding: 0.35rem; border-radius: 6px; border: 1px solid #d2d2d7; font-size: 0.75rem;">
-            <option value="1">1</option><option value="5">5</option><option value="10" selected>10</option><option value="25">25</option><option value="50">50</option><option value="9999">All</option>
-          </select>
-          <button class="btn btn-primary" id="btn-process-selected" onclick="processSelected()">Process Selected</button>
-          <button class="btn btn-secondary" onclick="retryFailed()">Retry Failed</button>
-          <button class="btn btn-secondary" onclick="refreshData()">Refresh</button>
-          <button class="btn btn-secondary" onclick="resetOrders()" style="color:#ff3b30;">Reset All</button>
+      <div style="margin-bottom: 2rem;">
+        <div class="nav-title">History</div>
+        <div class="nav-item" onclick="showTab('activity', this)">📋 Activity Log</div>
+        <div class="nav-item" onclick="showTab('drafts', this)">📁 Replaced Drafts</div>
+      </div>
+      <div>
+        <div class="nav-title">Help</div>
+        <div class="nav-item" onclick="window.open('/documentation', '_blank')">📖 Documentation</div>
+      </div>
+    </nav>
+    
+    <main class="content">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Orders (24h)</div>
+          <div class="stat-value" id="statTotal">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Processed</div>
+          <div class="stat-value success" id="statProcessed">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Pending</div>
+          <div class="stat-value warning" id="statPending">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Failed</div>
+          <div class="stat-value danger" id="statFailed">0</div>
         </div>
       </div>
-    </div>
-
-    <div class="section">
-      <div class="tabs">
-        <div class="tab active" onclick="switchTab('orders')">Orders</div>
-        <div class="tab" onclick="switchTab('mappings')">Customer Mappings</div>
+      
+      <!-- Orders Tab -->
+      <div id="tabOrders">
+        <div class="action-bar">
+          <button class="btn btn-primary" onclick="fetchSFTP()">📥 Fetch from SFTP</button>
+          <button class="btn btn-secondary" onclick="processOrders()">⚡ Process Orders</button>
+          <select id="limitSelect"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select>
+          <button class="btn btn-success" onclick="processSelected()">✓ Process Selected</button>
+          <button class="btn btn-secondary" onclick="retryFailed()">🔄 Retry Failed</button>
+          <button class="btn btn-secondary" onclick="loadOrders()">↻ Refresh</button>
+          <button class="btn btn-danger" onclick="resetAll()">Reset All</button>
+        </div>
+        
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th><input type="checkbox" class="checkbox" id="selectAll" onchange="toggleAll()"></th>
+                <th>PO #</th>
+                <th>Customer</th>
+                <th>Items</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="ordersTable"><tr><td colspan="8" class="empty-state">Loading...</td></tr></tbody>
+          </table>
+        </div>
       </div>
       
-      <div id="tab-orders" class="tab-content active">
-        <div id="orders-container"><div class="empty-state">Loading...</div></div>
+      <!-- Mappings Tab -->
+      <div id="tabMappings" style="display:none;">
+        <h2 style="margin-bottom: 1.5rem;">Customer Mappings</h2>
+        <div class="mapping-form">
+          <input type="text" id="ediName" placeholder="EDI Customer Name (e.g. Fred Meyer)">
+          <input type="text" id="zohoName" placeholder="Zoho Customer Name">
+          <button class="btn btn-primary" onclick="addMapping()">Add</button>
+        </div>
+        <div id="mappingsList"></div>
       </div>
       
-      <div id="tab-mappings" class="tab-content">
-        <div class="section-body" id="mappings-container"><div class="empty-state">No mappings yet.</div></div>
+      <!-- Activity Tab -->
+      <div id="tabActivity" style="display:none;">
+        <h2 style="margin-bottom: 1.5rem;">Activity Log</h2>
+        <div id="activityList"></div>
       </div>
-    </div>
-  </main>
-
-  <!-- Order Details Modal -->
-  <div class="modal-overlay" id="order-modal">
+      
+      <!-- Drafts Tab -->
+      <div id="tabDrafts" style="display:none;">
+        <h2 style="margin-bottom: 1.5rem;">Replaced Drafts Archive</h2>
+        <div id="draftsList"><p class="empty-state">No replaced drafts yet.</p></div>
+      </div>
+    </main>
+  </div>
+  
+  <!-- Order Modal -->
+  <div class="modal-overlay" id="orderModal">
     <div class="modal">
       <div class="modal-header">
-        <h3 class="modal-title">Order Details</h3>
+        <h2 class="modal-title">Order Details</h2>
         <button class="modal-close" onclick="closeModal()">&times;</button>
       </div>
-      <div class="modal-body" id="order-details-content">
-        <div class="empty-state">Loading...</div>
-      </div>
+      <div class="modal-body" id="modalBody"></div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal()">Close</button>
-        <button class="btn btn-primary" id="btn-process-order" onclick="processCurrentOrder()">Process This Order</button>
+        <button class="btn btn-primary" id="processBtn" onclick="processCurrentOrder()">Process This Order</button>
       </div>
     </div>
   </div>
-
-  <div class="toast" id="toast"><span id="toast-message"></span></div>
-
+  
+  <!-- Draft Match Modal -->
+  <div class="modal-overlay" id="draftModal">
+    <div class="modal" style="max-width: 1200px;">
+      <div class="modal-header">
+        <h2 class="modal-title">🔍 Draft Matching</h2>
+        <button class="modal-close" onclick="closeDraftModal()">&times;</button>
+      </div>
+      <div class="modal-body" id="draftModalBody"></div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeDraftModal()">Cancel</button>
+        <button class="btn btn-success" id="confirmMatchBtn" onclick="confirmMatch()">Confirm & Process</button>
+      </div>
+    </div>
+  </div>
+  
+  <div class="toast-container" id="toasts"></div>
+  
   <script>
-    let zohoAccounts = [];
-    let currentOrderId = null;
+    let orders = [];
+    let selectedIds = new Set();
+    let currentOrder = null;
+    let selectedDraft = null;
+    let matchOption = 'replace';
     
-    document.addEventListener('DOMContentLoaded', () => {
-      refreshData();
-      loadZohoAccounts();
-    });
-
-    function switchTab(tab) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-      event.target.classList.add('active');
-      document.getElementById('tab-' + tab).classList.add('active');
+    document.addEventListener('DOMContentLoaded', () => { loadOrders(); loadStats(); });
+    
+    function showTab(tab, el) {
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      el.classList.add('active');
+      ['tabOrders','tabMappings','tabActivity','tabDrafts'].forEach(t => document.getElementById(t).style.display = 'none');
+      document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).style.display = 'block';
       if (tab === 'mappings') loadMappings();
+      if (tab === 'activity') loadActivity();
+      if (tab === 'drafts') loadReplacedDrafts();
     }
-
-    async function loadZohoAccounts() {
+    
+    async function loadOrders() {
       try {
-        const res = await fetch('/zoho-accounts');
-        if (res.ok) zohoAccounts = await res.json();
-      } catch (e) { console.warn('Could not load accounts'); }
+        const res = await fetch('/orders');
+        orders = await res.json();
+        renderOrders();
+        loadStats();
+      } catch (e) { toast('Failed to load orders', 'error'); }
     }
-
-    async function refreshData() {
+    
+    function renderOrders() {
+      const tbody = document.getElementById('ordersTable');
+      if (!orders.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No orders. Click "Fetch from SFTP".</td></tr>'; return; }
+      tbody.innerHTML = orders.map(o => {
+        const items = o.parsed_data?.items || [];
+        const amt = items.reduce((s,i) => s + (i.quantityOrdered||0)*(i.unitPrice||0), 0);
+        const st = o.status === 'processed' ? 'processed' : o.status === 'failed' ? 'failed' : 'pending';
+        return \`<tr>
+          <td><input type="checkbox" class="checkbox" \${selectedIds.has(o.id)?'checked':''} onchange="toggleSelect(\${o.id})"></td>
+          <td><strong>\${o.edi_order_number||'N/A'}</strong></td>
+          <td>\${o.edi_customer_name||'Unknown'}</td>
+          <td>\${items.length} items</td>
+          <td>$\${amt.toLocaleString('en-US',{minimumFractionDigits:2})}</td>
+          <td><span class="status-badge status-\${st}">\${st}</span></td>
+          <td>\${new Date(o.created_at).toLocaleDateString()}</td>
+          <td><button class="btn btn-secondary" style="padding:0.5rem 1rem" onclick="viewOrder(\${o.id})">View</button></td>
+        </tr>\`;
+      }).join('');
+    }
+    
+    async function loadStats() {
       try {
-        const [statusRes, ordersRes] = await Promise.all([fetch('/status'), fetch('/orders')]);
-        const status = await statusRes.json();
-        const orders = await ordersRes.json();
-        
-        document.getElementById('stat-total').textContent = status.last24Hours?.total || '0';
-        document.getElementById('stat-processed').textContent = status.last24Hours?.processed || '0';
-        document.getElementById('stat-pending').textContent = status.last24Hours?.pending || '0';
-        document.getElementById('stat-failed').textContent = status.last24Hours?.failed || '0';
-        
-        renderOrders(orders);
-      } catch (e) {
-        console.error('Error:', e);
-        showToast('Error loading data');
-      }
+        const res = await fetch('/status');
+        const d = (await res.json()).last24Hours;
+        document.getElementById('statTotal').textContent = d.total||0;
+        document.getElementById('statProcessed').textContent = d.processed||0;
+        document.getElementById('statPending').textContent = d.pending||0;
+        document.getElementById('statFailed').textContent = d.failed||0;
+        document.getElementById('pendingBadge').textContent = d.pending||0;
+      } catch(e) {}
     }
-
-    function renderOrders(orders) {
-      const container = document.getElementById('orders-container');
-      if (!orders || !orders.length) {
-        container.innerHTML = '<div class="empty-state">No orders yet.</div>';
-        return;
-      }
-
-      container.innerHTML = \`
-        <table class="orders-table">
-          <thead>
-            <tr>
-              <th><input type="checkbox" onclick="toggleSelectAll(this)"></th>
-              <th>PO #</th>
-              <th>Customer</th>
-              <th>Items</th>
-              <th>Status</th>
-              <th>Date</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            \${orders.map(o => {
-              const customer = o.edi_customer_name || o.parsed_data?.parties?.buyer?.name || o.parsed_data?.header?.retailerName || extractCustomerFromFilename(o.filename);
-              const itemCount = o.parsed_data?.items?.length || 0;
-              const canSelect = o.status === 'pending' || o.status === 'failed';
-              return \`
-                <tr>
-                  <td onclick="event.stopPropagation()"><input type="checkbox" class="order-checkbox" value="\${o.id}" \${!canSelect ? 'disabled' : ''}></td>
-                  <td><a href="#" class="po-link" onclick="openOrderDetails(\${o.id}); return false;">\${o.edi_order_number || o.filename?.substring(0,25) || '-'}</a></td>
-                  <td class="customer-cell">\${customer}</td>
-                  <td>\${itemCount} items</td>
-                  <td><span class="badge badge-\${o.status === 'processed' ? 'success' : o.status === 'failed' ? 'error' : 'pending'}">\${o.status}</span></td>
-                  <td>\${o.created_at ? new Date(o.created_at).toLocaleDateString() : '-'}</td>
-                  <td onclick="event.stopPropagation()">
-                    <button class="btn btn-sm btn-secondary" onclick="openOrderDetails(\${o.id})">View</button>
-                  </td>
-                </tr>
-              \`;
-            }).join('')}
-          </tbody>
-        </table>
-      \`;
-    }
-
-    function extractCustomerFromFilename(filename) {
-      if (!filename) return '-';
-      const match = filename.match(/to-([\\w_]+)\\.csv/i);
-      if (match) return match[1].replace(/_/g, ' ');
-      return '-';
-    }
-
-    async function openOrderDetails(orderId) {
-      currentOrderId = orderId;
-      document.getElementById('order-modal').classList.add('show');
-      document.getElementById('order-details-content').innerHTML = '<div class="empty-state">Loading...</div>';
-      
+    
+    function toggleSelect(id) { selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id); }
+    function toggleAll() { const c = document.getElementById('selectAll').checked; orders.forEach(o => c ? selectedIds.add(o.id) : selectedIds.delete(o.id)); renderOrders(); }
+    
+    async function viewOrder(id) {
       try {
-        const res = await fetch('/orders/' + orderId);
-        const order = await res.json();
-        renderOrderDetails(order);
-      } catch (e) {
-        document.getElementById('order-details-content').innerHTML = '<div class="empty-state">Error loading order</div>';
-      }
+        const res = await fetch('/orders/' + id);
+        currentOrder = await res.json();
+        renderOrderModal();
+        document.getElementById('orderModal').classList.add('active');
+      } catch(e) { toast('Failed to load order', 'error'); }
     }
-
-    function renderOrderDetails(order) {
-      const data = order.parsed_data || {};
-      const header = data.header || {};
-      const parties = data.parties || {};
-      const dates = data.dates || {};
-      const items = data.items || [];
+    
+    function renderOrderModal() {
+      const o = currentOrder;
+      const p = o.parsed_data || {};
+      const items = p.items || [];
+      const totalQty = items.reduce((s,i) => s + (i.quantityOrdered||0), 0);
+      const totalAmt = items.reduce((s,i) => s + (i.quantityOrdered||0)*(i.unitPrice||0), 0);
+      const ship = p.parties?.shipTo || {};
       
-      const customer = parties.buyer?.name || header.retailerName || extractCustomerFromFilename(order.filename);
-      const shipTo = parties.shipTo || {};
-      
-      let totalQty = 0, totalAmount = 0;
-      items.forEach(i => {
-        totalQty += i.quantityOrdered || 0;
-        totalAmount += i.amount || (i.quantityOrdered * i.unitPrice) || 0;
-      });
-
-      document.getElementById('order-details-content').innerHTML = \`
-        <div class="order-header-grid">
-          <div class="order-field">
-            <div class="order-field-label">PO Number</div>
-            <div class="order-field-value">\${header.poNumber || order.edi_order_number || '-'}</div>
-          </div>
-          <div class="order-field">
-            <div class="order-field-label">Customer</div>
-            <div class="order-field-value">\${customer}</div>
-          </div>
-          <div class="order-field">
-            <div class="order-field-label">Order Date</div>
-            <div class="order-field-value">\${dates.orderDate || '-'}</div>
-          </div>
-          <div class="order-field">
-            <div class="order-field-label">Status</div>
-            <div class="order-field-value"><span class="badge badge-\${order.status === 'processed' ? 'success' : order.status === 'failed' ? 'error' : 'pending'}">\${order.status}</span></div>
-          </div>
+      document.getElementById('modalBody').innerHTML = \`
+        <div class="order-header">
+          <div class="order-field"><div class="order-field-label">PO Number</div><div class="order-field-value">\${p.header?.poNumber||o.edi_order_number||'N/A'}</div></div>
+          <div class="order-field"><div class="order-field-label">Customer</div><div class="order-field-value">\${o.edi_customer_name||'Unknown'}</div></div>
+          <div class="order-field"><div class="order-field-label">Order Date</div><div class="order-field-value">\${p.dates?.orderDate||'N/A'}</div></div>
+          <div class="order-field"><div class="order-field-label">Status</div><div class="order-field-value"><span class="status-badge status-\${o.status}">\${o.status}</span></div></div>
         </div>
+        <div class="order-header">
+          <div class="order-field"><div class="order-field-label">Ship To</div><div class="order-field-value" style="font-size:0.85rem">\${[ship.name,ship.city,ship.state].filter(Boolean).join(', ')||'N/A'}</div></div>
+          <div class="order-field"><div class="order-field-label">Ship Window</div><div class="order-field-value">\${p.dates?.shipNotBefore||''} to \${p.dates?.shipNotAfter||''}</div></div>
+          <div class="order-field"><div class="order-field-label">Cancel Date</div><div class="order-field-value">\${p.dates?.cancelDate||'-'}</div></div>
+          <div class="order-field"><div class="order-field-label">Terms</div><div class="order-field-value">\${p.header?.paymentTerms||'N/A'}</div></div>
+        </div>
+        \${o.error_message ? \`<div class="error-box"><strong>Error:</strong> \${o.error_message}</div>\` : ''}
+        <h3 style="margin:1rem 0">Line Items (\${items.length})</h3>
+        <div class="line-items-container">
+          <table class="line-items-table">
+            <thead><tr><th>Style</th><th>Description</th><th>Color</th><th>Size</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead>
+            <tbody>\${items.map(i => \`<tr>
+              <td>\${i.productIds?.vendorItemNumber||i.productIds?.buyerItemNumber||''}</td>
+              <td>\${i.description||''}</td>
+              <td>\${i.color||''}</td>
+              <td>\${i.size||''}</td>
+              <td>\${i.quantityOrdered||0}</td>
+              <td>$\${(i.unitPrice||0).toFixed(2)}</td>
+              <td>$\${((i.quantityOrdered||0)*(i.unitPrice||0)).toFixed(2)}</td>
+            </tr>\`).join('')}</tbody>
+          </table>
+        </div>
+        <div class="summary-row">
+          <div class="summary-item"><div class="summary-value">\${items.length}</div><div class="summary-label">Line Items</div></div>
+          <div class="summary-item"><div class="summary-value">\${totalQty.toLocaleString()}</div><div class="summary-label">Total Units</div></div>
+          <div class="summary-item"><div class="summary-value">$\${totalAmt.toLocaleString('en-US',{minimumFractionDigits:2})}</div><div class="summary-label">Total Value</div></div>
+        </div>
+      \`;
+      
+      const btn = document.getElementById('processBtn');
+      btn.disabled = o.status === 'processed';
+      btn.textContent = o.status === 'processed' ? 'Already Processed' : 'Process This Order';
+    }
+    
+    function closeModal() { document.getElementById('orderModal').classList.remove('active'); currentOrder = null; }
+    function closeDraftModal() { document.getElementById('draftModal').classList.remove('active'); selectedDraft = null; }
+    
+    async function processCurrentOrder() {
+      if (!currentOrder) return;
+      // First search for matching drafts
+      try {
+        document.getElementById('processBtn').disabled = true;
+        document.getElementById('processBtn').textContent = 'Searching drafts...';
         
-        <div class="order-header-grid">
-          <div class="order-field">
-            <div class="order-field-label">Ship To</div>
-            <div class="order-field-value" style="font-size:0.75rem;">
-              \${shipTo.name || '-'}<br>
-              \${shipTo.address1 || ''} \${shipTo.address2 || ''}<br>
-              \${shipTo.city || ''}, \${shipTo.state || ''} \${shipTo.zip || ''}
+        const res = await fetch('/find-matching-drafts', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ orderId: currentOrder.id })
+        });
+        const data = await res.json();
+        
+        if (data.drafts && data.drafts.length > 0) {
+          // Show draft matching modal
+          closeModal();
+          showDraftMatchModal(data);
+        } else {
+          // No drafts found, process directly
+          await processOrderDirect(currentOrder.id);
+        }
+      } catch(e) {
+        toast('Error: ' + e.message, 'error');
+      } finally {
+        if (document.getElementById('processBtn')) {
+          document.getElementById('processBtn').disabled = false;
+          document.getElementById('processBtn').textContent = 'Process This Order';
+        }
+      }
+    }
+    
+    function showDraftMatchModal(data) {
+      selectedDraft = null;
+      matchOption = 'replace';
+      
+      const drafts = data.drafts;
+      const order = currentOrder;
+      const items = order.parsed_data?.items || [];
+      const totalAmt = items.reduce((s,i) => s + (i.quantityOrdered||0)*(i.unitPrice||0), 0);
+      
+      let draftsHtml = drafts.map((d, idx) => {
+        const scoreClass = d.match_score >= 40 ? 'high' : d.match_score >= 20 ? 'medium' : 'low';
+        return \`
+          <div class="draft-card \${idx===0?'selected':''}" onclick="selectDraft(\${idx}, this)">
+            <div class="draft-card-header">
+              <strong>\${d.salesorder_number}</strong>
+              <span class="match-score \${scoreClass}">\${d.match_score} pts</span>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:1rem; font-size:0.85rem; color:#94a3b8;">
+              <div>Date: <strong style="color:#e2e8f0">\${d.date||'N/A'}</strong></div>
+              <div>Amount: <strong style="color:#e2e8f0">$\${parseFloat(d.total||0).toLocaleString()}</strong></div>
+              <div>Items: <strong style="color:#e2e8f0">\${(d.line_items||[]).length}</strong></div>
+              <div>Ref: <strong style="color:#e2e8f0">\${d.reference_number||'-'}</strong></div>
             </div>
           </div>
-          <div class="order-field">
-            <div class="order-field-label">Ship Window</div>
-            <div class="order-field-value">\${dates.shipNotBefore || '-'} to \${dates.shipNotAfter || '-'}</div>
-          </div>
-          <div class="order-field">
-            <div class="order-field-label">Cancel Date</div>
-            <div class="order-field-value">\${dates.cancelAfter || '-'}</div>
-          </div>
-          <div class="order-field">
-            <div class="order-field-label">Payment Terms</div>
-            <div class="order-field-value">\${header.paymentTerms || '-'}</div>
-          </div>
-        </div>
-
-        <h4 style="margin: 1rem 0 0.5rem; font-size: 0.9rem;">Line Items (\${items.length})</h4>
-        <table class="line-items-table">
-          <thead>
-            <tr>
-              <th>Line</th>
-              <th>Style/SKU</th>
-              <th>Description</th>
-              <th>Color</th>
-              <th>Size</th>
-              <th>Qty</th>
-              <th>Price</th>
-              <th>Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            \${items.map(item => \`
-              <tr>
-                <td>\${item.lineNumber || '-'}</td>
-                <td>\${item.productIds?.vendorItemNumber || item.productIds?.buyerItemNumber || item.productIds?.sku || '-'}</td>
-                <td>\${item.description || '-'}</td>
-                <td>\${item.color || '-'}</td>
-                <td>\${item.size || '-'}</td>
-                <td>\${item.quantityOrdered || 0}</td>
-                <td>$\${(item.unitPrice || 0).toFixed(2)}</td>
-                <td>$\${(item.amount || (item.quantityOrdered * item.unitPrice) || 0).toFixed(2)}</td>
-              </tr>
-            \`).join('')}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colspan="5" style="text-align:right;"><strong>Totals:</strong></td>
-              <td><strong>\${totalQty}</strong></td>
-              <td></td>
-              <td><strong>$\${totalAmount.toFixed(2)}</strong></td>
-            </tr>
-          </tfoot>
-        </table>
-
-        <div class="order-summary">
-          <div class="summary-item">
-            <div class="summary-value">\${items.length}</div>
-            <div class="summary-label">Line Items</div>
-          </div>
-          <div class="summary-item">
-            <div class="summary-value">\${totalQty}</div>
-            <div class="summary-label">Total Units</div>
-          </div>
-          <div class="summary-item">
-            <div class="summary-value">$\${totalAmount.toFixed(2)}</div>
-            <div class="summary-label">Total Value</div>
-          </div>
+        \`;
+      }).join('');
+      
+      if (drafts.length === 0) {
+        draftsHtml = '<p style="color:#64748b;">No matching drafts found. Order will be created as new.</p>';
+      }
+      
+      document.getElementById('draftModalBody').innerHTML = \`
+        <div class="order-header">
+          <div class="order-field"><div class="order-field-label">EDI PO #</div><div class="order-field-value">\${order.edi_order_number}</div></div>
+          <div class="order-field"><div class="order-field-label">Customer</div><div class="order-field-value">\${order.edi_customer_name}</div></div>
+          <div class="order-field"><div class="order-field-label">Amount</div><div class="order-field-value">$\${totalAmt.toLocaleString('en-US',{minimumFractionDigits:2})}</div></div>
+          <div class="order-field"><div class="order-field-label">Items</div><div class="order-field-value">\${items.length} items</div></div>
         </div>
         
-        \${order.error_message ? \`<div style="margin-top:1rem; padding:0.75rem; background:#fff0f0; border-radius:8px; color:#ff3b30; font-size:0.75rem;"><strong>Error:</strong> \${order.error_message}</div>\` : ''}
+        <div class="draft-section">
+          <h3>📋 Matching Draft Orders in Zoho</h3>
+          \${draftsHtml}
+        </div>
+        
+        \${drafts.length > 0 ? \`
+        <div class="match-options">
+          <h3 style="margin-bottom:1rem;">Select Action</h3>
+          <div class="match-option selected" onclick="selectOption('replace', this)">
+            <input type="radio" name="matchOpt" checked>
+            <div>
+              <div class="match-option-title">Full Replace</div>
+              <div class="match-option-desc">Delete the draft and create new Sales Order with EDI data</div>
+            </div>
+          </div>
+          <div class="match-option" onclick="selectOption('partial', this)">
+            <input type="radio" name="matchOpt">
+            <div>
+              <div class="match-option-title">Partial Match (Create Remainder)</div>
+              <div class="match-option-desc">Create SO from EDI, and create NEW draft with remaining quantities not on this EDI</div>
+            </div>
+          </div>
+          <div class="match-option" onclick="selectOption('new', this)">
+            <input type="radio" name="matchOpt">
+            <div>
+              <div class="match-option-title">Create as New Order</div>
+              <div class="match-option-desc">Ignore drafts and create a separate Sales Order</div>
+            </div>
+          </div>
+        </div>
+        \` : ''}
       \`;
       
-      // Show/hide process button based on status
-      document.getElementById('btn-process-order').style.display = (order.status === 'pending' || order.status === 'failed') ? 'inline-flex' : 'none';
+      if (drafts.length > 0) selectedDraft = drafts[0];
+      document.getElementById('draftModal').classList.add('active');
     }
-
-    function closeModal() {
-      document.getElementById('order-modal').classList.remove('show');
-      currentOrderId = null;
+    
+    function selectDraft(idx, el) {
+      document.querySelectorAll('.draft-card').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+      // Get drafts from modal data - we'd need to store this
     }
-
-    async function processCurrentOrder() {
-      if (!currentOrderId) return;
-      showToast('Processing order...');
+    
+    function selectOption(opt, el) {
+      matchOption = opt;
+      document.querySelectorAll('.match-option').forEach(o => { o.classList.remove('selected'); o.querySelector('input').checked = false; });
+      el.classList.add('selected');
+      el.querySelector('input').checked = true;
+    }
+    
+    async function confirmMatch() {
+      if (!currentOrder) return;
+      try {
+        document.getElementById('confirmMatchBtn').disabled = true;
+        document.getElementById('confirmMatchBtn').textContent = 'Processing...';
+        
+        const res = await fetch('/process-with-draft-match', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            orderId: currentOrder.id,
+            draftId: selectedDraft?.salesorder_id || null,
+            matchOption: matchOption
+          })
+        });
+        
+        const data = await res.json();
+        if (data.success) {
+          toast('Order processed successfully!', 'success');
+          closeDraftModal();
+          loadOrders();
+        } else {
+          toast('Error: ' + (data.error || 'Unknown error'), 'error');
+        }
+      } catch(e) {
+        toast('Error: ' + e.message, 'error');
+      } finally {
+        document.getElementById('confirmMatchBtn').disabled = false;
+        document.getElementById('confirmMatchBtn').textContent = 'Confirm & Process';
+      }
+    }
+    
+    async function processOrderDirect(orderId) {
       try {
         const res = await fetch('/process-selected', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderIds: [currentOrderId] })
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ orderIds: [orderId] })
         });
-        const result = await res.json();
-        showToast(result.processed > 0 ? 'Order processed!' : 'Processing failed');
-        closeModal();
-        refreshData();
-      } catch (e) {
-        showToast('Error: ' + e.message);
+        const data = await res.json();
+        if (data.success) {
+          toast('Order processed! ' + data.processed + ' created', 'success');
+          closeModal();
+          loadOrders();
+        } else {
+          toast('Error: ' + (data.error || 'Failed'), 'error');
+        }
+      } catch(e) {
+        toast('Error: ' + e.message, 'error');
       }
     }
-
+    
+    async function fetchSFTP() {
+      try {
+        toast('Fetching from SFTP...', 'info');
+        const res = await fetch('/fetch-sftp', { method: 'POST' });
+        const data = await res.json();
+        toast('Fetched ' + (data.filesProcessed||0) + ' files', 'success');
+        loadOrders();
+      } catch(e) { toast('SFTP fetch failed', 'error'); }
+    }
+    
+    async function processOrders() {
+      const limit = document.getElementById('limitSelect').value;
+      try {
+        const res = await fetch('/process-limit', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ limit: parseInt(limit) })
+        });
+        const data = await res.json();
+        toast('Processed: ' + data.processed + ', Failed: ' + data.failed, data.failed ? 'error' : 'success');
+        loadOrders();
+      } catch(e) { toast('Processing failed', 'error'); }
+    }
+    
+    async function processSelected() {
+      if (!selectedIds.size) { toast('No orders selected', 'error'); return; }
+      try {
+        const res = await fetch('/process-selected', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ orderIds: Array.from(selectedIds) })
+        });
+        const data = await res.json();
+        toast('Processed: ' + data.processed, 'success');
+        selectedIds.clear();
+        loadOrders();
+      } catch(e) { toast('Failed', 'error'); }
+    }
+    
+    async function retryFailed() {
+      try {
+        const res = await fetch('/retry-failed', { method: 'POST' });
+        const data = await res.json();
+        toast('Reset ' + data.count + ' failed orders', 'success');
+        loadOrders();
+      } catch(e) { toast('Failed', 'error'); }
+    }
+    
+    async function resetAll() {
+      if (!confirm('Reset ALL orders to pending? This cannot be undone.')) return;
+      try {
+        const res = await fetch('/reset-to-pending');
+        toast('All orders reset', 'success');
+        loadOrders();
+      } catch(e) { toast('Failed', 'error'); }
+    }
+    
     async function loadMappings() {
       try {
         const res = await fetch('/customer-mappings');
         const mappings = await res.json();
-        const container = document.getElementById('mappings-container');
-        
-        let html = \`
-          <div style="margin-bottom:1rem; padding:1rem; background:#f5f5f7; border-radius:8px;">
-            <strong style="font-size:0.8rem;">Add Manual Mapping:</strong>
-            <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
-              <input type="text" id="edi-name" placeholder="EDI Customer Name (e.g. amazoncom)" style="flex:1; padding:0.4rem; border:1px solid #d2d2d7; border-radius:4px; font-size:0.75rem;">
-              <input type="text" id="zoho-name" placeholder="Zoho Account Name" style="flex:1; padding:0.4rem; border:1px solid #d2d2d7; border-radius:4px; font-size:0.75rem;">
-              <button class="btn btn-primary btn-sm" onclick="addMapping()">Add</button>
+        document.getElementById('mappingsList').innerHTML = mappings.length ? mappings.map(m => \`
+          <div class="mapping-item">
+            <span>\${m.edi_customer_name}</span>
+            <span style="color:#3b82f6">→</span>
+            <span>\${m.zoho_account_name}</span>
+            <button class="btn btn-danger" style="padding:0.25rem 0.75rem" onclick="deleteMapping(\${m.id})">Delete</button>
+          </div>
+        \`).join('') : '<p class="empty-state">No mappings yet.</p>';
+      } catch(e) {}
+    }
+    
+    async function addMapping() {
+      const edi = document.getElementById('ediName').value.trim();
+      const zoho = document.getElementById('zohoName').value.trim();
+      if (!edi || !zoho) { toast('Fill both fields', 'error'); return; }
+      try {
+        await fetch('/add-mapping', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ ediCustomerName: edi, zohoAccountName: zoho })
+        });
+        document.getElementById('ediName').value = '';
+        document.getElementById('zohoName').value = '';
+        toast('Mapping added', 'success');
+        loadMappings();
+      } catch(e) { toast('Failed', 'error'); }
+    }
+    
+    async function deleteMapping(id) {
+      try {
+        await fetch('/customer-mappings/' + id, { method: 'DELETE' });
+        loadMappings();
+      } catch(e) {}
+    }
+    
+    async function loadActivity() {
+      try {
+        const res = await fetch('/processing-logs?limit=50');
+        const logs = await res.json();
+        document.getElementById('activityList').innerHTML = logs.length ? logs.map(l => \`
+          <div class="activity-item \${l.status}">
+            <div class="activity-time">\${new Date(l.created_at).toLocaleString()}</div>
+            <div class="activity-content">
+              <div class="activity-title">\${l.action||'Action'}</div>
+              <div class="activity-details">\${l.details||''}</div>
             </div>
           </div>
-        \`;
-        
-        if (!mappings.length) {
-          html += '<div class="empty-state">No customer mappings saved yet.</div>';
-        } else {
-          html += mappings.map(m => \`
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem;background:#f5f5f7;border-radius:6px;margin-bottom:0.5rem;">
-              <span><strong>\${m.edi_customer_name}</strong> → \${m.zoho_account_name || '(no Zoho account)'}</span>
-              <button class="btn btn-sm btn-secondary" onclick="deleteMapping(\${m.id})">Delete</button>
+        \`).join('') : '<p class="empty-state">No activity yet.</p>';
+      } catch(e) { document.getElementById('activityList').innerHTML = '<p class="empty-state">Failed to load.</p>'; }
+    }
+    
+    async function loadReplacedDrafts() {
+      try {
+        const res = await fetch('/replaced-drafts');
+        const drafts = await res.json();
+        document.getElementById('draftsList').innerHTML = drafts.length ? drafts.map(d => \`
+          <div class="mapping-item">
+            <div>
+              <strong>\${d.original_so_number}</strong>
+              <div style="font-size:0.8rem;color:#64748b">Replaced by PO# \${d.edi_po_number} on \${new Date(d.replaced_at).toLocaleDateString()}</div>
             </div>
-          \`).join('');
-        }
-        
-        container.innerHTML = html;
-      } catch (e) { console.error(e); }
+            <button class="btn btn-secondary" style="padding:0.25rem 0.75rem" onclick="viewDraftDetails(\${d.id})">Details</button>
+          </div>
+        \`).join('') : '<p class="empty-state">No replaced drafts yet.</p>';
+      } catch(e) {}
     }
-
-    async function addMapping() {
-      const ediName = document.getElementById('edi-name').value.trim();
-      const zohoName = document.getElementById('zoho-name').value.trim();
-      if (!ediName || !zohoName) { showToast('Enter both names'); return; }
-      
-      try {
-        const res = await fetch('/add-mapping', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ediCustomerName: ediName, zohoAccountName: zohoName })
-        });
-        if (res.ok) {
-          showToast('Mapping added!');
-          document.getElementById('edi-name').value = '';
-          document.getElementById('zoho-name').value = '';
-          loadMappings();
-        }
-      } catch (e) { showToast('Error adding mapping'); }
-    }
-
-    async function resetOrders() {
-      if (!confirm('This will DELETE all orders and re-import from SFTP. Are you sure?')) return;
-      try {
-        const res = await fetch('/reset-orders', { method: 'POST' });
-        const r = await res.json();
-        showToast(r.message || 'Orders reset');
-        refreshData();
-      } catch (e) { showToast('Error resetting'); }
-    }
-
-    async function deleteMapping(id) {
-      await fetch('/customer-mappings/' + id, { method: 'DELETE' });
-      loadMappings();
-    }
-
-    function toggleSelectAll(cb) {
-      document.querySelectorAll('.order-checkbox:not(:disabled)').forEach(c => c.checked = cb.checked);
-    }
-
-    function getSelectedIds() {
-      return Array.from(document.querySelectorAll('.order-checkbox:checked')).map(c => parseInt(c.value));
-    }
-
-    async function fetchSFTP() {
-      const btn = document.getElementById('btn-fetch');
-      btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Fetching...';
-      showToast('Connecting to SFTP...');
-      try {
-        const res = await fetch('/fetch-sftp', { method: 'POST' });
-        const r = await res.json();
-        if (r.success) {
-          showToast('Fetched ' + r.filesProcessed + ' files, ' + r.ordersCreated + ' orders created');
-        } else {
-          showToast('Error: ' + (r.error || 'Unknown error'));
-        }
-        refreshData();
-      } catch (e) { showToast('Error: ' + e.message); }
-      btn.disabled = false; btn.innerHTML = 'Fetch from SFTP';
-    }
-
-    async function triggerProcessLimit() {
-      const btn = document.getElementById('btn-process');
-      const limit = document.getElementById('process-limit').value;
-      btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
-      try {
-        const res = await fetch('/process-limit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ limit: parseInt(limit) }) });
-        const r = await res.json();
-        showToast(\`Processed: \${r.processed}, Failed: \${r.failed}\`);
-        refreshData();
-      } catch (e) { showToast('Error'); }
-      btn.disabled = false; btn.innerHTML = 'Process Orders';
-    }
-
-    async function processSelected() {
-      const ids = getSelectedIds();
-      if (!ids.length) { showToast('Select orders first'); return; }
-      showToast('Processing ' + ids.length + ' orders...');
-      try {
-        const res = await fetch('/process-selected', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderIds: ids }) });
-        const r = await res.json();
-        showToast(\`Processed: \${r.processed}, Failed: \${r.failed}\`);
-        refreshData();
-      } catch (e) { showToast('Error'); }
-    }
-
-    async function retryFailed() {
-      const res = await fetch('/retry-failed', { method: 'POST' });
-      const r = await res.json();
-      showToast('Reset ' + r.count + ' orders');
-      refreshData();
-    }
-
-    function showToast(msg) {
-      const t = document.getElementById('toast');
-      document.getElementById('toast-message').textContent = msg;
-      t.classList.add('show');
-      setTimeout(() => t.classList.remove('show'), 3000);
+    
+    function toast(msg, type='info') {
+      const t = document.createElement('div');
+      t.className = 'toast ' + type;
+      t.textContent = msg;
+      document.getElementById('toasts').appendChild(t);
+      setTimeout(() => t.remove(), 4000);
     }
   </script>
 </body>
