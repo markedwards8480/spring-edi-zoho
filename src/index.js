@@ -61,11 +61,12 @@ app.get('/orders', async (req, res) => {
   const { pool } = require('./db');
   try {
     const result = await pool.query(`
-      SELECT id, filename, edi_order_number, status, zoho_so_id, error_message, created_at,
-             edi_customer_name, suggested_zoho_account_id, suggested_zoho_account_name, mapping_confirmed
+      SELECT id, filename, edi_order_number, status, zoho_so_id, zoho_so_number, error_message, created_at, processed_at,
+             edi_customer_name, suggested_zoho_account_id, suggested_zoho_account_name, mapping_confirmed,
+             parsed_data
       FROM edi_orders
       ORDER BY created_at DESC
-      LIMIT 50
+      LIMIT 500
     `);
     res.json(result.rows);
   } catch (error) {
@@ -409,6 +410,37 @@ app.delete('/customer-mappings/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Get processing logs
+app.get('/processing-logs', async (req, res) => {
+  const { pool } = require('./db');
+  const limit = parseInt(req.query.limit) || 50;
+  try {
+    const result = await pool.query(`
+      SELECT * FROM processing_logs
+      ORDER BY created_at DESC
+      LIMIT $1
+    `, [limit]);
+    res.json(result.rows);
+  } catch (error) {
+    res.json([]); // Return empty array if table doesn't exist
+  }
+});
+
+// Get replaced drafts
+app.get('/replaced-drafts', async (req, res) => {
+  const { pool } = require('./db');
+  try {
+    const result = await pool.query(`
+      SELECT * FROM replaced_drafts
+      ORDER BY replaced_at DESC
+      LIMIT 100
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    res.json([]); // Return empty array if table doesn't exist
   }
 });
 
