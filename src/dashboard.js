@@ -227,7 +227,7 @@ const dashboardHTML = `
       <div class="nav-item active" onclick="showTab('orders', this)">
         📥 EDI Orders <span class="nav-badge" id="pendingBadge">0</span>
       </div>
-      <div class="nav-item" onclick="showTab('review', this)">🔍 Review Matches</div>
+      <div class="nav-item" id="navReview" onclick="showTab('review', this)">🔍 Review Matches</div>
       <div class="nav-item" onclick="showTab('sent', this)">✅ Sent to Zoho</div>
       <div class="nav-title">Settings</div>
       <div class="nav-item" onclick="showTab('mappings', this)">🔗 Customer Mappings</div>
@@ -422,13 +422,23 @@ const dashboardHTML = `
     }
     
     async function fetchFromSftp() {
-      toast('Fetching from SFTP...');
+      const btn = event.target;
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '⏳ Fetching...';
+      
       try {
         const res = await fetch('/fetch-sftp', { method: 'POST' });
         const data = await res.json();
+        btn.disabled = false;
+        btn.innerHTML = originalText;
         toast(data.success ? 'Fetched ' + (data.result?.filesProcessed || 0) + ' files' : 'Error: ' + data.error);
         loadOrders();
-      } catch (e) { toast('Error: ' + e.message); }
+      } catch (e) { 
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        toast('Error: ' + e.message); 
+      }
     }
     
     // ============================================================
@@ -686,9 +696,20 @@ const dashboardHTML = `
     // ============================================================
     
     async function findMatches() {
-      toast('Finding matches with Zoho drafts...');
+      const btn = event.target;
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '⏳ Finding Matches...';
+      
       const pendingOrders = orders.filter(o => o.status === 'pending');
-      if (pendingOrders.length === 0) { toast('No pending orders to match'); return; }
+      if (pendingOrders.length === 0) { 
+        toast('No pending orders to match'); 
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        return; 
+      }
+      
+      toast('Searching ' + pendingOrders.length + ' orders against Zoho drafts... This may take a minute.');
       
       try {
         const res = await fetch('/find-matches', {
@@ -697,13 +718,19 @@ const dashboardHTML = `
           body: JSON.stringify({ orderIds: pendingOrders.map(o => o.id) })
         });
         const data = await res.json();
+        btn.disabled = false;
+        btn.innerHTML = originalText;
         if (data.success) {
           matchResults = data;
           showMatchReview(data);
-          showTab('review', document.querySelector('.nav-item:nth-child(2)'));
+          showTab('review', document.getElementById('navReview'));
           toast('Found ' + (data.matches?.length || 0) + ' matches');
         } else { toast('Error: ' + (data.error || 'Unknown')); }
-      } catch (e) { toast('Error: ' + e.message); }
+      } catch (e) { 
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        toast('Error: ' + e.message); 
+      }
     }
     
     function showMatchReview(data) {
@@ -833,6 +860,9 @@ const dashboardHTML = `
     }
     
     async function confirmSelectedMatches() {
+      const btn = event.target;
+      const originalText = btn.innerHTML;
+      
       const selectedMatches = [];
       const selectedNewOrders = [];
       
@@ -848,6 +878,9 @@ const dashboardHTML = `
       }
       
       if (selectedMatches.length === 0 && selectedNewOrders.length === 0) { toast('No orders selected'); return; }
+      
+      btn.disabled = true;
+      btn.innerHTML = '⏳ Processing...';
       toast('Processing ' + (selectedMatches.length + selectedNewOrders.length) + ' orders...');
       
       try {
@@ -857,6 +890,8 @@ const dashboardHTML = `
           body: JSON.stringify({ matches: selectedMatches, newOrders: selectedNewOrders })
         });
         const data = await res.json();
+        btn.disabled = false;
+        btn.innerHTML = originalText;
         if (data.success) {
           toast('Processed ' + data.processed + ' orders');
           matchResults = null;
@@ -864,7 +899,11 @@ const dashboardHTML = `
           loadOrders();
           loadStats();
         } else { toast('Error: ' + (data.error || 'Unknown')); }
-      } catch (e) { toast('Error: ' + e.message); }
+      } catch (e) { 
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        toast('Error: ' + e.message); 
+      }
     }
     
     async function updateZohoDraft(matchIndex) {
