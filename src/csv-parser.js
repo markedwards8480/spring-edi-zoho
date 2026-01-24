@@ -143,7 +143,11 @@ function parseSpringCSV(content, filename) {
   // Parse each row as a line item
   rows.forEach((row, index) => {
     // Get unit price - the key field!
+    // Primary: product_pack_product_pack_unit_price (column 48) has the actual selling price
+    // Fallback: po_item_po_item_unit_price (column 33) for older formats
     const unitPriceRaw = getField(row, 
+      'product_pack_product_pack_unit_price',
+      'product_pack.product_pack_unit_price',
       'po_item_po_item_unit_price',
       'po_item.po_item_unit_price'
     );
