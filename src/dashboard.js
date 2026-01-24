@@ -131,7 +131,7 @@ const dashboardHTML = `
       display: grid;
       grid-template-columns: repeat(4, 1fr);
       gap: 1.5rem;
-      margin-bottom: 2rem;
+      margin-bottom: 1.5rem;
     }
     
     .stat-card {
@@ -140,11 +140,16 @@ const dashboardHTML = `
       padding: 1.5rem;
       box-shadow: 0 1px 3px rgba(0,0,0,0.08);
       transition: all 0.2s;
+      cursor: pointer;
     }
     
     .stat-card:hover {
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    
+    .stat-card.active-filter {
+      border: 2px solid #0088c2;
     }
     
     .stat-label {
@@ -160,11 +165,65 @@ const dashboardHTML = `
     .stat-value.warning { color: #ff9500; }
     .stat-value.danger { color: #ff3b30; }
     
+    /* Filter Bar */
+    .filter-bar {
+      display: flex;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+      align-items: center;
+      background: white;
+      padding: 1rem;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    
+    .filter-bar input, .filter-bar select {
+      background: #f5f5f7;
+      border: 1px solid #d2d2d7;
+      color: #1e3a5f;
+      padding: 0.5rem 0.75rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-family: inherit;
+    }
+    
+    .filter-bar input:focus, .filter-bar select:focus {
+      outline: none;
+      border-color: #0088c2;
+      background: white;
+    }
+    
+    .filter-bar input[type="text"] {
+      width: 200px;
+    }
+    
+    .filter-bar input[type="date"] {
+      width: 140px;
+    }
+    
+    .filter-label {
+      font-size: 0.75rem;
+      color: #86868b;
+      margin-right: -0.5rem;
+    }
+    
+    .clear-filters {
+      color: #0088c2;
+      font-size: 0.8rem;
+      cursor: pointer;
+      margin-left: auto;
+    }
+    
+    .clear-filters:hover {
+      text-decoration: underline;
+    }
+    
     /* Action Bar */
     .action-bar {
       display: flex;
       gap: 0.75rem;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1rem;
       flex-wrap: wrap;
       align-items: center;
     }
@@ -183,44 +242,14 @@ const dashboardHTML = `
       font-family: inherit;
     }
     
-    .btn-primary {
-      background: #1e3a5f;
-      color: white;
-    }
-    
-    .btn-primary:hover {
-      background: #2d5a7f;
-    }
-    
-    .btn-secondary {
-      background: white;
-      color: #1e3a5f;
-      border: 1px solid #d2d2d7;
-    }
-    
-    .btn-secondary:hover {
-      background: #f5f5f7;
-    }
-    
-    .btn-success {
-      background: #34c759;
-      color: white;
-    }
-    
-    .btn-success:hover {
-      background: #2db14d;
-    }
-    
-    .btn-danger {
-      background: white;
-      color: #ff3b30;
-      border: 1px solid #ff3b30;
-    }
-    
-    .btn-danger:hover {
-      background: rgba(255, 59, 48, 0.08);
-    }
-    
+    .btn-primary { background: #1e3a5f; color: white; }
+    .btn-primary:hover { background: #2d5a7f; }
+    .btn-secondary { background: white; color: #1e3a5f; border: 1px solid #d2d2d7; }
+    .btn-secondary:hover { background: #f5f5f7; }
+    .btn-success { background: #34c759; color: white; }
+    .btn-success:hover { background: #2db14d; }
+    .btn-danger { background: white; color: #ff3b30; border: 1px solid #ff3b30; }
+    .btn-danger:hover { background: rgba(255, 59, 48, 0.08); }
     .btn:disabled { opacity: 0.5; cursor: not-allowed; }
     
     select {
@@ -233,10 +262,7 @@ const dashboardHTML = `
       font-family: inherit;
     }
     
-    select:focus {
-      outline: none;
-      border-color: #1e3a5f;
-    }
+    select:focus { outline: none; border-color: #1e3a5f; }
     
     /* Table */
     .table-container {
@@ -244,6 +270,14 @@ const dashboardHTML = `
       border-radius: 12px;
       overflow: hidden;
       box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    
+    .table-info {
+      padding: 0.75rem 1rem;
+      background: #f5f5f7;
+      font-size: 0.8rem;
+      color: #6e6e73;
+      border-bottom: 1px solid rgba(0,0,0,0.06);
     }
     
     table { width: 100%; border-collapse: collapse; }
@@ -283,10 +317,7 @@ const dashboardHTML = `
     /* Modal */
     .modal-overlay {
       position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      top: 0; left: 0; right: 0; bottom: 0;
       background: rgba(0, 0, 0, 0.4);
       display: flex;
       align-items: center;
@@ -480,79 +511,6 @@ const dashboardHTML = `
       margin-bottom: 1rem;
       color: #ff3b30;
     }
-    
-    /* Draft Section */
-    .draft-section {
-      background: #f5f5f7;
-      border-radius: 12px;
-      padding: 1.5rem;
-      margin-bottom: 1.5rem;
-    }
-    
-    .draft-section h3 {
-      margin-bottom: 1rem;
-      color: #1e3a5f;
-      font-size: 1rem;
-    }
-    
-    .draft-card {
-      background: white;
-      border: 2px solid #d2d2d7;
-      border-radius: 12px;
-      padding: 1rem;
-      margin-bottom: 0.75rem;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    
-    .draft-card:hover { border-color: #0088c2; }
-    .draft-card.selected { border-color: #34c759; background: rgba(52, 199, 89, 0.04); }
-    
-    .draft-card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 0.5rem;
-    }
-    
-    .match-score {
-      padding: 0.25rem 0.75rem;
-      border-radius: 980px;
-      font-size: 0.7rem;
-      font-weight: 600;
-      color: white;
-    }
-    
-    .match-score.high { background: #34c759; }
-    .match-score.medium { background: #ff9500; }
-    .match-score.low { background: #ff3b30; }
-    
-    /* Match Options */
-    .match-options {
-      background: #f5f5f7;
-      border-radius: 12px;
-      padding: 1.5rem;
-      margin-top: 1.5rem;
-    }
-    
-    .match-option {
-      display: flex;
-      align-items: flex-start;
-      gap: 1rem;
-      padding: 1rem;
-      background: white;
-      border: 2px solid #d2d2d7;
-      border-radius: 12px;
-      margin-bottom: 0.75rem;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    
-    .match-option:hover { border-color: #0088c2; }
-    .match-option.selected { border-color: #0088c2; background: rgba(0, 136, 194, 0.04); }
-    .match-option input[type="radio"] { margin-top: 0.25rem; accent-color: #0088c2; }
-    .match-option-title { font-weight: 600; color: #1e3a5f; margin-bottom: 0.25rem; }
-    .match-option-desc { font-size: 0.8125rem; color: #6e6e73; }
   </style>
 </head>
 <body>
@@ -586,19 +544,19 @@ const dashboardHTML = `
     
     <main class="content">
       <div class="stats-grid">
-        <div class="stat-card">
+        <div class="stat-card" onclick="filterByStatus('')" id="cardTotal">
           <div class="stat-label">Total Orders (24h)</div>
           <div class="stat-value" id="statTotal">0</div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" onclick="filterByStatus('processed')" id="cardProcessed">
           <div class="stat-label">Processed</div>
           <div class="stat-value success" id="statProcessed">0</div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" onclick="filterByStatus('pending')" id="cardPending">
           <div class="stat-label">Pending</div>
           <div class="stat-value warning" id="statPending">0</div>
         </div>
-        <div class="stat-card">
+        <div class="stat-card" onclick="filterByStatus('failed')" id="cardFailed">
           <div class="stat-label">Failed</div>
           <div class="stat-value danger" id="statFailed">0</div>
         </div>
@@ -606,6 +564,34 @@ const dashboardHTML = `
       
       <!-- Orders Tab -->
       <div id="tabOrders">
+        <!-- Filter Bar -->
+        <div class="filter-bar">
+          <span class="filter-label">🔍</span>
+          <input type="text" id="searchPO" placeholder="Search PO#..." oninput="applyFilters()">
+          
+          <span class="filter-label">Customer:</span>
+          <select id="filterCustomer" onchange="applyFilters()">
+            <option value="">All Customers</option>
+          </select>
+          
+          <span class="filter-label">Status:</span>
+          <select id="filterStatus" onchange="applyFilters()">
+            <option value="">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="processed">Processed</option>
+            <option value="failed">Failed</option>
+          </select>
+          
+          <span class="filter-label">From:</span>
+          <input type="date" id="filterDateFrom" onchange="applyFilters()">
+          
+          <span class="filter-label">To:</span>
+          <input type="date" id="filterDateTo" onchange="applyFilters()">
+          
+          <span class="clear-filters" onclick="clearFilters()">Clear Filters</span>
+        </div>
+        
+        <!-- Action Bar -->
         <div class="action-bar">
           <button class="btn btn-primary" onclick="fetchSFTP()">📥 Fetch from SFTP</button>
           <button class="btn btn-secondary" onclick="processOrders()">⚡ Process Orders</button>
@@ -617,6 +603,7 @@ const dashboardHTML = `
         </div>
         
         <div class="table-container">
+          <div class="table-info" id="tableInfo">Showing 0 orders</div>
           <table>
             <thead>
               <tr>
@@ -675,29 +662,14 @@ const dashboardHTML = `
     </div>
   </div>
   
-  <!-- Draft Match Modal -->
-  <div class="modal-overlay" id="draftModal">
-    <div class="modal" style="max-width: 1100px;">
-      <div class="modal-header">
-        <h2 class="modal-title">🔍 Draft Matching</h2>
-        <button class="modal-close" onclick="closeDraftModal()">×</button>
-      </div>
-      <div class="modal-body" id="draftModalBody"></div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" onclick="closeDraftModal()">Cancel</button>
-        <button class="btn btn-success" id="confirmMatchBtn" onclick="confirmMatch()">Confirm & Process</button>
-      </div>
-    </div>
-  </div>
-  
   <div class="toast-container" id="toasts"></div>
   
   <script>
     let orders = [];
+    let filteredOrders = [];
     let selectedIds = new Set();
     let currentOrder = null;
-    let selectedDraft = null;
-    let matchOption = 'replace';
+    let customers = new Set();
     
     document.addEventListener('DOMContentLoaded', () => { loadOrders(); loadStats(); });
     
@@ -715,15 +687,97 @@ const dashboardHTML = `
       try {
         const res = await fetch('/orders');
         orders = await res.json();
-        renderOrders();
+        
+        // Build customer list for filter dropdown
+        customers.clear();
+        orders.forEach(o => {
+          if (o.edi_customer_name) customers.add(o.edi_customer_name);
+        });
+        populateCustomerFilter();
+        
+        applyFilters();
         loadStats();
       } catch (e) { toast('Failed to load orders', 'error'); }
     }
     
+    function populateCustomerFilter() {
+      const select = document.getElementById('filterCustomer');
+      const currentValue = select.value;
+      select.innerHTML = '<option value="">All Customers</option>';
+      Array.from(customers).sort().forEach(c => {
+        select.innerHTML += '<option value="' + c + '">' + c + '</option>';
+      });
+      select.value = currentValue;
+    }
+    
+    function applyFilters() {
+      const searchPO = document.getElementById('searchPO').value.toLowerCase();
+      const customer = document.getElementById('filterCustomer').value;
+      const status = document.getElementById('filterStatus').value;
+      const dateFrom = document.getElementById('filterDateFrom').value;
+      const dateTo = document.getElementById('filterDateTo').value;
+      
+      filteredOrders = orders.filter(o => {
+        // PO search
+        if (searchPO && !(o.edi_order_number || '').toLowerCase().includes(searchPO)) return false;
+        
+        // Customer filter
+        if (customer && o.edi_customer_name !== customer) return false;
+        
+        // Status filter
+        if (status && o.status !== status) return false;
+        
+        // Date range
+        if (dateFrom) {
+          const orderDate = new Date(o.created_at).toISOString().split('T')[0];
+          if (orderDate < dateFrom) return false;
+        }
+        if (dateTo) {
+          const orderDate = new Date(o.created_at).toISOString().split('T')[0];
+          if (orderDate > dateTo) return false;
+        }
+        
+        return true;
+      });
+      
+      renderOrders();
+      
+      // Update stat card active states
+      document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active-filter'));
+      if (status === 'processed') document.getElementById('cardProcessed').classList.add('active-filter');
+      else if (status === 'pending') document.getElementById('cardPending').classList.add('active-filter');
+      else if (status === 'failed') document.getElementById('cardFailed').classList.add('active-filter');
+      else if (!searchPO && !customer && !dateFrom && !dateTo) document.getElementById('cardTotal').classList.add('active-filter');
+    }
+    
+    function clearFilters() {
+      document.getElementById('searchPO').value = '';
+      document.getElementById('filterCustomer').value = '';
+      document.getElementById('filterStatus').value = '';
+      document.getElementById('filterDateFrom').value = '';
+      document.getElementById('filterDateTo').value = '';
+      applyFilters();
+    }
+    
+    function filterByStatus(status) {
+      document.getElementById('filterStatus').value = status;
+      document.getElementById('searchPO').value = '';
+      document.getElementById('filterCustomer').value = '';
+      document.getElementById('filterDateFrom').value = '';
+      document.getElementById('filterDateTo').value = '';
+      applyFilters();
+    }
+    
     function renderOrders() {
       const tbody = document.getElementById('ordersTable');
-      if (!orders.length) { tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No orders. Click "Fetch from SFTP".</td></tr>'; return; }
-      tbody.innerHTML = orders.map(o => {
+      document.getElementById('tableInfo').textContent = 'Showing ' + filteredOrders.length + ' of ' + orders.length + ' orders';
+      
+      if (!filteredOrders.length) { 
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No orders match your filters.</td></tr>'; 
+        return; 
+      }
+      
+      tbody.innerHTML = filteredOrders.map(o => {
         const items = o.parsed_data?.items || [];
         const amt = items.reduce((s,i) => s + (i.quantityOrdered||0)*(i.unitPrice||0), 0);
         const st = o.status === 'processed' ? 'processed' : o.status === 'failed' ? 'failed' : 'pending';
@@ -753,7 +807,11 @@ const dashboardHTML = `
     }
     
     function toggleSelect(id) { selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id); }
-    function toggleAll() { const c = document.getElementById('selectAll').checked; orders.forEach(o => c ? selectedIds.add(o.id) : selectedIds.delete(o.id)); renderOrders(); }
+    function toggleAll() { 
+      const c = document.getElementById('selectAll').checked; 
+      filteredOrders.forEach(o => c ? selectedIds.add(o.id) : selectedIds.delete(o.id)); 
+      renderOrders(); 
+    }
     
     async function viewOrder(id) {
       try {
@@ -814,7 +872,6 @@ const dashboardHTML = `
     }
     
     function closeModal() { document.getElementById('orderModal').classList.remove('active'); currentOrder = null; }
-    function closeDraftModal() { document.getElementById('draftModal').classList.remove('active'); selectedDraft = null; }
     
     async function processCurrentOrder() {
       if (!currentOrder) return;
