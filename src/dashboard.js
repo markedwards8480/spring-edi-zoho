@@ -87,13 +87,12 @@ const dashboardHTML = `
     
     .status-badge { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; border-radius: 980px; font-size: 0.75rem; font-weight: 500; }
     .status-pending { background: rgba(255, 149, 0, 0.12); color: #ff9500; }
-    .status-processed { background: rgba(52, 199, 89, 0.12); color: #34c759; }
+    .status-in-zoho { background: rgba(52, 199, 89, 0.12); color: #34c759; }
     .status-failed { background: rgba(255, 59, 48, 0.12); color: #ff3b30; }
     .status-not-synced { background: rgba(134, 134, 139, 0.12); color: #86868b; }
     
-    .zoho-so { font-family: monospace; font-size: 0.8rem; color: #0088c2; font-weight: 500; }
-    .zoho-so a { color: #0088c2; text-decoration: none; }
-    .zoho-so a:hover { text-decoration: underline; }
+    .zoho-link { color: #0088c2; text-decoration: none; font-size: 0.8rem; }
+    .zoho-link:hover { text-decoration: underline; }
     .no-zoho { color: #86868b; font-size: 0.8rem; }
     
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; visibility: hidden; transition: all 0.2s; }
@@ -111,12 +110,14 @@ const dashboardHTML = `
     .order-field-label { font-size: 0.65rem; color: #86868b; text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 0.25rem; }
     .order-field-value { font-size: 0.95rem; font-weight: 500; color: #1e3a5f; }
     
-    .zoho-link-box { background: rgba(0, 136, 194, 0.08); border: 1px solid rgba(0, 136, 194, 0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; }
+    .zoho-link-box { background: rgba(52, 199, 89, 0.08); border: 1px solid rgba(52, 199, 89, 0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 1rem; }
     .zoho-link-box .icon { font-size: 1.5rem; }
     .zoho-link-box .label { font-size: 0.75rem; color: #86868b; }
-    .zoho-link-box .value { font-size: 1.1rem; font-weight: 600; color: #0088c2; }
+    .zoho-link-box .value { font-size: 1.1rem; font-weight: 600; color: #34c759; }
     .zoho-link-box a { color: #0088c2; text-decoration: none; }
     .zoho-link-box a:hover { text-decoration: underline; }
+    
+    .warning-box { background: rgba(134,134,139,0.08); border: 1px solid rgba(134,134,139,0.2); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; color: #86868b; }
     
     .line-items-container { max-height: 280px; overflow-y: auto; border: 1px solid rgba(0,0,0,0.06); border-radius: 12px; }
     .line-items-table { width: 100%; font-size: 0.8125rem; }
@@ -185,16 +186,16 @@ const dashboardHTML = `
           <div class="stat-label">Total Orders (24h)</div>
           <div class="stat-value" id="statTotal">0</div>
         </div>
-        <div class="stat-card" onclick="filterByStatus('processed')" id="cardProcessed">
-          <div class="stat-label">In Zoho</div>
+        <div class="stat-card" onclick="filterByStatus('in_zoho')" id="cardProcessed">
+          <div class="stat-label">Sent to Zoho</div>
           <div class="stat-value success" id="statProcessed">0</div>
         </div>
         <div class="stat-card" onclick="filterByStatus('pending')" id="cardPending">
-          <div class="stat-label">Pending</div>
+          <div class="stat-label">Ready to Send</div>
           <div class="stat-value warning" id="statPending">0</div>
         </div>
         <div class="stat-card" onclick="filterByStatus('failed')" id="cardFailed">
-          <div class="stat-label">Failed</div>
+          <div class="stat-label">Send Failed</div>
           <div class="stat-value danger" id="statFailed">0</div>
         </div>
       </div>
@@ -208,10 +209,10 @@ const dashboardHTML = `
           <span class="filter-label">Status:</span>
           <select id="filterStatus" onchange="applyFilters()">
             <option value="">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="in_zoho">In Zoho</option>
-            <option value="not_synced">Not Synced</option>
-            <option value="failed">Failed</option>
+            <option value="pending">Ready to Send</option>
+            <option value="in_zoho">Sent to Zoho</option>
+            <option value="not_synced">Sent (Unlinked)</option>
+            <option value="failed">Send Failed</option>
           </select>
           <span class="filter-label">From:</span>
           <input type="date" id="filterDateFrom" onchange="applyFilters()">
@@ -240,7 +241,7 @@ const dashboardHTML = `
                 <th>Customer</th>
                 <th>Items</th>
                 <th>Amount</th>
-                <th>Zoho SO#</th>
+                <th>Zoho</th>
                 <th>Status</th>
                 <th>Date</th>
                 <th>Actions</th>
@@ -282,7 +283,7 @@ const dashboardHTML = `
       <div class="modal-body" id="modalBody"></div>
       <div class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal()">Close</button>
-        <button class="btn btn-primary" id="processBtn" onclick="processCurrentOrder()">Process This Order</button>
+        <button class="btn btn-primary" id="processBtn" onclick="processCurrentOrder()">Send to Zoho</button>
       </div>
     </div>
   </div>
@@ -346,15 +347,10 @@ const dashboardHTML = `
       filteredOrders = orders.filter(o => {
         if (searchPO && !(o.edi_order_number || '').toLowerCase().includes(searchPO)) return false;
         if (customer && o.edi_customer_name !== customer) return false;
-        
         if (status) {
           const syncStatus = getOrderSyncStatus(o);
-          if (status === 'in_zoho' && syncStatus !== 'in_zoho') return false;
-          if (status === 'not_synced' && syncStatus !== 'not_synced') return false;
-          if (status === 'pending' && syncStatus !== 'pending') return false;
-          if (status === 'failed' && syncStatus !== 'failed') return false;
+          if (status !== syncStatus) return false;
         }
-        
         if (dateFrom) {
           const orderDate = new Date(o.created_at).toISOString().split('T')[0];
           if (orderDate < dateFrom) return false;
@@ -380,7 +376,7 @@ const dashboardHTML = `
     }
     
     function filterByStatus(status) {
-      document.getElementById('filterStatus').value = status === 'processed' ? 'in_zoho' : status;
+      document.getElementById('filterStatus').value = status;
       document.getElementById('searchPO').value = '';
       document.getElementById('filterCustomer').value = '';
       document.getElementById('filterDateFrom').value = '';
@@ -404,30 +400,30 @@ const dashboardHTML = `
         
         let statusBadge, zohoCell;
         if (syncStatus === 'in_zoho') {
-          statusBadge = '<span class="status-badge status-processed">✓ In Zoho</span>';
-          zohoCell = '<span class="zoho-so">' + o.zoho_so_id + '</span>';
+          statusBadge = '<span class="status-badge status-in-zoho">✓ Sent to Zoho</span>';
+          zohoCell = '<a href="https://books.zoho.com/app/677681121#/salesorders/' + o.zoho_so_id + '" target="_blank" class="zoho-link">View in Zoho ↗</a>';
         } else if (syncStatus === 'not_synced') {
-          statusBadge = '<span class="status-badge status-not-synced">⚠️ Not Synced</span>';
+          statusBadge = '<span class="status-badge status-not-synced">⚠️ Sent (Unlinked)</span>';
           zohoCell = '<span class="no-zoho">—</span>';
         } else if (syncStatus === 'failed') {
-          statusBadge = '<span class="status-badge status-failed">✗ Failed</span>';
+          statusBadge = '<span class="status-badge status-failed">❌ Send Failed</span>';
           zohoCell = '<span class="no-zoho">—</span>';
         } else {
-          statusBadge = '<span class="status-badge status-pending">Pending</span>';
+          statusBadge = '<span class="status-badge status-pending">⏳ Ready to Send</span>';
           zohoCell = '<span class="no-zoho">—</span>';
         }
         
-        return \`<tr>
-          <td><input type="checkbox" class="checkbox" \${selectedIds.has(o.id)?'checked':''} onchange="toggleSelect(\${o.id})"></td>
-          <td><strong>\${o.edi_order_number||'N/A'}</strong></td>
-          <td>\${o.edi_customer_name||'Unknown'}</td>
-          <td>\${items.length} items</td>
-          <td>$\${amt.toLocaleString('en-US',{minimumFractionDigits:2})}</td>
-          <td>\${zohoCell}</td>
-          <td>\${statusBadge}</td>
-          <td>\${new Date(o.created_at).toLocaleDateString()}</td>
-          <td><button class="btn btn-secondary" style="padding:0.35rem 0.75rem;font-size:0.8rem" onclick="viewOrder(\${o.id})">View</button></td>
-        </tr>\`;
+        return '<tr>' +
+          '<td><input type="checkbox" class="checkbox" ' + (selectedIds.has(o.id)?'checked':'') + ' onchange="toggleSelect(' + o.id + ')"></td>' +
+          '<td><strong>' + (o.edi_order_number||'N/A') + '</strong></td>' +
+          '<td>' + (o.edi_customer_name||'Unknown') + '</td>' +
+          '<td>' + items.length + ' items</td>' +
+          '<td>$' + amt.toLocaleString('en-US',{minimumFractionDigits:2}) + '</td>' +
+          '<td>' + zohoCell + '</td>' +
+          '<td>' + statusBadge + '</td>' +
+          '<td>' + new Date(o.created_at).toLocaleDateString() + '</td>' +
+          '<td><button class="btn btn-secondary" style="padding:0.35rem 0.75rem;font-size:0.8rem" onclick="viewOrder(' + o.id + ')">View</button></td>' +
+        '</tr>';
       }).join('');
     }
     
@@ -466,67 +462,70 @@ const dashboardHTML = `
       
       let zohoSection = '';
       if (syncStatus === 'in_zoho') {
-        zohoSection = \`
-          <div class="zoho-link-box">
-            <div class="icon">✓</div>
-            <div>
-              <div class="label">ZOHO BOOKS SALES ORDER</div>
-              <div class="value"><a href="https://books.zoho.com/app#/salesorders/\${o.zoho_so_id}" target="_blank">\${o.zoho_so_id}</a></div>
-            </div>
-          </div>
-        \`;
+        zohoSection = '<div class="zoho-link-box">' +
+          '<div class="icon">✓</div>' +
+          '<div>' +
+            '<div class="label">SENT TO ZOHO BOOKS</div>' +
+            '<div class="value"><a href="https://books.zoho.com/app/677681121#/salesorders/' + o.zoho_so_id + '" target="_blank">View Sales Order in Zoho ↗</a></div>' +
+          '</div>' +
+        '</div>';
       } else if (syncStatus === 'not_synced') {
-        zohoSection = \`
-          <div class="error-box" style="background: rgba(134,134,139,0.08); border-color: rgba(134,134,139,0.2); color: #86868b;">
-            <strong>⚠️ Not Synced to Zoho</strong> - This order is marked as processed but has no Zoho SO#. It may need to be reprocessed.
-          </div>
-        \`;
+        zohoSection = '<div class="warning-box">' +
+          '<strong>⚠️ Sent (Unlinked)</strong> - This order was processed but we lost the Zoho reference. Check Zoho Books manually using the PO#.' +
+        '</div>';
       }
       
-      document.getElementById('modalBody').innerHTML = \`
-        \${zohoSection}
-        <div class="order-header">
-          <div class="order-field"><div class="order-field-label">PO Number</div><div class="order-field-value">\${p.header?.poNumber||o.edi_order_number||'N/A'}</div></div>
-          <div class="order-field"><div class="order-field-label">Customer</div><div class="order-field-value">\${o.edi_customer_name||'Unknown'}</div></div>
-          <div class="order-field"><div class="order-field-label">Order Date</div><div class="order-field-value">\${p.dates?.orderDate||'N/A'}</div></div>
-          <div class="order-field"><div class="order-field-label">Status</div><div class="order-field-value">\${syncStatus === 'in_zoho' ? '<span class="status-badge status-processed">✓ In Zoho</span>' : syncStatus === 'not_synced' ? '<span class="status-badge status-not-synced">⚠️ Not Synced</span>' : syncStatus === 'failed' ? '<span class="status-badge status-failed">✗ Failed</span>' : '<span class="status-badge status-pending">Pending</span>'}</div></div>
-        </div>
-        <div class="order-header">
-          <div class="order-field"><div class="order-field-label">Ship To</div><div class="order-field-value" style="font-size:0.85rem">\${[ship.name,ship.city,ship.state].filter(Boolean).join(', ')||'N/A'}</div></div>
-          <div class="order-field"><div class="order-field-label">Ship Window</div><div class="order-field-value">\${p.dates?.shipNotBefore||''} to \${p.dates?.shipNotAfter||''}</div></div>
-          <div class="order-field"><div class="order-field-label">Cancel Date</div><div class="order-field-value">\${p.dates?.cancelDate||'-'}</div></div>
-          <div class="order-field"><div class="order-field-label">Terms</div><div class="order-field-value">\${p.header?.paymentTerms||'N/A'}</div></div>
-        </div>
-        \${o.error_message ? \`<div class="error-box"><strong>Error:</strong> \${o.error_message}</div>\` : ''}
-        <h3 style="margin:1rem 0;color:#1e3a5f">Line Items (\${items.length})</h3>
-        <div class="line-items-container">
-          <table class="line-items-table">
-            <thead><tr><th>Style</th><th>Description</th><th>Color</th><th>Size</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead>
-            <tbody>\${items.length ? items.map(i => \`<tr>
-              <td>\${i.productIds?.vendorItemNumber||i.productIds?.buyerItemNumber||''}</td>
-              <td>\${i.description||''}</td>
-              <td>\${i.color||''}</td>
-              <td>\${i.size||''}</td>
-              <td>\${i.quantityOrdered||0}</td>
-              <td>$\${(i.unitPrice||0).toFixed(2)}</td>
-              <td>$\${((i.quantityOrdered||0)*(i.unitPrice||0)).toFixed(2)}</td>
-            </tr>\`).join('') : '<tr><td colspan="7" style="text-align:center;color:#86868b;padding:2rem;">No line items parsed</td></tr>'}</tbody>
-          </table>
-        </div>
-        <div class="summary-row">
-          <div class="summary-item"><div class="summary-value">\${items.length}</div><div class="summary-label">Line Items</div></div>
-          <div class="summary-item"><div class="summary-value">\${totalQty.toLocaleString()}</div><div class="summary-label">Total Units</div></div>
-          <div class="summary-item"><div class="summary-value">$\${totalAmt.toLocaleString('en-US',{minimumFractionDigits:2})}</div><div class="summary-label">Total Value</div></div>
-        </div>
-      \`;
+      let statusText, statusClass;
+      if (syncStatus === 'in_zoho') { statusText = '✓ Sent to Zoho'; statusClass = 'status-in-zoho'; }
+      else if (syncStatus === 'not_synced') { statusText = '⚠️ Sent (Unlinked)'; statusClass = 'status-not-synced'; }
+      else if (syncStatus === 'failed') { statusText = '❌ Send Failed'; statusClass = 'status-failed'; }
+      else { statusText = '⏳ Ready to Send'; statusClass = 'status-pending'; }
+      
+      document.getElementById('modalBody').innerHTML = zohoSection +
+        '<div class="order-header">' +
+          '<div class="order-field"><div class="order-field-label">PO Number</div><div class="order-field-value">' + (p.header?.poNumber||o.edi_order_number||'N/A') + '</div></div>' +
+          '<div class="order-field"><div class="order-field-label">Customer</div><div class="order-field-value">' + (o.edi_customer_name||'Unknown') + '</div></div>' +
+          '<div class="order-field"><div class="order-field-label">Order Date</div><div class="order-field-value">' + (p.dates?.orderDate||'N/A') + '</div></div>' +
+          '<div class="order-field"><div class="order-field-label">Status</div><div class="order-field-value"><span class="status-badge ' + statusClass + '">' + statusText + '</span></div></div>' +
+        '</div>' +
+        '<div class="order-header">' +
+          '<div class="order-field"><div class="order-field-label">Ship To</div><div class="order-field-value" style="font-size:0.85rem">' + ([ship.name,ship.city,ship.state].filter(Boolean).join(', ')||'N/A') + '</div></div>' +
+          '<div class="order-field"><div class="order-field-label">Ship Window</div><div class="order-field-value">' + (p.dates?.shipNotBefore||'') + ' to ' + (p.dates?.shipNotAfter||'') + '</div></div>' +
+          '<div class="order-field"><div class="order-field-label">Cancel Date</div><div class="order-field-value">' + (p.dates?.cancelDate||'-') + '</div></div>' +
+          '<div class="order-field"><div class="order-field-label">Terms</div><div class="order-field-value">' + (p.header?.paymentTerms||'N/A') + '</div></div>' +
+        '</div>' +
+        (o.error_message ? '<div class="error-box"><strong>Error:</strong> ' + o.error_message + '</div>' : '') +
+        '<h3 style="margin:1rem 0;color:#1e3a5f">Line Items (' + items.length + ')</h3>' +
+        '<div class="line-items-container">' +
+          '<table class="line-items-table">' +
+            '<thead><tr><th>Style</th><th>Description</th><th>Color</th><th>Size</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead>' +
+            '<tbody>' + (items.length ? items.map(function(i) { return '<tr>' +
+              '<td>' + (i.productIds?.vendorItemNumber||i.productIds?.buyerItemNumber||'') + '</td>' +
+              '<td>' + (i.description||'') + '</td>' +
+              '<td>' + (i.color||'') + '</td>' +
+              '<td>' + (i.size||'') + '</td>' +
+              '<td>' + (i.quantityOrdered||0) + '</td>' +
+              '<td>$' + (i.unitPrice||0).toFixed(2) + '</td>' +
+              '<td>$' + ((i.quantityOrdered||0)*(i.unitPrice||0)).toFixed(2) + '</td>' +
+            '</tr>'; }).join('') : '<tr><td colspan="7" style="text-align:center;color:#86868b;padding:2rem;">No line items parsed</td></tr>') + '</tbody>' +
+          '</table>' +
+        '</div>' +
+        '<div class="summary-row">' +
+          '<div class="summary-item"><div class="summary-value">' + items.length + '</div><div class="summary-label">Line Items</div></div>' +
+          '<div class="summary-item"><div class="summary-value">' + totalQty.toLocaleString() + '</div><div class="summary-label">Total Units</div></div>' +
+          '<div class="summary-item"><div class="summary-value">$' + totalAmt.toLocaleString('en-US',{minimumFractionDigits:2}) + '</div><div class="summary-label">Total Value</div></div>' +
+        '</div>';
       
       const btn = document.getElementById('processBtn');
       if (syncStatus === 'in_zoho') {
         btn.disabled = true;
-        btn.textContent = 'Already in Zoho';
+        btn.textContent = 'Already Sent to Zoho';
+      } else if (syncStatus === 'not_synced') {
+        btn.disabled = true;
+        btn.textContent = 'Already Processed';
       } else {
         btn.disabled = false;
-        btn.textContent = syncStatus === 'not_synced' ? 'Reprocess to Zoho' : 'Process to Zoho';
+        btn.textContent = 'Send to Zoho';
       }
     }
     
@@ -536,16 +535,16 @@ const dashboardHTML = `
       if (!currentOrder) return;
       try {
         document.getElementById('processBtn').disabled = true;
-        document.getElementById('processBtn').textContent = 'Processing...';
+        document.getElementById('processBtn').textContent = 'Sending...';
         await processOrderDirect(currentOrder.id);
       } catch(e) { toast('Error: ' + e.message, 'error'); }
-      finally { const btn = document.getElementById('processBtn'); if (btn) { btn.disabled = false; btn.textContent = 'Process to Zoho'; } }
+      finally { const btn = document.getElementById('processBtn'); if (btn) { btn.disabled = false; btn.textContent = 'Send to Zoho'; } }
     }
     
     async function processOrderDirect(orderId) {
       const res = await fetch('/process-selected', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ orderIds: [orderId] }) });
       const data = await res.json();
-      if (data.processed > 0) { toast('Order processed successfully!', 'success'); closeModal(); loadOrders(); }
+      if (data.processed > 0) { toast('Order sent to Zoho successfully!', 'success'); closeModal(); loadOrders(); }
       else { toast('Error: ' + (data.error || 'Processing failed'), 'error'); }
     }
     
@@ -557,13 +556,13 @@ const dashboardHTML = `
     
     async function processOrders() {
       const limit = document.getElementById('limitSelect').value;
-      try { const res = await fetch('/process-limit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ limit: parseInt(limit) }) }); const data = await res.json(); toast('Processed: ' + data.processed + ', Failed: ' + data.failed, data.failed ? 'error' : 'success'); loadOrders(); }
+      try { const res = await fetch('/process-limit', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ limit: parseInt(limit) }) }); const data = await res.json(); toast('Sent: ' + data.processed + ', Failed: ' + data.failed, data.failed ? 'error' : 'success'); loadOrders(); }
       catch(e) { toast('Processing failed', 'error'); }
     }
     
     async function processSelected() {
       if (!selectedIds.size) { toast('No orders selected', 'error'); return; }
-      try { const res = await fetch('/process-selected', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ orderIds: Array.from(selectedIds) }) }); const data = await res.json(); toast('Processed: ' + data.processed, 'success'); selectedIds.clear(); loadOrders(); }
+      try { const res = await fetch('/process-selected', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ orderIds: Array.from(selectedIds) }) }); const data = await res.json(); toast('Sent: ' + data.processed, 'success'); selectedIds.clear(); loadOrders(); }
       catch(e) { toast('Failed', 'error'); }
     }
     
@@ -579,7 +578,7 @@ const dashboardHTML = `
     }
     
     async function loadMappings() {
-      try { const res = await fetch('/customer-mappings'); const mappings = await res.json(); document.getElementById('mappingsList').innerHTML = mappings.length ? mappings.map(m => '<div class="mapping-item"><span style="flex:1">' + m.edi_customer_name + '</span><span class="mapping-arrow">→</span><span style="flex:1">' + m.zoho_account_name + '</span><button class="btn btn-danger" style="padding:0.25rem 0.75rem;font-size:0.75rem" onclick="deleteMapping(' + m.id + ')">Delete</button></div>').join('') : '<p class="empty-state">No mappings yet.</p>'; }
+      try { const res = await fetch('/customer-mappings'); const mappings = await res.json(); document.getElementById('mappingsList').innerHTML = mappings.length ? mappings.map(function(m) { return '<div class="mapping-item"><span style="flex:1">' + m.edi_customer_name + '</span><span class="mapping-arrow">→</span><span style="flex:1">' + m.zoho_account_name + '</span><button class="btn btn-danger" style="padding:0.25rem 0.75rem;font-size:0.75rem" onclick="deleteMapping(' + m.id + ')">Delete</button></div>'; }).join('') : '<p class="empty-state">No mappings yet.</p>'; }
       catch(e) {}
     }
     
@@ -594,16 +593,16 @@ const dashboardHTML = `
     async function deleteMapping(id) { try { await fetch('/customer-mappings/' + id, { method: 'DELETE' }); loadMappings(); } catch(e) {} }
     
     async function loadActivity() {
-      try { const res = await fetch('/processing-logs?limit=50'); const logs = await res.json(); document.getElementById('activityList').innerHTML = logs.length ? logs.map(l => '<div class="activity-item ' + l.status + '"><div class="activity-time">' + new Date(l.created_at).toLocaleString() + '</div><div class="activity-content"><div class="activity-title">' + (l.action||'Action') + '</div><div class="activity-details">' + (l.details||'') + '</div></div></div>').join('') : '<p class="empty-state">No activity yet.</p>'; }
+      try { const res = await fetch('/processing-logs?limit=50'); const logs = await res.json(); document.getElementById('activityList').innerHTML = logs.length ? logs.map(function(l) { return '<div class="activity-item ' + l.status + '"><div class="activity-time">' + new Date(l.created_at).toLocaleString() + '</div><div class="activity-content"><div class="activity-title">' + (l.action||'Action') + '</div><div class="activity-details">' + (l.details||'') + '</div></div></div>'; }).join('') : '<p class="empty-state">No activity yet.</p>'; }
       catch(e) { document.getElementById('activityList').innerHTML = '<p class="empty-state">No activity yet.</p>'; }
     }
     
     async function loadReplacedDrafts() {
-      try { const res = await fetch('/replaced-drafts'); const drafts = await res.json(); document.getElementById('draftsList').innerHTML = drafts.length ? drafts.map(d => '<div class="mapping-item"><div style="flex:1"><strong>' + d.original_so_number + '</strong><div style="font-size:0.75rem;color:#86868b">Replaced by PO# ' + d.edi_po_number + ' on ' + new Date(d.replaced_at).toLocaleDateString() + '</div></div><button class="btn btn-secondary" style="padding:0.25rem 0.75rem;font-size:0.75rem">Details</button></div>').join('') : '<p class="empty-state">No replaced drafts yet.</p>'; }
+      try { const res = await fetch('/replaced-drafts'); const drafts = await res.json(); document.getElementById('draftsList').innerHTML = drafts.length ? drafts.map(function(d) { return '<div class="mapping-item"><div style="flex:1"><strong>' + d.original_so_number + '</strong><div style="font-size:0.75rem;color:#86868b">Replaced by PO# ' + d.edi_po_number + ' on ' + new Date(d.replaced_at).toLocaleDateString() + '</div></div><button class="btn btn-secondary" style="padding:0.25rem 0.75rem;font-size:0.75rem">Details</button></div>'; }).join('') : '<p class="empty-state">No replaced drafts yet.</p>'; }
       catch(e) {}
     }
     
-    function toast(msg, type='info') { const t = document.createElement('div'); t.className = 'toast ' + type; t.textContent = msg; document.getElementById('toasts').appendChild(t); setTimeout(() => t.remove(), 4000); }
+    function toast(msg, type) { type = type || 'info'; var t = document.createElement('div'); t.className = 'toast ' + type; t.textContent = msg; document.getElementById('toasts').appendChild(t); setTimeout(function() { t.remove(); }, 4000); }
   </script>
 </body>
 </html>
