@@ -72,7 +72,7 @@ app.get('/orders', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT id, filename, edi_order_number, customer_po, status, 
-             zoho_so_id, zoho_so_number, error_message, created_at, updated_at,
+             zoho_so_id, zoho_so_number, error_message, created_at,
              processed_at, edi_customer_name, parsed_data
       FROM edi_orders
       ORDER BY created_at DESC
