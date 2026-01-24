@@ -471,17 +471,17 @@ const dashboardHTML = `
       }).join('');
     }
     
-    // SYNC WITH ZOHO - Find matches and show for review
+    // SYNC WITH ZOHO - Find matches and show detailed review
     async function syncWithZoho() {
-      toast('Searching Zoho for matches...', 'info');
+      toast('Searching Zoho for matches (this may take a minute)...', 'info');
       try {
         var res = await fetch('/sync-with-zoho', { method: 'POST' });
         var data = await res.json();
         if (data.success) {
           if (data.matches && data.matches.length > 0) {
-            showMatchReview(data.matches, data.noMatch);
+            showSmartMatchReview(data.matches, data.noMatch);
           } else {
-            toast('No matches found in Zoho', 'warning');
+            toast('No matches found in Zoho (' + (data.noMatch?.length || 0) + ' EDI orders have no match)', 'warning');
           }
         } else {
           toast('Sync failed: ' + (data.error || 'Unknown error'), 'error');
@@ -493,56 +493,135 @@ const dashboardHTML = `
     
     let pendingMatches = [];
     
-    function showMatchReview(matches, noMatch) {
+    function showSmartMatchReview(matches, noMatch) {
       pendingMatches = matches;
       
-      var html = '<div class="info-box" style="margin-bottom:1rem;">' +
-        '<strong>Found ' + matches.length + ' EDI orders matching Zoho orders</strong><br>' +
-        '<span style="color:#86868b;">' + (noMatch ? noMatch.length : 0) + ' EDI orders have no match in Zoho (new orders)</span>' +
-        '</div>' +
-        '<div style="margin-bottom:1rem;">' +
-          '<button class="btn btn-success" onclick="confirmAllMatches()">✓ Confirm All ' + matches.length + ' Matches</button> ' +
-          '<button class="btn btn-secondary" onclick="closeMatchReview()">Cancel</button>' +
-        '</div>' +
-        '<div class="table-container"><table>' +
-        '<thead><tr><th><input type="checkbox" checked onchange="toggleAllMatches(this)"></th><th>PO #</th><th>EDI Customer</th><th>EDI Total</th><th>Zoho SO#</th><th>Zoho Total</th><th>Diff</th><th>Zoho Status</th></tr></thead>' +
-        '<tbody>';
+      var html = '<div style="max-height:70vh;overflow-y:auto;">';
       
+      // Summary header
+      html += '<div class="info-box" style="margin-bottom:1rem;">' +
+        '<strong>Found ' + matches.length + ' potential matches</strong><br>' +
+        '<span style="color:#86868b;">' + (noMatch ? noMatch.length : 0) + ' EDI orders have no match (will need to create new)</span>' +
+        '</div>';
+      
+      // Match cards
       matches.forEach(function(m, idx) {
-        var diffClass = m.totalDiff > 1 ? ' style="color:#ff9500;font-weight:bold;"' : '';
-        html += '<tr>' +
-          '<td><input type="checkbox" class="match-checkbox" data-idx="' + idx + '" checked></td>' +
-          '<td><strong>' + m.poNumber + '</strong></td>' +
-          '<td>' + (m.ediCustomer || '') + '</td>' +
-          '<td>$' + (m.ediTotal || 0).toLocaleString('en-US', {minimumFractionDigits:2}) + '</td>' +
-          '<td>' + m.zohoSoNumber + '</td>' +
-          '<td>$' + (m.zohoTotal || 0).toLocaleString('en-US', {minimumFractionDigits:2}) + '</td>' +
-          '<td' + diffClass + '>$' + (m.totalDiff || 0).toFixed(2) + '</td>' +
-          '<td><span class="status-badge status-' + (m.zohoStatus === 'draft' ? 'draft' : 'in-zoho') + '">' + (m.zohoStatus || '') + '</span></td>' +
-        '</tr>';
+        var score = m.matchScore || {};
+        var confidence = score.confidence || 'low';
+        var pct = score.percentage || 0;
+        
+        var confidenceColor = confidence === 'high' ? '#34c759' : confidence === 'medium' ? '#ff9500' : '#ff3b30';
+        var confidenceLabel = confidence === 'high' ? 'High Confidence' : confidence === 'medium' ? 'Medium Confidence' : 'Low Confidence';
+        var borderColor = confidence === 'high' ? '#34c759' : confidence === 'medium' ? '#ff9500' : '#ff3b30';
+        
+        html += '<div style="background:white;border:1px solid #e0e0e0;border-radius:12px;padding:1.25rem;margin-bottom:1rem;border-left:4px solid ' + borderColor + ';">';
+        
+        // Header with score and checkbox
+        html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;">' +
+          '<div style="flex:1;">' +
+            '<div style="font-size:1rem;font-weight:600;color:#1e3a5f;">PO# ' + m.poNumber + '</div>' +
+            '<div style="font-size:0.85rem;color:#86868b;">' + m.ediCustomer + '</div>' +
+          '</div>' +
+          '<div style="text-align:center;padding:0 1rem;">' +
+            '<div style="font-size:1.75rem;font-weight:700;color:' + confidenceColor + ';">' + pct + '%</div>' +
+            '<div style="font-size:0.7rem;color:' + confidenceColor + ';font-weight:500;">' + confidenceLabel + '</div>' +
+          '</div>' +
+          '<div style="display:flex;align-items:center;gap:0.5rem;">' +
+            '<span style="font-size:0.8rem;color:#86868b;">Include</span>' +
+            '<input type="checkbox" class="match-checkbox" data-idx="' + idx + '" ' + (confidence !== 'low' ? 'checked' : '') + ' style="width:22px;height:22px;accent-color:#34c759;">' +
+          '</div>' +
+        '</div>';
+        
+        // Match criteria breakdown - color coded boxes
+        html += '<div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem;">';
+        
+        // Matches (green)
+        if (score.matches && score.matches.length > 0) {
+          score.matches.forEach(function(match) {
+            html += '<div style="background:#d4edda;border-radius:6px;padding:0.4rem 0.6rem;font-size:0.75rem;">' +
+              '<span style="color:#155724;">✅ ' + match.field + '</span>' +
+            '</div>';
+          });
+        }
+        
+        // Warnings (yellow)
+        if (score.warnings && score.warnings.length > 0) {
+          score.warnings.forEach(function(warn) {
+            html += '<div style="background:#fff3cd;border-radius:6px;padding:0.4rem 0.6rem;font-size:0.75rem;">' +
+              '<span style="color:#856404;">⚠️ ' + warn.field + (warn.diff ? ' (' + warn.diff + ')' : '') + '</span>' +
+            '</div>';
+          });
+        }
+        
+        // Mismatches (red)
+        if (score.mismatches && score.mismatches.length > 0) {
+          score.mismatches.forEach(function(mis) {
+            html += '<div style="background:#f8d7da;border-radius:6px;padding:0.4rem 0.6rem;font-size:0.75rem;">' +
+              '<span style="color:#721c24;">❌ ' + mis.field + '</span>' +
+            '</div>';
+          });
+        }
+        
+        html += '</div>';
+        
+        // Side by side comparison
+        html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;padding:0.75rem;background:#f8f9fa;border-radius:8px;">' +
+          '<div>' +
+            '<div style="font-size:0.65rem;color:#86868b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem;">EDI ORDER</div>' +
+            '<div style="font-size:1.1rem;font-weight:600;color:#1e3a5f;">$' + (m.ediTotal || 0).toLocaleString('en-US', {minimumFractionDigits:2}) + '</div>' +
+            '<div style="font-size:0.8rem;color:#86868b;">' + (m.ediItemCount || 0) + ' line items</div>' +
+          '</div>' +
+          '<div>' +
+            '<div style="font-size:0.65rem;color:#86868b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem;">ZOHO ORDER #' + m.zohoSoNumber + '</div>' +
+            '<div style="font-size:1.1rem;font-weight:600;color:#1e3a5f;">$' + (m.zohoTotal || 0).toLocaleString('en-US', {minimumFractionDigits:2}) + '</div>' +
+            '<div style="font-size:0.8rem;color:#86868b;">' + (m.zohoItemCount || 0) + ' items • <span style="color:' + (m.zohoStatus === 'draft' ? '#0088c2' : '#34c759') + ';">' + (m.zohoStatus || '') + '</span></div>' +
+          '</div>' +
+        '</div>';
+        
+        // Detail buttons
+        html += '<div style="display:flex;gap:0.5rem;margin-top:0.75rem;">' +
+          '<button class="btn btn-secondary" style="font-size:0.75rem;padding:0.35rem 0.7rem;" onclick="viewOrder(' + m.ediOrderId + ')">📄 EDI Details</button>' +
+          '<button class="btn btn-secondary" style="font-size:0.75rem;padding:0.35rem 0.7rem;" onclick="window.open(\\'https://books.zoho.com/app/677681121#/salesorders/' + m.zohoSoId + '\\', \\'_blank\\')">🔗 Zoho Order</button>' +
+        '</div>';
+        
+        html += '</div>'; // end card
       });
       
-      html += '</tbody></table></div>';
+      // No match section
+      if (noMatch && noMatch.length > 0) {
+        html += '<div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid #e0e0e0;">' +
+          '<div style="font-size:0.9rem;font-weight:600;color:#1e3a5f;margin-bottom:0.75rem;">❓ ' + noMatch.length + ' EDI Orders Without Matches</div>' +
+          '<div style="font-size:0.8rem;color:#86868b;margin-bottom:0.5rem;">These will need to be created as new orders in Zoho:</div>';
+        noMatch.slice(0, 10).forEach(function(n) {
+          html += '<div style="background:#f8f9fa;padding:0.5rem 0.75rem;border-radius:6px;margin-bottom:0.25rem;font-size:0.8rem;">' +
+            '<strong>' + n.poNumber + '</strong> - ' + n.ediCustomer + ' - $' + (n.ediTotal || 0).toLocaleString('en-US', {minimumFractionDigits:2}) +
+          '</div>';
+        });
+        if (noMatch.length > 10) {
+          html += '<div style="font-size:0.8rem;color:#86868b;margin-top:0.5rem;">... and ' + (noMatch.length - 10) + ' more</div>';
+        }
+        html += '</div>';
+      }
+      
+      html += '</div>'; // end scrollable container
       
       document.getElementById('modalBody').innerHTML = html;
-      document.getElementById('processBtn').style.display = 'none';
+      document.querySelector('.modal-footer').innerHTML = 
+        '<button class="btn btn-secondary" onclick="closeMatchReview()">Cancel</button>' +
+        '<button class="btn btn-success" onclick="confirmSelectedMatches()">✓ Confirm Selected Matches</button>';
       document.querySelector('.modal-title').textContent = 'Review Zoho Matches';
       document.getElementById('orderModal').classList.add('active');
     }
     
-    function toggleAllMatches(checkbox) {
-      document.querySelectorAll('.match-checkbox').forEach(function(cb) {
-        cb.checked = checkbox.checked;
-      });
-    }
-    
     function closeMatchReview() {
       document.getElementById('orderModal').classList.remove('active');
-      document.getElementById('processBtn').style.display = '';
+      document.querySelector('.modal-footer').innerHTML = 
+        '<button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
+        '<button class="btn btn-primary" id="processBtn" onclick="processCurrentOrder()">Send to Zoho</button>';
       pendingMatches = [];
     }
     
-    async function confirmAllMatches() {
+    async function confirmSelectedMatches() {
       var selectedMatches = [];
       document.querySelectorAll('.match-checkbox:checked').forEach(function(cb) {
         var idx = parseInt(cb.dataset.idx);
