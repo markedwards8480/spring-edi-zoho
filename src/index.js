@@ -256,7 +256,7 @@ app.get('/export-orders', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT id, edi_order_number, customer_po, edi_customer_name, status,
-             zoho_so_id, zoho_so_number, created_at, updated_at, processed_at, parsed_data
+             zoho_so_id, zoho_so_number, created_at, processed_at, parsed_data
       FROM edi_orders ORDER BY created_at DESC
     `);
     const orders = result.rows;
@@ -303,7 +303,7 @@ app.post('/reparse-orders', async (req, res) => {
     for (const order of result.rows) {
       try {
         const newParsed = parseSpringCSV(order.raw_edi, order.filename || 'unknown.csv');
-        await pool.query(`UPDATE edi_orders SET parsed_data = $1, updated_at = NOW() WHERE id = $2`, [JSON.stringify(newParsed), order.id]);
+        await pool.query(`UPDATE edi_orders SET parsed_data = $1 WHERE id = $2`, [JSON.stringify(newParsed), order.id]);
         updated++;
       } catch (e) { 
         failed++; 
