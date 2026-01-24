@@ -38,8 +38,8 @@ async function initDatabase() {
 
     // Add new columns if they don't exist (for existing tables)
     await client.query(`
-      DO $$ 
-      BEGIN 
+      DO $$
+      BEGIN
         ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS edi_customer_name VARCHAR(500);
         ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS suggested_zoho_account_id VARCHAR(100);
         ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS suggested_zoho_account_name VARCHAR(500);
@@ -87,6 +87,42 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_customer_mappings_edi_name ON customer_mappings(edi_customer_name);
     `);
 
+    // Create processing_logs table for audit trail
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS processing_logs (
+        id SERIAL PRIMARY KEY,
+        action VARCHAR(100) NOT NULL,
+        status VARCHAR(50) DEFAULT 'success',
+        edi_order_id INTEGER,
+        edi_po_number VARCHAR(100),
+        zoho_so_id VARCHAR(100),
+        zoho_so_number VARCHAR(100),
+        customer_name VARCHAR(500),
+        details JSONB,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_processing_logs_created ON processing_logs(created_at);
+      CREATE INDEX IF NOT EXISTS idx_processing_logs_zoho_so ON processing_logs(zoho_so_number);
+    `);
+
+    // Create replaced_drafts table for tracking draft replacements
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS replaced_drafts (
+        id SERIAL PRIMARY KEY,
+        original_so_id VARCHAR(100),
+        original_so_number VARCHAR(100),
+        original_so_data JSONB,
+        edi_order_id INTEGER,
+        edi_po_number VARCHAR(100),
+        new_so_id VARCHAR(100),
+        new_so_number VARCHAR(100),
+        match_option VARCHAR(50),
+        replaced_at TIMESTAMP DEFAULT NOW(),
+        replaced_by VARCHAR(100) DEFAULT 'system'
+      );
+    `);
+
     logger.info('Database tables initialized');
   } finally {
     client.release();
@@ -103,8 +139,8 @@ async function isFileProcessed(filename) {
 
 async function markFileProcessed(filename, fileSize, orderCount) {
   await pool.query(
-    `INSERT INTO processed_files (filename, file_size, order_count) 
-     VALUES ($1, $2, $3) 
+    `INSERT INTO processed_files (filename, file_size, order_count)
+     VALUES ($1, $2, $3)
      ON CONFLICT (filename) DO UPDATE SET processed_at = NOW(), order_count = $3`,
     [filename, fileSize, orderCount]
   );
@@ -112,8 +148,7 @@ async function markFileProcessed(filename, fileSize, orderCount) {
 
 async function saveEDIOrder(order) {
   const result = await pool.query(
-    `INSERT INTO edi_orders 
-     (filename, edi_order_number, customer_po, status, raw_edi, parsed_data, edi_customer_name)
+    `INSERT INTO edi_orders (filename, edi_order_number, customer_po, status, raw_edi, parsed_data, edi_customer_name)
      VALUES ($1, $2, $3, $4, $5, $6, $7)
      ON CONFLICT (filename, edi_order_number) DO UPDATE SET
        parsed_data = $6,
@@ -127,12 +162,12 @@ async function saveEDIOrder(order) {
 
 async function updateOrderStatus(id, status, zohoData = {}) {
   await pool.query(
-    `UPDATE edi_orders SET 
-      status = $2, 
-      zoho_so_id = $3, 
-      zoho_so_number = $4,
-      error_message = $5,
-      processed_at = NOW()
+    `UPDATE edi_orders SET
+       status = $2,
+       zoho_so_id = $3,
+       zoho_so_number = $4,
+       error_message = $5,
+       processed_at = NOW()
      WHERE id = $1`,
     [id, status, zohoData.soId || null, zohoData.soNumber || null, zohoData.error || null]
   );
@@ -140,10 +175,10 @@ async function updateOrderStatus(id, status, zohoData = {}) {
 
 async function updateOrderMapping(id, zohoAccountId, zohoAccountName, confirmed = false) {
   await pool.query(
-    `UPDATE edi_orders SET 
-      suggested_zoho_account_id = $2, 
-      suggested_zoho_account_name = $3,
-      mapping_confirmed = $4
+    `UPDATE edi_orders SET
+       suggested_zoho_account_id = $2,
+       suggested_zoho_account_name = $3,
+       mapping_confirmed = $4
      WHERE id = $1`,
     [id, zohoAccountId, zohoAccountName, confirmed]
   );
@@ -151,9 +186,9 @@ async function updateOrderMapping(id, zohoAccountId, zohoAccountName, confirmed 
 
 async function getPendingOrders() {
   const result = await pool.query(
-    `SELECT id, filename, edi_order_number, parsed_data, edi_customer_name, 
+    `SELECT id, filename, edi_order_number, parsed_data, edi_customer_name,
             suggested_zoho_account_id, suggested_zoho_account_name, mapping_confirmed
-     FROM edi_orders 
+     FROM edi_orders
      WHERE status = 'pending'
      ORDER BY created_at ASC
      LIMIT 100`
@@ -195,6 +230,78 @@ async function deleteCustomerMapping(id) {
   await pool.query('DELETE FROM customer_mappings WHERE id = $1', [id]);
 }
 
+// Processing logs functions
+async function logProcessingActivity(data) {
+  try {
+    await pool.query(
+      `INSERT INTO processing_logs (action, status, edi_order_id, edi_po_number, zoho_so_id, zoho_so_number, customer_name, details)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        data.action,
+        data.status || 'success',
+        data.ediOrderId || null,
+        data.ediPoNumber || null,
+        data.zohoSoId || null,
+        data.zohoSoNumber || null,
+        data.customerName || null,
+        JSON.stringify(data.details || {})
+      ]
+    );
+  } catch (error) {
+    logger.error('Failed to log processing activity', { error: error.message });
+  }
+}
+
+async function getProcessingLogs(limit = 100) {
+  const result = await pool.query(
+    `SELECT * FROM processing_logs ORDER BY created_at DESC LIMIT $1`,
+    [limit]
+  );
+  return result.rows;
+}
+
+// Get all orders sent to Zoho (for audit/cleanup)
+async function getZohoSentOrders() {
+  const result = await pool.query(
+    `SELECT 
+       id, edi_order_number, edi_customer_name, zoho_so_id, zoho_so_number, 
+       processed_at, status
+     FROM edi_orders 
+     WHERE zoho_so_number IS NOT NULL
+     ORDER BY processed_at DESC`
+  );
+  return result.rows;
+}
+
+// Replaced drafts functions
+async function saveReplacedDraft(data) {
+  const result = await pool.query(
+    `INSERT INTO replaced_drafts 
+     (original_so_id, original_so_number, original_so_data, edi_order_id, edi_po_number, new_so_id, new_so_number, match_option)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING id`,
+    [
+      data.originalSoId,
+      data.originalSoNumber,
+      JSON.stringify(data.originalSoData || {}),
+      data.ediOrderId,
+      data.ediPoNumber,
+      data.newSoId || null,
+      data.newSoNumber || null,
+      data.matchOption || 'replace'
+    ]
+  );
+  return result.rows[0];
+}
+
+async function getReplacedDrafts(limit = 100) {
+  const result = await pool.query(
+    `SELECT * FROM replaced_drafts ORDER BY replaced_at DESC LIMIT $1`,
+    [limit]
+  );
+  return result.rows;
+}
+
 module.exports = {
   pool,
   initDatabase,
@@ -207,5 +314,10 @@ module.exports = {
   getCustomerMapping,
   saveCustomerMapping,
   getAllCustomerMappings,
-  deleteCustomerMapping
+  deleteCustomerMapping,
+  logProcessingActivity,
+  getProcessingLogs,
+  getZohoSentOrders,
+  saveReplacedDraft,
+  getReplacedDrafts
 };
