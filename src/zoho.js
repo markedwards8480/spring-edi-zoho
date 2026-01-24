@@ -181,7 +181,7 @@ class ZohoClient {
 
     const salesOrderData = {
       customer_id: orderData.customerId,
-      salesorder_number: orderData.poNumber ? `EDI-${orderData.poNumber}` : undefined,
+      // Let Zoho auto-generate the SO number, put PO in reference field
       reference_number: orderData.poNumber || '',
       date: orderData.orderDate || new Date().toISOString().split('T')[0],
       shipment_date: orderData.shipDate || undefined,
