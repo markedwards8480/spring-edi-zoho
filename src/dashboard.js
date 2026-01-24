@@ -709,7 +709,20 @@ const dashboardHTML = `
         return; 
       }
       
-      toast('Searching ' + pendingOrders.length + ' orders against Zoho drafts... This may take a minute.');
+      // Show persistent progress in the Review tab
+      document.getElementById('matchReviewContent').innerHTML = \`
+        <div style="text-align:center;padding:3rem;">
+          <div style="font-size:3rem;margin-bottom:1rem;">⏳</div>
+          <h3 style="margin-bottom:0.5rem;">Finding Matches...</h3>
+          <p style="color:#86868b;">Searching \${pendingOrders.length} EDI orders against Zoho drafts.</p>
+          <p style="color:#86868b;">This may take 1-2 minutes. Please wait...</p>
+          <div style="margin-top:1.5rem;width:200px;height:4px;background:#e5e5e5;border-radius:2px;margin:1.5rem auto;overflow:hidden;">
+            <div style="width:100%;height:100%;background:linear-gradient(90deg,#0088c2,#34c759,#0088c2);background-size:200% 100%;animation:loading 1.5s ease-in-out infinite;"></div>
+          </div>
+        </div>
+        <style>@keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }</style>
+      \`;
+      showTab('review', document.getElementById('navReview'));
       
       try {
         const res = await fetch('/find-matches', {
@@ -800,32 +813,69 @@ const dashboardHTML = `
       if (!match) return;
       const edi = match.ediOrder;
       const zoho = match.zohoDraft;
-      const amtDiff = edi.totalAmount - zoho.totalAmount;
-      const hasChanges = Math.abs(amtDiff) > 0.01;
+      
+      // Calculate all differences
+      const amtDiff = Math.abs(edi.totalAmount - zoho.totalAmount);
+      const hasAmtDiff = amtDiff > 0.01;
+      
+      // Check ship date difference
+      const ediShipDate = edi.shipDate ? new Date(edi.shipDate) : null;
+      const zohoShipDate = zoho.shipDate ? new Date(zoho.shipDate) : null;
+      let shipDateDiffDays = 0;
+      if (ediShipDate && zohoShipDate) {
+        shipDateDiffDays = Math.abs(Math.round((ediShipDate - zohoShipDate) / (1000 * 60 * 60 * 24)));
+      }
+      const hasShipDateDiff = shipDateDiffDays > 7;
+      
+      // Check style differences
+      const ediStyles = new Set((edi.items || []).map(i => (i.productIds?.sku || i.productIds?.vendorItemNumber || '').toUpperCase()).filter(Boolean));
+      const zohoStyles = new Set((zoho.items || []).map(i => (i.name || '').split(' ')[0].toUpperCase()).filter(Boolean));
+      let styleMatchCount = 0;
+      ediStyles.forEach(es => {
+        zohoStyles.forEach(zs => {
+          if (es === zs || es.includes(zs) || zs.includes(es)) styleMatchCount++;
+        });
+      });
+      const hasStyleMismatch = ediStyles.size > 0 && zohoStyles.size > 0 && styleMatchCount === 0;
+      
+      // Build warnings HTML
+      let warningsHtml = '';
+      if (hasStyleMismatch) {
+        warningsHtml += \`<div class="changes-summary" style="background:#ffebee;border:2px solid #c62828;"><span style="font-size:1.5rem">🚨</span><span style="color:#c62828;font-weight:600">STYLE MISMATCH - EDI styles (\${[...ediStyles].slice(0,3).join(', ')}) do not match Zoho styles (\${[...zohoStyles].slice(0,3).join(', ')}). This may be the WRONG match!</span></div>\`;
+      }
+      if (hasShipDateDiff) {
+        warningsHtml += \`<div class="changes-summary" style="background:#fff3e0;"><span style="font-size:1.5rem">⚠️</span><span>Ship date difference: \${shipDateDiffDays} days (EDI: \${edi.shipDate || 'N/A'} vs Zoho: \${zoho.shipDate || 'N/A'})</span></div>\`;
+      }
+      if (hasAmtDiff) {
+        warningsHtml += \`<div class="changes-summary" style="background:#fff3e0;"><span style="font-size:1.5rem">⚠️</span><span>Amount difference: $\${amtDiff.toFixed(2)}</span></div>\`;
+      }
+      if (!warningsHtml) {
+        warningsHtml = \`<div class="changes-summary no-changes"><span style="font-size:1.5rem">✓</span><span>No significant differences found</span></div>\`;
+      }
       
       const html = \`
         <div class="modal-overlay" onclick="closeModal()">
           <div class="modal comparison-modal" onclick="event.stopPropagation()">
             <div class="modal-header"><h2>Compare: EDI Order vs Draft</h2><button class="modal-close" onclick="closeModal()">×</button></div>
             <div class="modal-body">
-              <div class="changes-summary \${hasChanges ? '' : 'no-changes'}"><span style="font-size:1.5rem">\${hasChanges ? '⚠️' : '✓'}</span><span>\${hasChanges ? 'Amount difference: $' + Math.abs(amtDiff).toFixed(2) : '0 changes to apply'}</span></div>
+              \${warningsHtml}
               
               <div class="comparison-header">
                 <div class="comparison-side edi">
                   <h3>📄 EDI Order (Confirmed)</h3>
                   <div class="comparison-field"><div class="comparison-field-label">PO#</div><div class="comparison-field-value">\${edi.poNumber}</div></div>
                   <div class="comparison-field"><div class="comparison-field-label">Customer</div><div class="comparison-field-value">\${edi.customer}</div></div>
-                  <div class="comparison-field"><div class="comparison-field-label">Ship Date</div><div class="comparison-field-value">\${edi.shipDate || 'N/A'}</div></div>
+                  <div class="comparison-field"><div class="comparison-field-label">Ship Date</div><div class="comparison-field-value" style="\${hasShipDateDiff ? 'color:#f57c00;font-weight:600' : ''}">\${edi.shipDate || 'N/A'}</div></div>
                   <div class="comparison-field"><div class="comparison-field-label">Items</div><div class="comparison-field-value">\${edi.itemCount} lines, \${edi.totalUnits.toLocaleString()} units</div></div>
-                  <div class="comparison-total">Total: $\${edi.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</div>
+                  <div class="comparison-total" style="\${hasAmtDiff ? 'color:#f57c00' : ''}">Total: $\${edi.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</div>
                 </div>
                 <div class="comparison-side zoho">
                   <h3>📋 Zoho Draft #\${zoho.number}</h3>
                   <div class="comparison-field"><div class="comparison-field-label">Reference</div><div class="comparison-field-value">\${zoho.reference || 'N/A'}</div></div>
                   <div class="comparison-field"><div class="comparison-field-label">Customer</div><div class="comparison-field-value">\${zoho.customer}</div></div>
-                  <div class="comparison-field"><div class="comparison-field-label">Ship Date</div><div class="comparison-field-value">\${zoho.shipDate || 'N/A'}</div></div>
+                  <div class="comparison-field"><div class="comparison-field-label">Ship Date</div><div class="comparison-field-value" style="\${hasShipDateDiff ? 'color:#f57c00;font-weight:600' : ''}">\${zoho.shipDate || 'N/A'}</div></div>
                   <div class="comparison-field"><div class="comparison-field-label">Items</div><div class="comparison-field-value">\${zoho.itemCount} lines, \${zoho.totalUnits.toLocaleString()} units</div></div>
-                  <div class="comparison-total">Total: $\${zoho.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</div>
+                  <div class="comparison-total" style="\${hasAmtDiff ? 'color:#f57c00' : ''}">Total: $\${zoho.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</div>
                 </div>
               </div>
               
@@ -837,7 +887,7 @@ const dashboardHTML = `
                 </table>
               </div>
             </div>
-            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-success" onclick="updateZohoDraft(\${matchIndex})">✓ Update Zoho Draft</button></div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-success" onclick="updateZohoDraft(\${matchIndex})">\${hasStyleMismatch ? '⚠️ Update Anyway' : '✓ Update Zoho Draft'}</button></div>
           </div>
         </div>
       \`;
