@@ -1,6 +1,6 @@
 const axios = require('axios');
 const logger = require('./logger');
-const { pool } = require('./db');
+const { pool, getCustomerMapping } = require('./db');
 
 class ZohoClient {
   constructor() {
@@ -26,13 +26,13 @@ class ZohoClient {
       if (result.rows.length > 0) {
         const token = result.rows[0];
         const expiresAt = new Date(token.expires_at);
-
+        
         if (expiresAt > new Date(Date.now() + 5 * 60 * 1000)) {
           this.accessToken = token.access_token;
           this.tokenExpiry = expiresAt;
           return this.accessToken;
         }
-
+        
         return await this.refreshAccessToken(token.refresh_token);
       }
     } catch (error) {
@@ -68,7 +68,6 @@ class ZohoClient {
 
       this.accessToken = access_token;
       this.tokenExpiry = expiresAt;
-
       logger.info('Zoho token refreshed', { expiresAt });
       return access_token;
     } catch (error) {
@@ -79,17 +78,28 @@ class ZohoClient {
     }
   }
 
-  // ==========================================
+  // ============================================
   // ZOHO BOOKS API FUNCTIONS
-  // ==========================================
+  // ============================================
 
-  // Find customer in Zoho Books by name
   async findBooksCustomerByName(name) {
     if (!name) return null;
+    
+    // First check our customer mappings table
+    try {
+      const mapping = await getCustomerMapping(name);
+      if (mapping && mapping.zoho_account_name) {
+        // Search for the mapped name in Zoho
+        name = mapping.zoho_account_name;
+      }
+    } catch (e) {
+      // Continue with original name
+    }
 
     const token = await this.ensureValidToken();
 
     try {
+      // Search for contact by name in Zoho Books
       const response = await axios({
         method: 'GET',
         url: `${this.baseUrl}/books/v3/contacts`,
@@ -105,335 +115,77 @@ class ZohoClient {
 
       const contacts = response.data?.contacts || [];
       
-      // First try exact match
-      const exactMatch = contacts.find(c => 
-        c.contact_name.toLowerCase() === name.toLowerCase()
-      );
-      if (exactMatch) return exactMatch;
-
-      // Otherwise return first partial match
-      if (contacts.length > 0) {
-        return contacts[0];
+      // Find exact or best match
+      for (const contact of contacts) {
+        if (contact.contact_name.toLowerCase() === name.toLowerCase()) {
+          return contact;
+        }
       }
-
-      return null;
+      
+      // Return first match if no exact match
+      return contacts[0] || null;
     } catch (error) {
       logger.warn('Zoho Books customer search failed', { name, error: error.message });
       return null;
     }
   }
 
-  // Search for Draft Sales Orders in Zoho Books
-  async searchDraftSalesOrders(customerId = null, searchText = null) {
-    const token = await this.ensureValidToken();
-
-    try {
-      const params = {
-        organization_id: this.orgId,
-        status: 'draft',
-        per_page: 100
-      };
-
-      if (customerId) {
-        params.customer_id = customerId;
-      }
-
-      if (searchText) {
-        params.search_text = searchText;
-      }
-
-      const response = await axios({
-        method: 'GET',
-        url: `${this.baseUrl}/books/v3/salesorders`,
-        headers: {
-          'Authorization': `Zoho-oauthtoken ${token}`
-        },
-        params
-      });
-
-      return response.data?.salesorders || [];
-    } catch (error) {
-      logger.warn('Failed to search draft sales orders', { error: error.message });
-      return [];
-    }
-  }
-
-  // Get full Sales Order details including line items
-  async getSalesOrderDetails(salesorderId) {
+  async getBooksCustomers() {
     const token = await this.ensureValidToken();
 
     try {
       const response = await axios({
         method: 'GET',
-        url: `${this.baseUrl}/books/v3/salesorders/${salesorderId}`,
+        url: `${this.baseUrl}/books/v3/contacts`,
         headers: {
           'Authorization': `Zoho-oauthtoken ${token}`
         },
         params: {
-          organization_id: this.orgId
+          organization_id: this.orgId,
+          contact_type: 'customer',
+          per_page: 200
         }
       });
 
-      return response.data?.salesorder || null;
+      return response.data?.contacts || [];
     } catch (error) {
-      logger.warn('Failed to get sales order details', { salesorderId, error: error.message });
-      return null;
+      logger.error('Failed to get Zoho Books customers', { error: error.message });
+      return [];
     }
   }
 
-  // Find potential matching drafts for an EDI order
-  async findMatchingDrafts(customerName, ediItems, shipDate) {
-    const token = await this.ensureValidToken();
-
-    try {
-      // First find the customer
-      const customer = await this.findBooksCustomerByName(customerName);
-      if (!customer) {
-        logger.info('No customer found for draft matching', { customerName });
-        return { customer: null, drafts: [] };
-      }
-
-      // Get all draft orders for this customer
-      const drafts = await this.searchDraftSalesOrders(customer.contact_id);
-      
-      if (drafts.length === 0) {
-        return { customer, drafts: [] };
-      }
-
-      // Get full details for each draft and calculate match scores
-      const detailedDrafts = [];
-      for (const draft of drafts) {
-        const details = await this.getSalesOrderDetails(draft.salesorder_id);
-        if (details) {
-          const matchScore = this.calculateDraftMatchScore(details, ediItems, shipDate);
-          detailedDrafts.push({
-            ...details,
-            match_score: matchScore.score,
-            match_details: matchScore.details
-          });
-        }
-      }
-
-      // Sort by match score descending
-      detailedDrafts.sort((a, b) => b.match_score - a.match_score);
-
-      return { customer, drafts: detailedDrafts };
-    } catch (error) {
-      logger.error('Error finding matching drafts', { error: error.message });
-      return { customer: null, drafts: [] };
-    }
-  }
-
-  // Calculate how well a draft matches an EDI order
-  calculateDraftMatchScore(draft, ediItems, ediShipDate) {
-    let score = 0;
-    const details = {
-      hasEdiReference: false,
-      dateMatch: false,
-      styleMatches: 0,
-      totalStyles: ediItems.length,
-      quantityVariance: 0,
-      amountVariance: 0
-    };
-
-    // Check if reference contains "EDI" (+20 points)
-    const reference = (draft.reference_number || '').toLowerCase();
-    if (reference.includes('edi')) {
-      score += 20;
-      details.hasEdiReference = true;
-    }
-
-    // Check ship date within 30 days (+15 points)
-    if (ediShipDate && draft.shipment_date) {
-      const ediDate = new Date(ediShipDate);
-      const draftDate = new Date(draft.shipment_date);
-      const daysDiff = Math.abs((ediDate - draftDate) / (1000 * 60 * 60 * 24));
-      if (daysDiff <= 30) {
-        score += 15;
-        details.dateMatch = true;
-      }
-    }
-
-    // Check style/item matches (+5 points per matching style)
-    const draftItems = draft.line_items || [];
-    const ediStyleSet = new Set(ediItems.map(i => (i.style || i.name || '').toLowerCase()));
-    const draftStyleSet = new Set(draftItems.map(i => (i.name || '').toLowerCase().split(' ')[0]));
-
-    for (const style of ediStyleSet) {
-      for (const draftStyle of draftStyleSet) {
-        if (style && draftStyle && (style.includes(draftStyle) || draftStyle.includes(style))) {
-          score += 5;
-          details.styleMatches++;
-          break;
-        }
-      }
-    }
-
-    // Calculate quantity and amount variance
-    const ediTotal = ediItems.reduce((sum, i) => sum + (i.quantity || 0), 0);
-    const draftTotal = draftItems.reduce((sum, i) => sum + (i.quantity || 0), 0);
-    details.quantityVariance = ediTotal - draftTotal;
-
-    const ediAmount = ediItems.reduce((sum, i) => sum + ((i.quantity || 0) * (i.unitPrice || 0)), 0);
-    const draftAmount = parseFloat(draft.total) || 0;
-    details.amountVariance = ediAmount - draftAmount;
-
-    // Bonus for similar amounts (+10 points if within 20%)
-    if (draftAmount > 0) {
-      const variancePercent = Math.abs(details.amountVariance) / draftAmount;
-      if (variancePercent <= 0.20) {
-        score += 10;
-      }
-    }
-
-    return { score, details };
-  }
-
-  // Compare EDI order with draft order in detail
-  compareOrderWithDraft(ediItems, draftDetails) {
-    const draftItems = draftDetails.line_items || [];
-    const comparison = {
-      matched: [],
-      ediOnly: [],
-      draftOnly: [],
-      differences: [],
-      summary: {
-        ediTotalQty: 0,
-        draftTotalQty: 0,
-        ediTotalAmount: 0,
-        draftTotalAmount: 0,
-        qtyDifference: 0,
-        amountDifference: 0
-      }
-    };
-
-    // Create maps for easier comparison
-    const ediMap = new Map();
-    ediItems.forEach(item => {
-      const key = `${(item.style || '').toLowerCase()}-${(item.color || '').toLowerCase()}-${(item.size || '').toLowerCase()}`;
-      if (ediMap.has(key)) {
-        const existing = ediMap.get(key);
-        existing.quantity += item.quantity || 0;
-        existing.amount += (item.quantity || 0) * (item.unitPrice || 0);
-      } else {
-        ediMap.set(key, {
-          style: item.style,
-          color: item.color,
-          size: item.size,
-          quantity: item.quantity || 0,
-          unitPrice: item.unitPrice || 0,
-          amount: (item.quantity || 0) * (item.unitPrice || 0),
-          description: item.description
-        });
-      }
-    });
-
-    const draftMap = new Map();
-    draftItems.forEach(item => {
-      // Try to extract style, color, size from draft item name/description
-      const name = (item.name || '').toLowerCase();
-      const desc = (item.description || '').toLowerCase();
-      
-      // Simple extraction - may need refinement based on actual data format
-      const colorMatch = desc.match(/color:\s*(\w+)/i);
-      const sizeMatch = desc.match(/size:\s*([^\s|]+)/i);
-      
-      const style = name.split(' ')[0] || name;
-      const color = colorMatch ? colorMatch[1] : '';
-      const size = sizeMatch ? sizeMatch[1] : '';
-      
-      const key = `${style}-${color}-${size}`;
-      
-      draftMap.set(key, {
-        style: style.toUpperCase(),
-        color: color.toUpperCase(),
-        size: size.toUpperCase(),
-        quantity: item.quantity || 0,
-        unitPrice: item.rate || 0,
-        amount: item.item_total || 0,
-        lineItemId: item.line_item_id,
-        description: item.description
-      });
-    });
-
-    // Compare items
-    for (const [key, ediItem] of ediMap) {
-      comparison.summary.ediTotalQty += ediItem.quantity;
-      comparison.summary.ediTotalAmount += ediItem.amount;
-
-      const draftItem = draftMap.get(key);
-      if (draftItem) {
-        draftMap.delete(key); // Mark as processed
-        
-        if (ediItem.quantity === draftItem.quantity && 
-            Math.abs(ediItem.unitPrice - draftItem.unitPrice) < 0.01) {
-          comparison.matched.push({
-            ...ediItem,
-            draftQty: draftItem.quantity,
-            draftPrice: draftItem.unitPrice
-          });
-        } else {
-          comparison.differences.push({
-            ...ediItem,
-            draftQty: draftItem.quantity,
-            draftPrice: draftItem.unitPrice,
-            qtyDiff: ediItem.quantity - draftItem.quantity,
-            priceDiff: ediItem.unitPrice - draftItem.unitPrice
-          });
-        }
-      } else {
-        comparison.ediOnly.push(ediItem);
-      }
-    }
-
-    // Remaining draft items not in EDI
-    for (const [key, draftItem] of draftMap) {
-      comparison.summary.draftTotalQty += draftItem.quantity;
-      comparison.summary.draftTotalAmount += draftItem.amount;
-      comparison.draftOnly.push(draftItem);
-    }
-
-    // Calculate summary
-    comparison.summary.draftTotalQty = draftItems.reduce((sum, i) => sum + (i.quantity || 0), 0);
-    comparison.summary.draftTotalAmount = parseFloat(draftDetails.total) || 0;
-    comparison.summary.qtyDifference = comparison.summary.ediTotalQty - comparison.summary.draftTotalQty;
-    comparison.summary.amountDifference = comparison.summary.ediTotalAmount - comparison.summary.draftTotalAmount;
-
-    return comparison;
-  }
-
-  // Create Sales Order in Zoho Books
   async createBooksSalesOrder(orderData) {
     const token = await this.ensureValidToken();
 
-    // Build line items for Zoho Books format
+    // Build line items array for Zoho Books
     const lineItems = (orderData.items || []).map((item, idx) => ({
-      name: item.style || item.description || `Item ${idx + 1}`,
-      description: `${item.description || ''} | Color: ${item.color || 'N/A'} | Size: ${item.size || 'N/A'}`.trim(),
-      quantity: item.quantity || 1,
-      rate: item.unitPrice || 0,
+      name: item.style || item.description || `Line ${idx + 1}`,
+      description: item.description || `${item.style} ${item.color} ${item.size}`.trim(),
+      quantity: item.quantity || 0,
+      rate: item.unitPrice || 0
     }));
 
-    const salesOrderData = {
-      customer_id: orderData.customerId,
-      reference_number: orderData.poNumber || '',
-      date: orderData.orderDate || new Date().toISOString().split('T')[0],
-      shipment_date: orderData.shipDate || undefined,
-      notes: orderData.notes || '',
-      line_items: lineItems
-    };
+    // Build notes with ship-to and other details
+    let notes = orderData.notes || '';
+    if (orderData.shipDate) notes += `\nShip Not Before: ${orderData.shipDate}`;
+    if (orderData.shipNotAfter) notes += `\nShip Not After: ${orderData.shipNotAfter}`;
+    if (orderData.cancelDate) notes += `\nCancel Date: ${orderData.cancelDate}`;
 
-    // Remove undefined fields
-    Object.keys(salesOrderData).forEach(key => {
-      if (salesOrderData[key] === undefined) {
-        delete salesOrderData[key];
-      }
-    });
+    const payload = {
+      customer_id: orderData.customerId,
+      reference_number: orderData.poNumber,  // Customer PO goes in reference field
+      date: orderData.orderDate || new Date().toISOString().split('T')[0],
+      shipment_date: orderData.shipDate || null,
+      notes: notes,
+      terms: orderData.paymentTerms || '',
+      line_items: lineItems,
+      status: 'draft'  // Create as draft so it can be reviewed
+    };
 
     logger.info('Creating Zoho Books Sales Order', { 
       customerId: orderData.customerId, 
       poNumber: orderData.poNumber,
-      itemCount: lineItems.length 
+      lineItemCount: lineItems.length 
     });
 
     try {
@@ -447,21 +199,36 @@ class ZohoClient {
         params: {
           organization_id: this.orgId
         },
-        data: salesOrderData
+        data: payload
       });
 
-      if (response.data?.code === 0) {
-        const salesOrder = response.data.salesorder;
-        logger.info('Created Zoho Books Sales Order', { 
-          id: salesOrder.salesorder_id, 
-          number: salesOrder.salesorder_number 
+      // Zoho Books response: { code: 0, message: "...", salesorder: { salesorder_id, salesorder_number, ... } }
+      if (response.data?.code === 0 && response.data?.salesorder) {
+        const so = response.data.salesorder;
+        logger.info('Zoho Books Sales Order created successfully', {
+          salesorder_id: so.salesorder_id,
+          salesorder_number: so.salesorder_number,
+          reference_number: so.reference_number,
+          total: so.total
         });
-        return salesOrder;
+        
+        // Return the salesorder object with ID and number at top level for easy access
+        return {
+          salesorder_id: so.salesorder_id,
+          salesorder_number: so.salesorder_number,
+          reference_number: so.reference_number,
+          customer_name: so.customer_name,
+          total: so.total,
+          status: so.status,
+          ...so  // Include all other fields too
+        };
       } else {
-        throw new Error(response.data?.message || 'Unknown error creating sales order');
+        const errorMsg = response.data?.message || 'Unknown error creating sales order';
+        logger.error('Zoho Books API error', { response: response.data });
+        throw new Error(errorMsg);
       }
     } catch (error) {
-      logger.error('Failed to create Zoho Books Sales Order', {
+      logger.error('Zoho Books createSalesOrder failed', {
         error: error.response?.data || error.message,
         status: error.response?.status
       });
@@ -469,102 +236,9 @@ class ZohoClient {
     }
   }
 
-  // Delete Sales Order in Zoho Books
-  async deleteBooksSalesOrder(salesorderId) {
-    const token = await this.ensureValidToken();
-
-    try {
-      const response = await axios({
-        method: 'DELETE',
-        url: `${this.baseUrl}/books/v3/salesorders/${salesorderId}`,
-        headers: {
-          'Authorization': `Zoho-oauthtoken ${token}`
-        },
-        params: {
-          organization_id: this.orgId
-        }
-      });
-
-      if (response.data?.code === 0) {
-        logger.info('Deleted Zoho Books Sales Order', { salesorderId });
-        return true;
-      } else {
-        throw new Error(response.data?.message || 'Unknown error deleting sales order');
-      }
-    } catch (error) {
-      logger.error('Failed to delete Zoho Books Sales Order', {
-        salesorderId,
-        error: error.response?.data || error.message
-      });
-      throw error;
-    }
-  }
-
-  // Create a draft order with remaining quantities (for partial matches)
-  async createRemainderDraft(originalDraft, remainingItems, originalSoNumber) {
-    const token = await this.ensureValidToken();
-
-    const lineItems = remainingItems.map((item, idx) => ({
-      name: item.style || item.name || `Item ${idx + 1}`,
-      description: item.description || `${item.color || ''} ${item.size || ''}`.trim(),
-      quantity: item.quantity || 1,
-      rate: item.unitPrice || item.rate || 0,
-    }));
-
-    const salesOrderData = {
-      customer_id: originalDraft.customer_id,
-      reference_number: `EDI - Remaining from ${originalSoNumber}`,
-      date: new Date().toISOString().split('T')[0],
-      shipment_date: originalDraft.shipment_date || undefined,
-      notes: `Split from original draft ${originalSoNumber}. Awaiting additional EDI.`,
-      line_items: lineItems
-    };
-
-    Object.keys(salesOrderData).forEach(key => {
-      if (salesOrderData[key] === undefined) {
-        delete salesOrderData[key];
-      }
-    });
-
-    logger.info('Creating remainder draft', { 
-      originalSo: originalSoNumber,
-      itemCount: lineItems.length 
-    });
-
-    try {
-      const response = await axios({
-        method: 'POST',
-        url: `${this.baseUrl}/books/v3/salesorders`,
-        headers: {
-          'Authorization': `Zoho-oauthtoken ${token}`,
-          'Content-Type': 'application/json'
-        },
-        params: {
-          organization_id: this.orgId
-        },
-        data: salesOrderData
-      });
-
-      if (response.data?.code === 0) {
-        const salesOrder = response.data.salesorder;
-        logger.info('Created remainder draft', { 
-          id: salesOrder.salesorder_id, 
-          number: salesOrder.salesorder_number 
-        });
-        return salesOrder;
-      } else {
-        throw new Error(response.data?.message || 'Unknown error creating remainder draft');
-      }
-    } catch (error) {
-      logger.error('Failed to create remainder draft', {
-        error: error.response?.data || error.message
-      });
-      throw error;
-    }
-  }
-
-  // Check if PO number already exists in Zoho Books
+  // Check if PO already exists in Zoho Books
   async checkDuplicatePO(poNumber) {
+    if (!poNumber) return null;
     const token = await this.ensureValidToken();
 
     try {
@@ -588,27 +262,120 @@ class ZohoClient {
     }
   }
 
-  // Get all customers from Zoho Books
-  async getBooksCustomers() {
+  // Get draft sales orders for a customer (for draft matching)
+  async searchDraftSalesOrders(customerId, searchText = '') {
     const token = await this.ensureValidToken();
 
     try {
       const response = await axios({
         method: 'GET',
-        url: `${this.baseUrl}/books/v3/contacts`,
+        url: `${this.baseUrl}/books/v3/salesorders`,
         headers: {
           'Authorization': `Zoho-oauthtoken ${token}`
         },
         params: {
           organization_id: this.orgId,
-          contact_type: 'customer',
-          per_page: 200
+          customer_id: customerId,
+          status: 'draft'
         }
       });
 
-      return response.data?.contacts || [];
+      return response.data?.salesorders || [];
     } catch (error) {
-      logger.warn('Failed to get Zoho Books customers', { error: error.message });
+      logger.warn('Draft sales order search failed', { customerId, error: error.message });
+      return [];
+    }
+  }
+
+  // Get full sales order details including line items
+  async getSalesOrderDetails(salesorderId) {
+    const token = await this.ensureValidToken();
+
+    try {
+      const response = await axios({
+        method: 'GET',
+        url: `${this.baseUrl}/books/v3/salesorders/${salesorderId}`,
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${token}`
+        },
+        params: {
+          organization_id: this.orgId
+        }
+      });
+
+      return response.data?.salesorder || null;
+    } catch (error) {
+      logger.warn('Get sales order details failed', { salesorderId, error: error.message });
+      return null;
+    }
+  }
+
+  // Delete a sales order (for draft replacement)
+  async deleteBooksSalesOrder(salesorderId) {
+    const token = await this.ensureValidToken();
+
+    try {
+      const response = await axios({
+        method: 'DELETE',
+        url: `${this.baseUrl}/books/v3/salesorders/${salesorderId}`,
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${token}`
+        },
+        params: {
+          organization_id: this.orgId
+        }
+      });
+
+      return response.data?.code === 0;
+    } catch (error) {
+      logger.error('Delete sales order failed', { salesorderId, error: error.message });
+      throw error;
+    }
+  }
+
+  // ============================================
+  // LEGACY ZOHO CRM FUNCTIONS (kept for compatibility)
+  // ============================================
+
+  async request(method, endpoint, data = null) {
+    const token = await this.ensureValidToken();
+    try {
+      const response = await axios({
+        method,
+        url: `${this.baseUrl}${endpoint}`,
+        headers: {
+          'Authorization': `Zoho-oauthtoken ${token}`,
+          'Content-Type': 'application/json'
+        },
+        data
+      });
+      return response.data;
+    } catch (error) {
+      if (error.response?.status === 401) {
+        logger.warn('Token expired, clearing and retrying');
+        this.accessToken = null;
+        const newToken = await this.ensureValidToken();
+        const retryResponse = await axios({
+          method,
+          url: `${this.baseUrl}${endpoint}`,
+          headers: {
+            'Authorization': `Zoho-oauthtoken ${newToken}`,
+            'Content-Type': 'application/json'
+          },
+          data
+        });
+        return retryResponse.data;
+      }
+      throw error;
+    }
+  }
+
+  async getAllAccounts() {
+    try {
+      const result = await this.request('GET', '/crm/v2/Accounts?per_page=200');
+      return result?.data || [];
+    } catch (error) {
+      logger.warn('Get all accounts failed', { error: error.message });
       return [];
     }
   }
