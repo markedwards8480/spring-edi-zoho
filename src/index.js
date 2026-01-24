@@ -444,12 +444,12 @@ app.get('/replaced-drafts', async (req, res) => {
   }
 });
 
-// Sync with Zoho - find orders already in Zoho and mark them as processed
+// Sync with Zoho - FIND matches but DON'T auto-update - return for review
 app.post('/sync-with-zoho', async (req, res) => {
   const { pool } = require('./db');
   
   try {
-    logger.info('Starting Zoho sync - finding orders already in Zoho');
+    logger.info('Starting Zoho sync - finding potential matches');
     
     const ZohoClient = require('./zoho');
     const zoho = new ZohoClient();
@@ -504,54 +504,97 @@ app.post('/sync-with-zoho', async (req, res) => {
       }
     }
     
-    // Get all pending EDI orders
+    // Get all pending EDI orders with their details
     const ediResult = await pool.query(`
-      SELECT id, edi_order_number FROM edi_orders WHERE status = 'pending'
+      SELECT id, edi_order_number, edi_customer_name, parsed_data, created_at
+      FROM edi_orders 
+      WHERE status = 'pending'
     `);
     
-    let matched = 0;
-    let notFound = 0;
-    const matchedOrders = [];
+    const matches = [];
+    const noMatch = [];
     
     for (const edi of ediResult.rows) {
       const poNumber = edi.edi_order_number;
       const zohoOrder = zohoByPO[poNumber];
       
+      // Calculate EDI total
+      const items = edi.parsed_data?.items || [];
+      const ediTotal = items.reduce((s, i) => s + (i.quantityOrdered || 0) * (i.unitPrice || 0), 0);
+      
       if (zohoOrder) {
-        // Found a match - update our database
-        await pool.query(`
-          UPDATE edi_orders 
-          SET status = 'processed', 
-              zoho_so_id = $2, 
-              zoho_so_number = $3,
-              processed_at = NOW()
-          WHERE id = $1
-        `, [edi.id, zohoOrder.salesorder_id, zohoOrder.salesorder_number]);
-        
-        matched++;
-        matchedOrders.push({
-          poNumber,
+        // Found a match - add to matches array for review
+        matches.push({
+          ediOrderId: edi.id,
+          poNumber: poNumber,
+          ediCustomer: edi.edi_customer_name,
+          ediTotal: ediTotal,
+          ediItems: items.length,
+          ediDate: edi.created_at,
+          zohoSoId: zohoOrder.salesorder_id,
           zohoSoNumber: zohoOrder.salesorder_number,
+          zohoCustomer: zohoOrder.customer_name,
+          zohoTotal: zohoOrder.total,
           zohoStatus: zohoOrder.status,
-          total: zohoOrder.total
+          zohoDate: zohoOrder.date,
+          totalDiff: Math.abs(ediTotal - (zohoOrder.total || 0))
         });
       } else {
-        notFound++;
+        noMatch.push({
+          ediOrderId: edi.id,
+          poNumber: poNumber,
+          ediCustomer: edi.edi_customer_name,
+          ediTotal: ediTotal,
+          ediItems: items.length
+        });
       }
     }
     
-    logger.info(`Zoho sync complete: ${matched} matched, ${notFound} not found in Zoho`);
+    logger.info(`Found ${matches.length} matches, ${noMatch.length} without matches`);
     
+    // Return matches for review - DO NOT auto-update
     res.json({
       success: true,
       zohoOrdersFound: allZohoOrders.length,
-      matched,
-      notFound,
-      matchedOrders: matchedOrders.slice(0, 20) // Show first 20 matches
+      matches: matches,
+      noMatch: noMatch,
+      message: `Found ${matches.length} EDI orders that match Zoho orders. Review and confirm below.`
     });
     
   } catch (error) {
     logger.error('Zoho sync failed', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Confirm matches - actually update the database after user review
+app.post('/confirm-matches', async (req, res) => {
+  const { pool } = require('./db');
+  const { matches } = req.body; // Array of { ediOrderId, zohoSoId, zohoSoNumber }
+  
+  if (!matches || !matches.length) {
+    return res.status(400).json({ success: false, error: 'No matches to confirm' });
+  }
+  
+  try {
+    let confirmed = 0;
+    
+    for (const match of matches) {
+      await pool.query(`
+        UPDATE edi_orders 
+        SET status = 'processed', 
+            zoho_so_id = $2, 
+            zoho_so_number = $3,
+            processed_at = NOW()
+        WHERE id = $1 AND status = 'pending'
+      `, [match.ediOrderId, match.zohoSoId, match.zohoSoNumber]);
+      confirmed++;
+    }
+    
+    logger.info(`Confirmed ${confirmed} matches`);
+    res.json({ success: true, confirmed });
+  } catch (error) {
+    logger.error('Confirm matches failed', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
   }
 });
