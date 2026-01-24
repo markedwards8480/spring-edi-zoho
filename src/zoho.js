@@ -1,6 +1,6 @@
 const axios = require('axios');
 const logger = require('./logger');
-const { pool, getCustomerMapping } = require('./db');
+const { pool } = require('./db');
 
 class ZohoClient {
   constructor() {
@@ -32,7 +32,7 @@ class ZohoClient {
           this.tokenExpiry = expiresAt;
           return this.accessToken;
         }
-        
+
         return await this.refreshAccessToken(token.refresh_token);
       }
     } catch (error) {
@@ -43,7 +43,7 @@ class ZohoClient {
       return await this.refreshAccessToken(process.env.ZOHO_REFRESH_TOKEN);
     }
 
-    throw new Error('No Zoho tokens available. Please authorize via /oauth/start');
+    throw new Error('No Zoho tokens available. Please authorize at /oauth/start');
   }
 
   async refreshAccessToken(refreshToken) {
@@ -61,323 +61,555 @@ class ZohoClient {
       const expiresAt = new Date(Date.now() + (expires_in * 1000));
 
       await pool.query(
-        `INSERT INTO zoho_tokens (access_token, refresh_token, expires_at, updated_at)
-         VALUES ($1, $2, $3, NOW())`,
+        `INSERT INTO zoho_tokens (access_token, refresh_token, expires_at) 
+         VALUES ($1, $2, $3)`,
         [access_token, refreshToken, expiresAt]
       );
 
       this.accessToken = access_token;
       this.tokenExpiry = expiresAt;
-      logger.info('Zoho token refreshed', { expiresAt });
+
+      logger.info('Zoho token refreshed successfully');
       return access_token;
     } catch (error) {
-      logger.error('Failed to refresh Zoho token', {
-        error: error.response?.data || error.message
-      });
-      throw new Error('Zoho token refresh failed');
+      logger.error('Failed to refresh Zoho token', { error: error.message });
+      throw error;
     }
   }
 
-  // ============================================
-  // ZOHO BOOKS API FUNCTIONS
-  // ============================================
+  // ============================================================
+  // CUSTOMER SEARCH
+  // ============================================================
 
-  async findBooksCustomerByName(name) {
-    if (!name) return null;
+  async searchCustomer(searchTerm) {
+    const token = await this.ensureValidToken();
     
-    // First check our customer mappings table
     try {
-      const mapping = await getCustomerMapping(name);
-      if (mapping && mapping.zoho_account_name) {
-        // Search for the mapped name in Zoho
-        name = mapping.zoho_account_name;
-      }
-    } catch (e) {
-      // Continue with original name
-    }
-
-    const token = await this.ensureValidToken();
-
-    try {
-      // Search for contact by name in Zoho Books
       const response = await axios({
         method: 'GET',
         url: `${this.baseUrl}/books/v3/contacts`,
-        headers: {
-          'Authorization': `Zoho-oauthtoken ${token}`
-        },
+        headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
         params: {
           organization_id: this.orgId,
-          contact_name_contains: name,
+          search_text: searchTerm,
           contact_type: 'customer'
-        }
-      });
-
-      const contacts = response.data?.contacts || [];
-      
-      // Find exact or best match
-      for (const contact of contacts) {
-        if (contact.contact_name.toLowerCase() === name.toLowerCase()) {
-          return contact;
-        }
-      }
-      
-      // Return first match if no exact match
-      return contacts[0] || null;
-    } catch (error) {
-      logger.warn('Zoho Books customer search failed', { name, error: error.message });
-      return null;
-    }
-  }
-
-  async getBooksCustomers() {
-    const token = await this.ensureValidToken();
-
-    try {
-      const response = await axios({
-        method: 'GET',
-        url: `${this.baseUrl}/books/v3/contacts`,
-        headers: {
-          'Authorization': `Zoho-oauthtoken ${token}`
-        },
-        params: {
-          organization_id: this.orgId,
-          contact_type: 'customer',
-          per_page: 200
         }
       });
 
       return response.data?.contacts || [];
     } catch (error) {
-      logger.error('Failed to get Zoho Books customers', { error: error.message });
-      return [];
-    }
-  }
-
-  async createBooksSalesOrder(orderData) {
-    const token = await this.ensureValidToken();
-
-    // Build line items array for Zoho Books
-    const lineItems = (orderData.items || []).map((item, idx) => ({
-      name: item.style || item.description || `Line ${idx + 1}`,
-      description: item.description || `${item.style} ${item.color} ${item.size}`.trim(),
-      quantity: item.quantity || 0,
-      rate: item.unitPrice || 0
-    }));
-
-    // Build notes with ship-to and other details
-    let notes = orderData.notes || '';
-    if (orderData.shipDate) notes += `\nShip Not Before: ${orderData.shipDate}`;
-    if (orderData.shipNotAfter) notes += `\nShip Not After: ${orderData.shipNotAfter}`;
-    if (orderData.cancelDate) notes += `\nCancel Date: ${orderData.cancelDate}`;
-
-    const payload = {
-      customer_id: orderData.customerId,
-      reference_number: orderData.poNumber,  // Customer PO goes in reference field
-      date: orderData.orderDate || new Date().toISOString().split('T')[0],
-      shipment_date: orderData.shipDate || null,
-      notes: notes,
-      terms: orderData.paymentTerms || '',
-      line_items: lineItems,
-      status: 'draft'  // Create as draft so it can be reviewed
-    };
-
-    logger.info('Creating Zoho Books Sales Order', { 
-      customerId: orderData.customerId, 
-      poNumber: orderData.poNumber,
-      lineItemCount: lineItems.length 
-    });
-
-    try {
-      const response = await axios({
-        method: 'POST',
-        url: `${this.baseUrl}/books/v3/salesorders`,
-        headers: {
-          'Authorization': `Zoho-oauthtoken ${token}`,
-          'Content-Type': 'application/json'
-        },
-        params: {
-          organization_id: this.orgId
-        },
-        data: payload
-      });
-
-      // Zoho Books response: { code: 0, message: "...", salesorder: { salesorder_id, salesorder_number, ... } }
-      if (response.data?.code === 0 && response.data?.salesorder) {
-        const so = response.data.salesorder;
-        logger.info('Zoho Books Sales Order created successfully', {
-          salesorder_id: so.salesorder_id,
-          salesorder_number: so.salesorder_number,
-          reference_number: so.reference_number,
-          total: so.total
-        });
-        
-        // Return the salesorder object with ID and number at top level for easy access
-        return {
-          salesorder_id: so.salesorder_id,
-          salesorder_number: so.salesorder_number,
-          reference_number: so.reference_number,
-          customer_name: so.customer_name,
-          total: so.total,
-          status: so.status,
-          ...so  // Include all other fields too
-        };
-      } else {
-        const errorMsg = response.data?.message || 'Unknown error creating sales order';
-        logger.error('Zoho Books API error', { response: response.data });
-        throw new Error(errorMsg);
-      }
-    } catch (error) {
-      logger.error('Zoho Books createSalesOrder failed', {
-        error: error.response?.data || error.message,
-        status: error.response?.status
-      });
+      logger.error('Customer search failed', { error: error.message, searchTerm });
       throw error;
     }
   }
 
-  // Check if PO already exists in Zoho Books
-  async checkDuplicatePO(poNumber) {
-    if (!poNumber) return null;
+  async getCustomerById(customerId) {
     const token = await this.ensureValidToken();
-
+    
     try {
       const response = await axios({
         method: 'GET',
-        url: `${this.baseUrl}/books/v3/salesorders`,
-        headers: {
-          'Authorization': `Zoho-oauthtoken ${token}`
-        },
-        params: {
-          organization_id: this.orgId,
-          reference_number: poNumber
-        }
+        url: `${this.baseUrl}/books/v3/contacts/${customerId}`,
+        headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
+        params: { organization_id: this.orgId }
       });
 
-      const orders = response.data?.salesorders || [];
-      return orders.length > 0 ? orders[0] : null;
+      return response.data?.contact;
     } catch (error) {
-      logger.warn('Duplicate PO check failed', { poNumber, error: error.message });
-      return null;
+      logger.error('Get customer failed', { error: error.message, customerId });
+      throw error;
     }
   }
 
-  // Get draft sales orders for a customer (for draft matching)
-  async searchDraftSalesOrders(customerId, searchText = '') {
-    const token = await this.ensureValidToken();
+  // ============================================================
+  // SALES ORDER OPERATIONS
+  // ============================================================
 
+  async getDraftSalesOrders() {
+    const token = await this.ensureValidToken();
+    
     try {
       const response = await axios({
         method: 'GET',
         url: `${this.baseUrl}/books/v3/salesorders`,
-        headers: {
-          'Authorization': `Zoho-oauthtoken ${token}`
-        },
+        headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
         params: {
           organization_id: this.orgId,
-          customer_id: customerId,
-          status: 'draft'
+          status: 'draft',
+          per_page: 200
         }
       });
 
       return response.data?.salesorders || [];
     } catch (error) {
-      logger.warn('Draft sales order search failed', { customerId, error: error.message });
-      return [];
+      logger.error('Failed to get draft sales orders', { error: error.message });
+      throw error;
     }
   }
 
-  // Get full sales order details including line items
   async getSalesOrderDetails(salesorderId) {
     const token = await this.ensureValidToken();
-
+    
     try {
       const response = await axios({
         method: 'GET',
         url: `${this.baseUrl}/books/v3/salesorders/${salesorderId}`,
-        headers: {
-          'Authorization': `Zoho-oauthtoken ${token}`
-        },
-        params: {
-          organization_id: this.orgId
-        }
+        headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
+        params: { organization_id: this.orgId }
       });
 
-      return response.data?.salesorder || null;
+      return response.data?.salesorder;
     } catch (error) {
-      logger.warn('Get sales order details failed', { salesorderId, error: error.message });
-      return null;
-    }
-  }
-
-  // Delete a sales order (for draft replacement)
-  async deleteBooksSalesOrder(salesorderId) {
-    const token = await this.ensureValidToken();
-
-    try {
-      const response = await axios({
-        method: 'DELETE',
-        url: `${this.baseUrl}/books/v3/salesorders/${salesorderId}`,
-        headers: {
-          'Authorization': `Zoho-oauthtoken ${token}`
-        },
-        params: {
-          organization_id: this.orgId
-        }
-      });
-
-      return response.data?.code === 0;
-    } catch (error) {
-      logger.error('Delete sales order failed', { salesorderId, error: error.message });
+      logger.error('Failed to get sales order details', { error: error.message, salesorderId });
       throw error;
     }
   }
 
-  // ============================================
-  // LEGACY ZOHO CRM FUNCTIONS (kept for compatibility)
-  // ============================================
-
-  async request(method, endpoint, data = null) {
+  async createBooksSalesOrder(orderData) {
     const token = await this.ensureValidToken();
+    
+    const lineItems = (orderData.items || []).map(item => ({
+      name: item.style || item.description || 'Item',
+      description: `${item.style || ''} ${item.description || ''} ${item.color || ''} ${item.size || ''}`.trim(),
+      quantity: item.quantity || item.quantityOrdered || 0,
+      rate: item.unitPrice || item.rate || 0
+    }));
+
+    const payload = {
+      customer_id: orderData.customerId,
+      reference_number: orderData.poNumber,
+      date: orderData.orderDate || new Date().toISOString().split('T')[0],
+      shipment_date: orderData.shipDate || null,
+      notes: orderData.notes || '',
+      line_items: lineItems
+    };
+
     try {
       const response = await axios({
-        method,
-        url: `${this.baseUrl}${endpoint}`,
-        headers: {
+        method: 'POST',
+        url: `${this.baseUrl}/books/v3/salesorders`,
+        headers: { 
           'Authorization': `Zoho-oauthtoken ${token}`,
           'Content-Type': 'application/json'
         },
-        data
+        params: { organization_id: this.orgId },
+        data: payload
       });
-      return response.data;
+
+      logger.info('Sales order created', { 
+        soId: response.data?.salesorder?.salesorder_id,
+        soNumber: response.data?.salesorder?.salesorder_number
+      });
+
+      return response.data?.salesorder;
     } catch (error) {
-      if (error.response?.status === 401) {
-        logger.warn('Token expired, clearing and retrying');
-        this.accessToken = null;
-        const newToken = await this.ensureValidToken();
-        const retryResponse = await axios({
-          method,
-          url: `${this.baseUrl}${endpoint}`,
-          headers: {
-            'Authorization': `Zoho-oauthtoken ${newToken}`,
-            'Content-Type': 'application/json'
-          },
-          data
-        });
-        return retryResponse.data;
-      }
+      logger.error('Failed to create sales order', { 
+        error: error.response?.data || error.message,
+        payload 
+      });
       throw error;
     }
   }
 
-  async getAllAccounts() {
+  async updateSalesOrder(salesorderId, updateData) {
+    const token = await this.ensureValidToken();
+    
     try {
-      const result = await this.request('GET', '/crm/v2/Accounts?per_page=200');
-      return result?.data || [];
+      const response = await axios({
+        method: 'PUT',
+        url: `${this.baseUrl}/books/v3/salesorders/${salesorderId}`,
+        headers: { 
+          'Authorization': `Zoho-oauthtoken ${token}`,
+          'Content-Type': 'application/json'
+        },
+        params: { organization_id: this.orgId },
+        data: updateData
+      });
+
+      logger.info('Sales order updated', { salesorderId });
+      return response.data?.salesorder;
     } catch (error) {
-      logger.warn('Get all accounts failed', { error: error.message });
-      return [];
+      logger.error('Failed to update sales order', { error: error.message, salesorderId });
+      throw error;
     }
+  }
+
+  async deleteSalesOrder(salesorderId) {
+    const token = await this.ensureValidToken();
+    
+    try {
+      await axios({
+        method: 'DELETE',
+        url: `${this.baseUrl}/books/v3/salesorders/${salesorderId}`,
+        headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
+        params: { organization_id: this.orgId }
+      });
+
+      logger.info('Sales order deleted', { salesorderId });
+      return true;
+    } catch (error) {
+      logger.error('Failed to delete sales order', { error: error.message, salesorderId });
+      throw error;
+    }
+  }
+
+  // ============================================================
+  // MATCHING SYSTEM
+  // ============================================================
+
+  /**
+   * Find potential matching draft orders for EDI orders
+   * @param {Array} ediOrders - Array of EDI orders from our database
+   * @returns {Object} - { matches: [], noMatches: [] }
+   */
+  async findMatchingDrafts(ediOrders) {
+    logger.info('Starting draft matching process', { ediOrderCount: ediOrders.length });
+    
+    // Get all draft orders from Zoho
+    const drafts = await this.getDraftSalesOrders();
+    logger.info('Fetched draft orders from Zoho', { draftCount: drafts.length });
+
+    // Get details for each draft (includes line items)
+    const draftDetails = [];
+    for (const draft of drafts) {
+      try {
+        const details = await this.getSalesOrderDetails(draft.salesorder_id);
+        draftDetails.push(details);
+      } catch (error) {
+        logger.warn('Failed to get draft details', { draftId: draft.salesorder_id });
+      }
+    }
+
+    const matches = [];
+    const noMatches = [];
+
+    for (const ediOrder of ediOrders) {
+      const parsed = ediOrder.parsed_data || {};
+      const ediItems = parsed.items || [];
+      const ediPoNumber = ediOrder.edi_order_number || '';
+      const ediCustomer = ediOrder.edi_customer_name || '';
+      const ediTotal = ediItems.reduce((sum, item) => 
+        sum + ((item.quantityOrdered || 0) * (item.unitPrice || 0)), 0);
+      const ediShipDate = parsed.dates?.shipNotBefore || '';
+
+      let bestMatch = null;
+      let bestScore = 0;
+
+      for (const draft of draftDetails) {
+        const score = this.scoreMatch(ediOrder, draft);
+        
+        if (score.total > bestScore && score.total >= 40) {
+          bestScore = score.total;
+          bestMatch = {
+            ediOrder: {
+              id: ediOrder.id,
+              poNumber: ediPoNumber,
+              customer: ediCustomer,
+              shipDate: ediShipDate,
+              cancelDate: parsed.dates?.cancelAfter || '',
+              itemCount: ediItems.length,
+              totalUnits: ediItems.reduce((s, i) => s + (i.quantityOrdered || 0), 0),
+              totalAmount: ediTotal,
+              items: ediItems
+            },
+            zohoDraft: {
+              id: draft.salesorder_id,
+              number: draft.salesorder_number,
+              reference: draft.reference_number || '',
+              customer: draft.customer_name,
+              shipDate: draft.shipment_date || '',
+              status: draft.status,
+              itemCount: (draft.line_items || []).length,
+              totalUnits: (draft.line_items || []).reduce((s, i) => s + (i.quantity || 0), 0),
+              totalAmount: parseFloat(draft.total) || 0,
+              items: draft.line_items || []
+            },
+            score: score,
+            confidence: score.total,
+            confidenceLevel: score.total >= 80 ? 'high' : score.total >= 60 ? 'medium' : 'low'
+          };
+        }
+      }
+
+      if (bestMatch) {
+        matches.push(bestMatch);
+      } else {
+        noMatches.push({
+          ediOrder: {
+            id: ediOrder.id,
+            poNumber: ediPoNumber,
+            customer: ediCustomer,
+            shipDate: ediShipDate,
+            itemCount: ediItems.length,
+            totalUnits: ediItems.reduce((s, i) => s + (i.quantityOrdered || 0), 0),
+            totalAmount: ediTotal,
+            items: ediItems
+          }
+        });
+      }
+    }
+
+    logger.info('Matching complete', { 
+      matches: matches.length, 
+      noMatches: noMatches.length 
+    });
+
+    return { matches, noMatches };
+  }
+
+  /**
+   * Score how well an EDI order matches a Zoho draft
+   * @returns {Object} - { total, details }
+   */
+  scoreMatch(ediOrder, zohoDraft) {
+    const score = {
+      total: 0,
+      details: {
+        poNumber: false,
+        customer: false,
+        shipDate: false,
+        totalAmount: false,
+        styles: false
+      }
+    };
+
+    const parsed = ediOrder.parsed_data || {};
+    const ediItems = parsed.items || [];
+    const ediPoNumber = (ediOrder.edi_order_number || '').toLowerCase().trim();
+    const ediCustomer = (ediOrder.edi_customer_name || '').toLowerCase().trim();
+    const ediTotal = ediItems.reduce((sum, item) => 
+      sum + ((item.quantityOrdered || 0) * (item.unitPrice || 0)), 0);
+    const ediShipDate = parsed.dates?.shipNotBefore || '';
+
+    const zohoRef = (zohoDraft.reference_number || '').toLowerCase().trim();
+    const zohoCustomer = (zohoDraft.customer_name || '').toLowerCase().trim();
+    const zohoTotal = parseFloat(zohoDraft.total) || 0;
+    const zohoShipDate = zohoDraft.shipment_date || '';
+    const zohoItems = zohoDraft.line_items || [];
+
+    // PO Number match (25 points)
+    if (ediPoNumber && zohoRef && (ediPoNumber === zohoRef || zohoRef.includes(ediPoNumber) || ediPoNumber.includes(zohoRef))) {
+      score.total += 25;
+      score.details.poNumber = true;
+    }
+
+    // Customer match (20 points)
+    if (ediCustomer && zohoCustomer) {
+      // Fuzzy match - check if significant parts match
+      const ediParts = ediCustomer.split(/[\s,]+/).filter(p => p.length > 2);
+      const zohoParts = zohoCustomer.split(/[\s,]+/).filter(p => p.length > 2);
+      const matchingParts = ediParts.filter(ep => 
+        zohoParts.some(zp => zp.includes(ep) || ep.includes(zp))
+      );
+      if (matchingParts.length > 0 || ediCustomer.includes(zohoCustomer) || zohoCustomer.includes(ediCustomer)) {
+        score.total += 20;
+        score.details.customer = true;
+      }
+    }
+
+    // Ship date match (15 points) - within 7 days
+    if (ediShipDate && zohoShipDate) {
+      const ediDate = new Date(ediShipDate);
+      const zohoDate = new Date(zohoShipDate);
+      const diffDays = Math.abs((ediDate - zohoDate) / (1000 * 60 * 60 * 24));
+      if (diffDays <= 7) {
+        score.total += 15;
+        score.details.shipDate = true;
+      }
+    }
+
+    // Total amount match (20 points) - within 10%
+    if (ediTotal > 0 && zohoTotal > 0) {
+      const diff = Math.abs(ediTotal - zohoTotal);
+      const percentDiff = diff / Math.max(ediTotal, zohoTotal);
+      if (percentDiff <= 0.10) {
+        score.total += 20;
+        score.details.totalAmount = true;
+      } else if (percentDiff <= 0.25) {
+        score.total += 10; // Partial credit
+      }
+    }
+
+    // Style/SKU match (20 points)
+    if (ediItems.length > 0 && zohoItems.length > 0) {
+      const ediStyles = new Set(ediItems.map(i => 
+        (i.productIds?.sku || i.productIds?.vendorItemNumber || '').toLowerCase()
+      ).filter(Boolean));
+      
+      const zohoStyles = new Set(zohoItems.map(i => {
+        const name = (i.name || '').toLowerCase();
+        const desc = (i.description || '').toLowerCase();
+        // Extract style from name or description
+        const match = name.match(/^([a-z0-9-]+)/i) || desc.match(/^([a-z0-9-]+)/i);
+        return match ? match[1] : name.split(' ')[0];
+      }).filter(Boolean));
+
+      let matchCount = 0;
+      ediStyles.forEach(es => {
+        zohoStyles.forEach(zs => {
+          if (es === zs || es.includes(zs) || zs.includes(es)) {
+            matchCount++;
+          }
+        });
+      });
+
+      if (matchCount > 0) {
+        const matchPercent = matchCount / Math.max(ediStyles.size, zohoStyles.size);
+        if (matchPercent >= 0.5) {
+          score.total += 20;
+          score.details.styles = true;
+        } else if (matchPercent >= 0.25) {
+          score.total += 10;
+          score.details.styles = true;
+        }
+      }
+    }
+
+    return score;
+  }
+
+  /**
+   * Compare EDI order with Zoho draft in detail for side-by-side view
+   */
+  compareOrderWithDraft(ediOrder, zohoDraft) {
+    const parsed = ediOrder.parsed_data || {};
+    const ediItems = parsed.items || [];
+    const zohoItems = zohoDraft.line_items || [];
+
+    const comparison = {
+      header: {
+        edi: {
+          poNumber: ediOrder.edi_order_number,
+          customer: ediOrder.edi_customer_name,
+          shipDate: parsed.dates?.shipNotBefore || '',
+          cancelDate: parsed.dates?.cancelAfter || '',
+          itemCount: ediItems.length,
+          totalUnits: ediItems.reduce((s, i) => s + (i.quantityOrdered || 0), 0),
+          totalAmount: ediItems.reduce((s, i) => s + ((i.quantityOrdered || 0) * (i.unitPrice || 0)), 0)
+        },
+        zoho: {
+          soNumber: zohoDraft.salesorder_number,
+          reference: zohoDraft.reference_number || '',
+          customer: zohoDraft.customer_name,
+          shipDate: zohoDraft.shipment_date || '',
+          status: zohoDraft.status,
+          itemCount: zohoItems.length,
+          totalUnits: zohoItems.reduce((s, i) => s + (i.quantity || 0), 0),
+          totalAmount: parseFloat(zohoDraft.total) || 0
+        }
+      },
+      lineItems: {
+        matched: [],
+        ediOnly: [],
+        zohoOnly: [],
+        differences: []
+      },
+      summary: {
+        qtyDifference: 0,
+        amountDifference: 0,
+        changesRequired: 0
+      }
+    };
+
+    // Build maps for comparison
+    const ediMap = new Map();
+    ediItems.forEach(item => {
+      const sku = item.productIds?.sku || item.productIds?.vendorItemNumber || '';
+      const key = `${sku}-${item.color || ''}-${item.size || ''}`.toLowerCase();
+      ediMap.set(key, {
+        sku,
+        color: item.color || '',
+        size: item.size || '',
+        qty: item.quantityOrdered || 0,
+        price: item.unitPrice || 0,
+        amount: (item.quantityOrdered || 0) * (item.unitPrice || 0),
+        description: item.description || ''
+      });
+    });
+
+    const zohoMap = new Map();
+    zohoItems.forEach(item => {
+      const name = item.name || '';
+      const desc = item.description || '';
+      // Try to extract SKU, color, size from Zoho item
+      const parts = desc.split(/[\s|]+/);
+      const sku = name.split(' ')[0] || parts[0] || '';
+      const colorMatch = desc.match(/color[:\s]*(\w+)/i);
+      const sizeMatch = desc.match(/size[:\s]*([^\s|]+)/i);
+      const color = colorMatch ? colorMatch[1] : '';
+      const size = sizeMatch ? sizeMatch[1] : '';
+      
+      const key = `${sku}-${color}-${size}`.toLowerCase();
+      zohoMap.set(key, {
+        sku,
+        color,
+        size,
+        qty: item.quantity || 0,
+        price: item.rate || 0,
+        amount: item.item_total || 0,
+        description: desc,
+        itemId: item.line_item_id
+      });
+    });
+
+    // Compare
+    ediMap.forEach((ediItem, key) => {
+      if (zohoMap.has(key)) {
+        const zohoItem = zohoMap.get(key);
+        const qtyDiff = ediItem.qty - zohoItem.qty;
+        const priceDiff = ediItem.price - zohoItem.price;
+        
+        if (qtyDiff === 0 && Math.abs(priceDiff) < 0.01) {
+          comparison.lineItems.matched.push({ edi: ediItem, zoho: zohoItem });
+        } else {
+          comparison.lineItems.differences.push({ 
+            edi: ediItem, 
+            zoho: zohoItem,
+            qtyDiff,
+            priceDiff
+          });
+          comparison.summary.changesRequired++;
+        }
+        zohoMap.delete(key);
+      } else {
+        comparison.lineItems.ediOnly.push(ediItem);
+        comparison.summary.changesRequired++;
+      }
+    });
+
+    zohoMap.forEach(zohoItem => {
+      comparison.lineItems.zohoOnly.push(zohoItem);
+      comparison.summary.changesRequired++;
+    });
+
+    comparison.summary.qtyDifference = comparison.header.edi.totalUnits - comparison.header.zoho.totalUnits;
+    comparison.summary.amountDifference = comparison.header.edi.totalAmount - comparison.header.zoho.totalAmount;
+
+    return comparison;
+  }
+
+  /**
+   * Update a Zoho draft with EDI data
+   */
+  async updateDraftWithEdiData(salesorderId, ediOrder) {
+    const parsed = ediOrder.parsed_data || {};
+    const ediItems = parsed.items || [];
+
+    const lineItems = ediItems.map(item => ({
+      name: item.productIds?.sku || item.productIds?.vendorItemNumber || 'Item',
+      description: `${item.productIds?.sku || ''} ${item.description || ''} ${item.color || ''} ${item.size || ''}`.trim(),
+      quantity: item.quantityOrdered || 0,
+      rate: item.unitPrice || 0
+    }));
+
+    const updateData = {
+      reference_number: ediOrder.edi_order_number,
+      shipment_date: parsed.dates?.shipNotBefore || undefined,
+      notes: `Updated from EDI ${ediOrder.edi_order_number} on ${new Date().toISOString()}`,
+      line_items: lineItems
+    };
+
+    return await this.updateSalesOrder(salesorderId, updateData);
   }
 }
 
