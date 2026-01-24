@@ -39,7 +39,7 @@ app.get('/status', async (req, res) => {
   const { pool } = require('./db');
   try {
     const result = await pool.query(`
-      SELECT 
+      SELECT
         COUNT(*) as total,
         COUNT(*) FILTER (WHERE status = 'processed') as processed,
         COUNT(*) FILTER (WHERE status = 'failed') as failed,
@@ -47,7 +47,7 @@ app.get('/status', async (req, res) => {
       FROM edi_orders
       WHERE created_at > NOW() - INTERVAL '24 hours'
     `);
-    res.json({ 
+    res.json({
       last24Hours: result.rows[0],
       timestamp: new Date().toISOString()
     });
@@ -73,7 +73,7 @@ app.get('/orders', async (req, res) => {
   }
 });
 
-// Reset all orders to pending status (for re-testing)
+// Reset all orders to pending status (for re-testing) - POST version
 app.post('/reset-to-pending', async (req, res) => {
   const { pool } = require('./db');
   try {
@@ -85,14 +85,30 @@ app.post('/reset-to-pending', async (req, res) => {
   }
 });
 
+// Reset all orders to pending status (for re-testing) - GET version for browser access
+app.get('/reset-to-pending', async (req, res) => {
+  const { pool } = require('./db');
+  try {
+    const result = await pool.query(`UPDATE edi_orders SET status = 'pending', zoho_so_id = NULL, error_message = NULL WHERE status IN ('processed', 'failed')`);
+    logger.info('Reset orders to pending via GET', { count: result.rowCount });
+    res.send(`
+      <h1>✅ Reset Complete</h1>
+      <p>Reset ${result.rowCount} orders to pending status.</p>
+      <p><a href="/">Go to Dashboard</a> to process orders.</p>
+    `);
+  } catch (error) {
+    res.status(500).send('Error: ' + error.message);
+  }
+});
+
 // Manually trigger SFTP fetch
 app.post('/fetch-sftp', async (req, res) => {
   try {
     logger.info('Manual SFTP fetch triggered');
     const processor = require('./processor');
     const result = await processor.processEDIOrders();
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'SFTP fetch complete',
       filesProcessed: result.filesProcessed || 0,
       ordersCreated: result.ordersCreated || 0,
@@ -123,9 +139,11 @@ app.get('/reset-orders', async (req, res) => {
   try {
     const ordersResult = await pool.query('SELECT COUNT(*) FROM edi_orders');
     const count = ordersResult.rows[0].count;
+
     await pool.query('DELETE FROM edi_orders');
     await pool.query('DELETE FROM processed_files');
     logger.info('Reset all orders and processed files via GET');
+
     res.send(`
       <h1>✅ Reset Complete</h1>
       <p>Deleted ${count} orders and cleared processed files.</p>
@@ -140,11 +158,11 @@ app.get('/reset-orders', async (req, res) => {
 app.post('/add-mapping', async (req, res) => {
   const { ediCustomerName, zohoAccountName } = req.body;
   const { saveCustomerMapping } = require('./db');
-  
+
   if (!ediCustomerName || !zohoAccountName) {
     return res.status(400).json({ error: 'Both ediCustomerName and zohoAccountName are required' });
   }
-  
+
   try {
     await saveCustomerMapping(ediCustomerName, null, zohoAccountName, true, 100);
     logger.info('Added manual customer mapping', { ediCustomerName, zohoAccountName });
@@ -165,11 +183,11 @@ app.get('/orders/:id', async (req, res) => {
       FROM edi_orders
       WHERE id = $1
     `, [req.params.id]);
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
     }
-    
+
     res.json(result.rows[0]);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -194,10 +212,10 @@ app.get('/zoho-test', async (req, res) => {
   try {
     const ZohoClient = require('./zoho');
     const zoho = new ZohoClient();
-    
     const token = await zoho.ensureValidToken();
+
     const axios = require('axios');
-    
+
     // Test Zoho Books API - get sales orders
     const response = await axios({
       method: 'GET',
@@ -211,7 +229,7 @@ app.get('/zoho-test', async (req, res) => {
         per_page: 10
       }
     });
-    
+
     res.json({
       success: true,
       count: response.data?.salesorders?.length || 0,
@@ -233,10 +251,10 @@ app.get('/zoho-orgs', async (req, res) => {
   try {
     const ZohoClient = require('./zoho');
     const zoho = new ZohoClient();
-    
     const token = await zoho.ensureValidToken();
+
     const axios = require('axios');
-    
+
     const response = await axios({
       method: 'GET',
       url: 'https://www.zohoapis.com/books/v3/organizations',
@@ -244,7 +262,7 @@ app.get('/zoho-orgs', async (req, res) => {
         'Authorization': `Zoho-oauthtoken ${token}`
       }
     });
-    
+
     res.json({
       success: true,
       organizations: response.data?.organizations || []
@@ -297,22 +315,19 @@ app.get('/order-stats', async (req, res) => {
 app.post('/suggest-mapping', async (req, res) => {
   const { ediCustomerName } = req.body;
   const { getCustomerMapping } = require('./db');
-  
+
   try {
     // First check if we have a confirmed mapping
     const existingMapping = await getCustomerMapping(ediCustomerName);
     if (existingMapping && existingMapping.confirmed) {
-      return res.json({
-        source: 'saved',
-        mapping: existingMapping
-      });
+      return res.json({ source: 'saved', mapping: existingMapping });
     }
 
     // Otherwise do fuzzy search
     const ZohoClient = require('./zoho');
     const zoho = new ZohoClient();
     const match = await zoho.findBestAccountMatch(ediCustomerName);
-    
+
     res.json({
       source: 'suggested',
       mapping: match ? {
@@ -331,20 +346,20 @@ app.post('/suggest-mapping', async (req, res) => {
 app.post('/save-mapping', async (req, res) => {
   const { ediCustomerName, zohoAccountId, zohoAccountName } = req.body;
   const { saveCustomerMapping, pool } = require('./db');
-  
+
   try {
     // Save to mappings table
     await saveCustomerMapping(ediCustomerName, zohoAccountId, zohoAccountName, true, 100);
-    
+
     // Update all orders with this EDI customer name
     await pool.query(`
-      UPDATE edi_orders SET
-        suggested_zoho_account_id = $2,
-        suggested_zoho_account_name = $3,
-        mapping_confirmed = TRUE
+      UPDATE edi_orders
+      SET suggested_zoho_account_id = $2,
+          suggested_zoho_account_name = $3,
+          mapping_confirmed = TRUE
       WHERE LOWER(edi_customer_name) = LOWER($1)
     `, [ediCustomerName, zohoAccountId, zohoAccountName]);
-    
+
     logger.info('Saved customer mapping', { ediCustomerName, zohoAccountName });
     res.json({ success: true });
   } catch (error) {
@@ -356,11 +371,11 @@ app.post('/save-mapping', async (req, res) => {
 app.post('/update-order-mapping', async (req, res) => {
   const { orderId, zohoAccountId, zohoAccountName, saveForFuture } = req.body;
   const { updateOrderMapping, saveCustomerMapping, pool } = require('./db');
-  
+
   try {
     // Update the specific order
     await updateOrderMapping(orderId, zohoAccountId, zohoAccountName, true);
-    
+
     // If saveForFuture, also save to mappings table
     if (saveForFuture) {
       const orderResult = await pool.query('SELECT edi_customer_name FROM edi_orders WHERE id = $1', [orderId]);
@@ -368,7 +383,7 @@ app.post('/update-order-mapping', async (req, res) => {
         await saveCustomerMapping(orderResult.rows[0].edi_customer_name, zohoAccountId, zohoAccountName, true, 100);
       }
     }
-    
+
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -402,8 +417,8 @@ app.post('/retry-failed', async (req, res) => {
   const { pool } = require('./db');
   try {
     const result = await pool.query(`
-      UPDATE edi_orders 
-      SET status = 'pending', error_message = NULL 
+      UPDATE edi_orders
+      SET status = 'pending', error_message = NULL
       WHERE status = 'failed'
       RETURNING id
     `);
@@ -418,10 +433,10 @@ app.post('/retry-failed', async (req, res) => {
 app.post('/process-limit', async (req, res) => {
   const { pool } = require('./db');
   const limit = parseInt(req.body.limit) || 10;
-  
+
   try {
     logger.info('Processing with limit', { limit });
-    
+
     // Get pending orders with limit
     const pendingResult = await pool.query(`
       SELECT id, filename, edi_order_number, parsed_data
@@ -430,36 +445,36 @@ app.post('/process-limit', async (req, res) => {
       ORDER BY created_at ASC
       LIMIT $1
     `, [limit]);
-    
+
     const orders = pendingResult.rows;
     logger.info(`Found ${orders.length} pending orders to process`);
-    
+
     if (orders.length === 0) {
-      return res.json({ success: true, message: 'No pending orders', processed: 0, failed: 0 });
+      return res.json({
+        success: true,
+        message: 'No pending orders',
+        processed: 0,
+        failed: 0
+      });
     }
-    
+
     const ZohoClient = require('./zoho');
     const { processOrderToZoho } = require('./processor');
     const { updateOrderStatus } = require('./db');
+
     const zoho = new ZohoClient();
-    
     let processed = 0;
     let failed = 0;
-    
+
     for (const order of orders) {
       try {
         const result = await processOrderToZoho(zoho, order);
-        
+
         if (result.success) {
-          await updateOrderStatus(order.id, 'processed', {
-            soId: result.soId,
-            soNumber: result.soNumber
-          });
+          await updateOrderStatus(order.id, 'processed', { soId: result.soId, soNumber: result.soNumber });
           processed++;
         } else {
-          await updateOrderStatus(order.id, 'failed', {
-            error: result.error
-          });
+          await updateOrderStatus(order.id, 'failed', { error: result.error });
           failed++;
         }
       } catch (error) {
@@ -468,8 +483,13 @@ app.post('/process-limit', async (req, res) => {
         failed++;
       }
     }
-    
-    res.json({ success: true, processed, failed, total: orders.length });
+
+    res.json({
+      success: true,
+      processed,
+      failed,
+      total: orders.length
+    });
   } catch (error) {
     logger.error('Process with limit failed', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
@@ -480,14 +500,14 @@ app.post('/process-limit', async (req, res) => {
 app.post('/process-selected', async (req, res) => {
   const { pool } = require('./db');
   const orderIds = req.body.orderIds || [];
-  
+
   if (!orderIds.length) {
     return res.status(400).json({ success: false, error: 'No orders selected' });
   }
-  
+
   try {
     logger.info('Processing selected orders', { count: orderIds.length, orderIds });
-    
+
     // Get selected orders
     const pendingResult = await pool.query(`
       SELECT id, filename, edi_order_number, parsed_data
@@ -495,36 +515,36 @@ app.post('/process-selected', async (req, res) => {
       WHERE id = ANY($1) AND status IN ('pending', 'failed')
       ORDER BY created_at ASC
     `, [orderIds]);
-    
+
     const orders = pendingResult.rows;
     logger.info(`Found ${orders.length} orders to process`);
-    
+
     if (orders.length === 0) {
-      return res.json({ success: true, message: 'No valid orders to process', processed: 0, failed: 0 });
+      return res.json({
+        success: true,
+        message: 'No valid orders to process',
+        processed: 0,
+        failed: 0
+      });
     }
-    
+
     const ZohoClient = require('./zoho');
     const { processOrderToZoho } = require('./processor');
     const { updateOrderStatus } = require('./db');
+
     const zoho = new ZohoClient();
-    
     let processed = 0;
     let failed = 0;
-    
+
     for (const order of orders) {
       try {
         const result = await processOrderToZoho(zoho, order);
-        
+
         if (result.success) {
-          await updateOrderStatus(order.id, 'processed', {
-            soId: result.soId,
-            soNumber: result.soNumber
-          });
+          await updateOrderStatus(order.id, 'processed', { soId: result.soId, soNumber: result.soNumber });
           processed++;
         } else {
-          await updateOrderStatus(order.id, 'failed', {
-            error: result.error
-          });
+          await updateOrderStatus(order.id, 'failed', { error: result.error });
           failed++;
         }
       } catch (error) {
@@ -533,8 +553,13 @@ app.post('/process-selected', async (req, res) => {
         failed++;
       }
     }
-    
-    res.json({ success: true, processed, failed, total: orders.length });
+
+    res.json({
+      success: true,
+      processed,
+      failed,
+      total: orders.length
+    });
   } catch (error) {
     logger.error('Process selected failed', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
@@ -565,7 +590,6 @@ async function startServer() {
       logger.info(`Server running on port ${port}`);
       logger.info('OAuth setup: Visit /oauth/start to authorize with Zoho');
     });
-
   } catch (error) {
     logger.error('Failed to start server', { error: error.message });
     process.exit(1);
