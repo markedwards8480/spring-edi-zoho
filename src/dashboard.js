@@ -1603,12 +1603,102 @@ const dashboardHTML = `
       } catch (e) { toast('Failed to load sent orders'); }
     }
     
+    var zohoCustomersCache = [];
+    
     async function loadMappings() {
       try {
-        const res = await fetch('/customer-mappings');
-        const mappings = await res.json();
-        document.getElementById('mappingsContent').innerHTML = mappings.length ? '<div class="table-container"><table class="orders-table"><thead><tr><th>EDI Customer</th><th>Zoho Customer</th></tr></thead><tbody>' + mappings.map(m => '<tr><td>' + m.edi_customer_name + '</td><td>' + m.zoho_customer_name + '</td></tr>').join('') + '</tbody></table></div>' : '<p style="color:#86868b">No mappings configured.</p>';
-      } catch (e) {}
+        var mappingsRes = await fetch('/customer-mappings');
+        var mappings = await mappingsRes.json();
+        
+        var customers = [];
+        try {
+          var custRes = await fetch('/zoho/customers');
+          var custData = await custRes.json();
+          customers = custData.customers || [];
+          zohoCustomersCache = customers;
+        } catch (err) {
+          console.log('Could not load Zoho customers:', err);
+        }
+        
+        var html = '';
+        
+        if (customers.length > 0) {
+          html += '<div style="background:#f5f5f7;padding:1rem;border-radius:8px;margin-bottom:1.5rem;">';
+          html += '<h4 style="margin:0 0 0.75rem 0;font-size:0.9rem;">Add New Mapping</h4>';
+          html += '<div style="display:flex;gap:0.75rem;flex-wrap:wrap;">';
+          html += '<input type="text" id="newEdiName" placeholder="EDI Customer Name" style="flex:1;min-width:150px;padding:0.5rem;border:1px solid #d2d2d7;border-radius:6px;font-size:0.85rem;">';
+          html += '<select id="newZohoId" style="flex:1;min-width:150px;padding:0.5rem;border:1px solid #d2d2d7;border-radius:6px;font-size:0.85rem;">';
+          html += '<option value="">-- Select Zoho Customer --</option>';
+          for (var i = 0; i < customers.length; i++) {
+            html += '<option value="' + customers[i].contact_id + '">' + (customers[i].contact_name || 'Unknown') + '</option>';
+          }
+          html += '</select>';
+          html += '<button class="btn btn-primary" onclick="addMapping()">Add</button>';
+          html += '</div></div>';
+        }
+        
+        if (mappings.length) {
+          html += '<div class="table-container"><table class="orders-table"><thead><tr><th>EDI Customer</th><th>Zoho Customer</th>';
+          if (customers.length > 0) html += '<th>Edit</th>';
+          html += '</tr></thead><tbody>';
+          for (var j = 0; j < mappings.length; j++) {
+            var m = mappings[j];
+            html += '<tr><td>' + m.edi_customer_name + '</td>';
+            html += '<td>' + (m.zoho_customer_name && m.zoho_customer_name !== 'undefined' ? '<span style="color:#34c759;">✓</span> ' + m.zoho_customer_name : '<span style="color:#ff9500;">⚠ Not linked</span>') + '</td>';
+            if (customers.length > 0) {
+              html += '<td><select onchange="editMapping(this)" data-edi="' + m.edi_customer_name.replace(/"/g, '&quot;') + '" style="padding:0.4rem;border:1px solid #d2d2d7;border-radius:4px;font-size:0.8rem;">';
+              html += '<option value="">-- Change --</option>';
+              for (var k = 0; k < customers.length; k++) {
+                html += '<option value="' + customers[k].contact_id + '">' + (customers[k].contact_name || 'Unknown') + '</option>';
+              }
+              html += '</select></td>';
+            }
+            html += '</tr>';
+          }
+          html += '</tbody></table></div>';
+        } else {
+          html += '<p style="color:#86868b">No mappings configured.</p>';
+        }
+        
+        document.getElementById('mappingsContent').innerHTML = html;
+      } catch (e) {
+        console.error('loadMappings error:', e);
+      }
+    }
+    
+    async function addMapping() {
+      var ediName = document.getElementById('newEdiName').value.trim();
+      var zohoSelect = document.getElementById('newZohoId');
+      var zohoId = zohoSelect.value;
+      var zohoName = zohoSelect.options[zohoSelect.selectedIndex].text;
+      if (!ediName || !zohoId) { toast('Fill in both fields'); return; }
+      try {
+        var res = await fetch('/customer-mappings', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ediCustomerName: ediName, zohoCustomerId: zohoId, zohoCustomerName: zohoName})
+        });
+        var data = await res.json();
+        if (data.success) { toast('Mapping added!'); loadMappings(); }
+        else { toast('Error: ' + (data.error || 'Failed')); }
+      } catch (err) { toast('Error: ' + err.message); }
+    }
+    
+    async function editMapping(selectEl) {
+      var zohoId = selectEl.value;
+      if (!zohoId) return;
+      var ediName = selectEl.getAttribute('data-edi');
+      var zohoName = selectEl.options[selectEl.selectedIndex].text;
+      try {
+        var res = await fetch('/customer-mappings', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ediCustomerName: ediName, zohoCustomerId: zohoId, zohoCustomerName: zohoName})
+        });
+        var data = await res.json();
+        if (data.success) { toast('Mapping updated!'); loadMappings(); }
+        else { toast('Error: ' + (data.error || 'Failed')); }
+      } catch (err) { toast('Error: ' + err.message); }
     }
     
     // ============================================================
