@@ -520,66 +520,119 @@ class ZohoClient {
     // ============================================================
     // STYLE/SKU MATCH (30 points) - REQUIRED
     // At least one style must match for this to be considered a match
+    // Uses BASE STYLE matching to handle format differences:
+    // EDI: "77887X-BB" → base: "77887X"
+    // Zoho: "77887X-BQ-GREY-1X" → base: "77887X"
     // ============================================================
+    
+    // Helper function to extract base style (the core style number before color/size)
+    const extractBaseStyle = (styleStr) => {
+      if (!styleStr) return '';
+      const s = styleStr.toLowerCase().trim();
+      // Pattern: digits followed by optional letter(s), e.g., "77887X", "84968X"
+      // This captures the style number which is usually 5-6 digits + optional letter
+      const match = s.match(/^(\d{4,6}[a-z]?)/i);
+      if (match) return match[1];
+      // Fallback: take first part before dash if it looks like a style
+      const firstPart = s.split('-')[0];
+      if (firstPart && /\d{4,}/.test(firstPart)) return firstPart;
+      return s;
+    };
+    
     if (ediItems.length > 0 && zohoItems.length > 0) {
-      // Extract EDI styles
-      const ediStyles = new Set();
+      // Extract EDI base styles and full styles
+      const ediBaseStyles = new Set();
+      const ediFullStyles = new Set();
       ediItems.forEach(i => {
-        const sku = (i.productIds?.sku || i.productIds?.vendorItemNumber || '').toLowerCase().trim();
+        const sku = (i.productIds?.sku || i.productIds?.vendorItemNumber || '').trim();
         if (sku) {
-          ediStyles.add(sku);
-          // Also add the base style (before any color/size suffix)
-          const baseStyle = sku.split('-')[0];
-          if (baseStyle) ediStyles.add(baseStyle);
+          ediFullStyles.add(sku.toLowerCase());
+          const baseStyle = extractBaseStyle(sku);
+          if (baseStyle && baseStyle.length >= 5) {
+            ediBaseStyles.add(baseStyle);
+          }
         }
       });
       
-      // Extract Zoho styles
-      const zohoStyles = new Set();
+      // Extract Zoho base styles and full styles
+      const zohoBaseStyles = new Set();
+      const zohoFullStyles = new Set();
       zohoItems.forEach(i => {
-        const name = (i.name || '').toLowerCase().trim();
-        const desc = (i.description || '').toLowerCase().trim();
+        const name = (i.name || '').trim();
+        const desc = (i.description || '').trim();
         
-        // Try to extract style from name (usually first part)
+        // Check item name (e.g., "77887X-BQ-GREY-1X")
         if (name) {
-          zohoStyles.add(name.split(' ')[0]);
-          zohoStyles.add(name.split('-')[0]);
-          // Also try full name
-          const fullStyle = name.match(/^([a-z0-9]+-?[a-z0-9]*)/i);
-          if (fullStyle) zohoStyles.add(fullStyle[1]);
+          zohoFullStyles.add(name.toLowerCase());
+          const baseStyle = extractBaseStyle(name);
+          if (baseStyle && baseStyle.length >= 5) {
+            zohoBaseStyles.add(baseStyle);
+          }
         }
         
-        // Also check description
+        // Also check description for style patterns
         if (desc) {
-          const descStyle = desc.match(/^([a-z0-9]+-?[a-z0-9]*)/i);
-          if (descStyle) zohoStyles.add(descStyle[1]);
+          const styleMatch = desc.match(/(\d{4,6}[a-z]?)/i);
+          if (styleMatch) {
+            zohoBaseStyles.add(styleMatch[1].toLowerCase());
+          }
         }
       });
 
-      // Check for ANY overlap
-      let matchCount = 0;
-      ediStyles.forEach(es => {
-        if (!es || es.length < 3) return; // Skip very short codes
-        zohoStyles.forEach(zs => {
-          if (!zs || zs.length < 3) return;
-          // Exact match or one contains the other
-          if (es === zs || (es.length >= 5 && zs.includes(es)) || (zs.length >= 5 && es.includes(zs))) {
-            matchCount++;
+      // Check for base style overlap (this is the key matching)
+      let baseStyleMatches = 0;
+      ediBaseStyles.forEach(ediBase => {
+        if (zohoBaseStyles.has(ediBase)) {
+          baseStyleMatches++;
+        }
+      });
+      
+      // Also check for full style matches or partial matches
+      let fullStyleMatches = 0;
+      ediFullStyles.forEach(ediFull => {
+        zohoFullStyles.forEach(zohoFull => {
+          // Check if one contains the other (handles different suffixes)
+          if (ediFull === zohoFull || 
+              (ediFull.length >= 6 && zohoFull.includes(ediFull.split('-')[0])) ||
+              (zohoFull.length >= 6 && ediFull.includes(zohoFull.split('-')[0]))) {
+            fullStyleMatches++;
           }
         });
       });
 
-      if (matchCount > 0) {
+      const totalStyleMatches = baseStyleMatches + fullStyleMatches;
+      
+      if (totalStyleMatches > 0) {
         score.details.styles = true;
-        // More matches = higher score
-        const matchRatio = matchCount / Math.max(ediStyles.size, 1);
-        if (matchRatio >= 0.5) {
-          score.total += 30;
+        score.details.styleMatchCount = totalStyleMatches;
+        score.details.ediStyleCount = ediBaseStyles.size;
+        score.details.zohoStyleCount = zohoBaseStyles.size;
+        
+        // Score based on how many styles matched
+        const matchRatio = baseStyleMatches / Math.max(ediBaseStyles.size, 1);
+        if (matchRatio >= 0.8) {
+          score.total += 30; // Almost all styles match
+        } else if (matchRatio >= 0.5) {
+          score.total += 25; // Most styles match
         } else if (matchRatio >= 0.25) {
-          score.total += 20;
+          score.total += 20; // Some styles match
         } else {
-          score.total += 15; // At least some match
+          score.total += 15; // At least one style matches
         }
+        
+        // Log for debugging
+        logger.debug('Style match found', {
+          ediBaseStyles: Array.from(ediBaseStyles),
+          zohoBaseStyles: Array.from(zohoBaseStyles),
+          baseStyleMatches,
+          fullStyleMatches
+        });
+      } else {
+        // Log why no match
+        logger.debug('No style match', {
+          ediBaseStyles: Array.from(ediBaseStyles),
+          zohoBaseStyles: Array.from(zohoBaseStyles)
+        });
       }
       // If no styles match at all, score.details.styles stays false
       // This will disqualify the match in findMatchingDrafts
