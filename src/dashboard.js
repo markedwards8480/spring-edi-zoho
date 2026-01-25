@@ -233,7 +233,7 @@ const dashboardHTML = `
         📥 EDI Orders <span class="nav-badge" id="pendingBadge">0</span>
       </div>
       <div class="nav-item" id="navReview" onclick="showTab('review', this)">🔍 Review Matches <span class="nav-badge" id="reviewBadge" style="display:none;background:#0088c2">0</span></div>
-      <div class="nav-item" onclick="showTab('sent', this)">✅ Sent to Zoho</div>
+      <div class="nav-item" onclick="showTab('sent', this)">✅ Sent to Zoho <span class="nav-badge" id="sentBadge" style="background:#34c759">0</span></div>
       <div class="nav-title">Settings</div>
       <div class="nav-item" onclick="showTab('mappings', this)">🔗 Customer Mappings</div>
       <div class="nav-title">History</div>
@@ -587,6 +587,7 @@ const dashboardHTML = `
         document.getElementById('statMatched').textContent = d.matched || 0;
         document.getElementById('statProcessed').textContent = d.processed || 0;
         document.getElementById('pendingBadge').textContent = d.pending || 0;
+        document.getElementById('sentBadge').textContent = d.processed || 0;
       } catch(e) {}
       
       // Also load cache status
