@@ -125,6 +125,54 @@ class AuditLogger {
         );
       `);
 
+      // Match sessions - stores match results server-side
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS match_sessions (
+          id SERIAL PRIMARY KEY,
+          session_name VARCHAR(255),
+          status VARCHAR(50) DEFAULT 'active',
+          matches JSONB,
+          no_matches JSONB,
+          total_matches INTEGER DEFAULT 0,
+          total_no_matches INTEGER DEFAULT 0,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+          created_by VARCHAR(100) DEFAULT 'system'
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_match_sessions_status ON match_sessions(status);
+        CREATE INDEX IF NOT EXISTS idx_match_sessions_created ON match_sessions(created_at DESC);
+      `);
+
+      // Individual match records for tracking
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS match_records (
+          id SERIAL PRIMARY KEY,
+          session_id INTEGER REFERENCES match_sessions(id) ON DELETE CASCADE,
+          edi_order_id INTEGER,
+          edi_order_number VARCHAR(100),
+          customer_name VARCHAR(255),
+          order_amount DECIMAL(12,2),
+          item_count INTEGER,
+          unit_count INTEGER,
+          zoho_draft_id VARCHAR(100),
+          zoho_draft_number VARCHAR(100),
+          zoho_draft_amount DECIMAL(12,2),
+          match_confidence INTEGER,
+          match_criteria JSONB,
+          status VARCHAR(50) DEFAULT 'pending',
+          included BOOLEAN DEFAULT true,
+          processed_at TIMESTAMP WITH TIME ZONE,
+          zoho_so_id VARCHAR(100),
+          zoho_so_number VARCHAR(100),
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_match_records_session ON match_records(session_id);
+        CREATE INDEX IF NOT EXISTS idx_match_records_status ON match_records(status);
+        CREATE INDEX IF NOT EXISTS idx_match_records_edi_order ON match_records(edi_order_id);
+      `);
+
       // Zoho orders sent - permanent record that survives resets
       await client.query(`
         CREATE TABLE IF NOT EXISTS zoho_orders_sent (
@@ -430,6 +478,187 @@ class AuditLogger {
     } catch (error) {
       console.error('Failed to check order status:', error);
       return null;
+    }
+  }
+
+  // ============================================================
+  // MATCH SESSION METHODS
+  // ============================================================
+
+  // Save a new match session
+  async saveMatchSession(matches, noMatches, createdBy = 'system') {
+    try {
+      // Deactivate any existing active sessions
+      await this.pool.query(`
+        UPDATE match_sessions SET status = 'archived', updated_at = NOW()
+        WHERE status = 'active'
+      `);
+
+      // Create new session
+      const sessionResult = await this.pool.query(`
+        INSERT INTO match_sessions (
+          session_name, status, matches, no_matches, 
+          total_matches, total_no_matches, created_by
+        ) VALUES ($1, 'active', $2, $3, $4, $5, $6)
+        RETURNING id, created_at
+      `, [
+        'Match Session ' + new Date().toLocaleString(),
+        JSON.stringify(matches || []),
+        JSON.stringify(noMatches || []),
+        (matches || []).length,
+        (noMatches || []).length,
+        createdBy
+      ]);
+
+      const sessionId = sessionResult.rows[0].id;
+
+      // Save individual match records for easier querying
+      for (const match of (matches || [])) {
+        await this.pool.query(`
+          INSERT INTO match_records (
+            session_id, edi_order_id, edi_order_number, customer_name,
+            order_amount, item_count, unit_count,
+            zoho_draft_id, zoho_draft_number, zoho_draft_amount,
+            match_confidence, match_criteria, status, included
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending', true)
+        `, [
+          sessionId,
+          match.ediOrder?.id,
+          match.ediOrder?.poNumber,
+          match.ediOrder?.customer,
+          match.ediOrder?.totalAmount,
+          match.ediOrder?.itemCount,
+          match.ediOrder?.totalUnits,
+          match.zohoDraft?.id,
+          match.zohoDraft?.number,
+          match.zohoDraft?.totalAmount,
+          match.confidence,
+          JSON.stringify(match.score?.details || {})
+        ]);
+      }
+
+      return { sessionId, createdAt: sessionResult.rows[0].created_at };
+    } catch (error) {
+      console.error('Failed to save match session:', error);
+      throw error;
+    }
+  }
+
+  // Get the active match session
+  async getActiveMatchSession() {
+    try {
+      const result = await this.pool.query(`
+        SELECT * FROM match_sessions 
+        WHERE status = 'active' 
+        ORDER BY created_at DESC 
+        LIMIT 1
+      `);
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      const session = result.rows[0];
+      return {
+        id: session.id,
+        matches: session.matches || [],
+        noMatches: session.no_matches || [],
+        totalMatches: session.total_matches,
+        totalNoMatches: session.total_no_matches,
+        createdAt: session.created_at,
+        updatedAt: session.updated_at
+      };
+    } catch (error) {
+      console.error('Failed to get active match session:', error);
+      return null;
+    }
+  }
+
+  // Update match record status (when sent to Zoho)
+  async updateMatchRecordStatus(ediOrderId, status, zohoSoId = null, zohoSoNumber = null) {
+    try {
+      await this.pool.query(`
+        UPDATE match_records 
+        SET status = $1, zoho_so_id = $2, zoho_so_number = $3, processed_at = NOW()
+        WHERE edi_order_id = $4 AND status = 'pending'
+      `, [status, zohoSoId, zohoSoNumber, ediOrderId]);
+
+      // Also update the JSON in match_sessions to keep in sync
+      const sessionResult = await this.pool.query(`
+        SELECT id, matches FROM match_sessions WHERE status = 'active' LIMIT 1
+      `);
+
+      if (sessionResult.rows.length > 0) {
+        const session = sessionResult.rows[0];
+        let matches = session.matches || [];
+        
+        // Update the match in the JSON
+        matches = matches.map(m => {
+          if (m.ediOrder?.id === ediOrderId) {
+            return { ...m, processed: true, zohoSoId, zohoSoNumber };
+          }
+          return m;
+        });
+
+        // Remove processed match from active list
+        matches = matches.filter(m => !m.processed);
+
+        await this.pool.query(`
+          UPDATE match_sessions 
+          SET matches = $1, total_matches = $2, updated_at = NOW()
+          WHERE id = $3
+        `, [JSON.stringify(matches), matches.length, session.id]);
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Failed to update match record:', error);
+      return false;
+    }
+  }
+
+  // Toggle include/exclude for a match
+  async toggleMatchIncluded(ediOrderId, included) {
+    try {
+      await this.pool.query(`
+        UPDATE match_records 
+        SET included = $1
+        WHERE edi_order_id = $2 AND status = 'pending'
+      `, [included, ediOrderId]);
+      return true;
+    } catch (error) {
+      console.error('Failed to toggle match included:', error);
+      return false;
+    }
+  }
+
+  // Clear the active match session
+  async clearMatchSession() {
+    try {
+      await this.pool.query(`
+        UPDATE match_sessions SET status = 'cleared', updated_at = NOW()
+        WHERE status = 'active'
+      `);
+      return true;
+    } catch (error) {
+      console.error('Failed to clear match session:', error);
+      return false;
+    }
+  }
+
+  // Get match session history
+  async getMatchSessionHistory(limit = 20) {
+    try {
+      const result = await this.pool.query(`
+        SELECT id, session_name, status, total_matches, total_no_matches, created_at
+        FROM match_sessions
+        ORDER BY created_at DESC
+        LIMIT $1
+      `, [limit]);
+      return result.rows;
+    } catch (error) {
+      console.error('Failed to get match session history:', error);
+      return [];
     }
   }
 }
