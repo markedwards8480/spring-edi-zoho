@@ -433,10 +433,11 @@ const dashboardHTML = `
                   <th>Customer</th>
                   <th>Details</th>
                   <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="activityLogBody">
-                <tr><td colspan="6" class="empty-state">Loading...</td></tr>
+                <tr><td colspan="7" class="empty-state">Loading...</td></tr>
               </tbody>
             </table>
           </div>
@@ -1774,7 +1775,7 @@ const dashboardHTML = `
         return labels[a] || a;
       };
       
-      tbody.innerHTML = activityLogData.map(a => {
+      tbody.innerHTML = activityLogData.map((a, idx) => {
         const time = new Date(a.created_at).toLocaleString();
         const details = a.zoho_so_number ? 'SO#' + a.zoho_so_number : (a.error_message ? a.error_message.substring(0, 50) : '-');
         return '<tr>' +
@@ -1784,8 +1785,47 @@ const dashboardHTML = `
           '<td>' + (a.customer_name || '-') + '</td>' +
           '<td>' + details + '</td>' +
           '<td>' + severityBadge(a.severity) + '</td>' +
+          '<td><button class="btn btn-secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem;" onclick="viewActivityDetails(' + idx + ')">ℹ️ Info</button></td>' +
           '</tr>';
       }).join('');
+    }
+    
+    function viewActivityDetails(idx) {
+      const a = activityLogData[idx];
+      if (!a) return;
+      
+      let detailsHtml = '';
+      if (a.details) {
+        try {
+          const details = typeof a.details === 'string' ? JSON.parse(a.details) : a.details;
+          detailsHtml = '<div style="background:#f5f5f7;padding:1rem;border-radius:8px;margin-top:1rem;"><h4 style="margin:0 0 0.5rem">Details</h4><pre style="margin:0;font-size:0.75rem;overflow-x:auto;">' + JSON.stringify(details, null, 2) + '</pre></div>';
+        } catch (e) {
+          detailsHtml = '<div style="background:#f5f5f7;padding:1rem;border-radius:8px;margin-top:1rem;"><h4 style="margin:0 0 0.5rem">Details</h4><pre style="margin:0;font-size:0.75rem;">' + a.details + '</pre></div>';
+        }
+      }
+      
+      const html = '<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()" style="max-width:600px">' +
+        '<div class="modal-header"><h2>Activity Details</h2><button class="modal-close" onclick="closeModal()">×</button></div>' +
+        '<div class="modal-body">' +
+        '<div class="info-grid" style="grid-template-columns:1fr 1fr">' +
+        '<div class="info-box"><div class="info-label">Action</div><div class="info-value">' + (a.action || 'N/A') + '</div></div>' +
+        '<div class="info-box"><div class="info-label">Severity</div><div class="info-value">' + (a.severity || 'info') + '</div></div>' +
+        '<div class="info-box"><div class="info-label">Time</div><div class="info-value">' + new Date(a.created_at).toLocaleString() + '</div></div>' +
+        '<div class="info-box"><div class="info-label">PO Number</div><div class="info-value">' + (a.edi_order_number || a.edi_po_number || 'N/A') + '</div></div>' +
+        '<div class="info-box"><div class="info-label">Customer</div><div class="info-value">' + (a.customer_name || 'N/A') + '</div></div>' +
+        '<div class="info-box"><div class="info-label">Order Amount</div><div class="info-value">' + (a.order_amount ? '$' + parseFloat(a.order_amount).toLocaleString('en-US', {minimumFractionDigits:2}) : 'N/A') + '</div></div>' +
+        (a.zoho_so_id ? '<div class="info-box"><div class="info-label">Zoho SO ID</div><div class="info-value">' + a.zoho_so_id + '</div></div>' : '') +
+        (a.zoho_so_number ? '<div class="info-box"><div class="info-label">Zoho SO#</div><div class="info-value">' + a.zoho_so_number + '</div></div>' : '') +
+        (a.match_confidence ? '<div class="info-box"><div class="info-label">Match Confidence</div><div class="info-value">' + a.match_confidence + '%</div></div>' : '') +
+        (a.error_message ? '<div class="info-box" style="grid-column:span 2"><div class="info-label">Error</div><div class="info-value" style="color:#c62828">' + a.error_message + '</div></div>' : '') +
+        '</div>' +
+        detailsHtml +
+        '</div>' +
+        '<div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
+        (a.zoho_so_id ? '<button class="btn btn-primary" onclick="window.open(\\'https://books.zoho.com/app/677681121#/salesorders/' + a.zoho_so_id + '\\',\\'_blank\\')">Open in Zoho</button>' : '') +
+        '</div></div></div>';
+      
+      document.getElementById('modalContainer').innerHTML = html;
     }
     
     function exportZohoLog() {
