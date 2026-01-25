@@ -910,7 +910,7 @@ app.get('/zoho/customers', async (req, res) => {
   try {
     const ZohoClient = require('./zoho');
     const zoho = new ZohoClient();
-    const accessToken = await zoho.getAccessToken();
+    const accessToken = await zoho.ensureValidToken();
     const orgId = process.env.ZOHO_ORG_ID;
     const axios = require('axios');
     const response = await axios.get('https://www.zohoapis.com/books/v3/contacts', {
