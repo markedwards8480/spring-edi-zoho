@@ -160,6 +160,27 @@ const dashboardHTML = `
     .match-po { font-size: 1.125rem; font-weight: 600; color: #1e3a5f; }
     .match-customer { font-size: 0.875rem; color: #86868b; }
     
+    /* Compact view styles */
+    .matches-grid { display: block; }
+    .matches-grid.compact { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
+    .matches-grid.compact .match-card { padding: 0.875rem; margin-bottom: 0; }
+    .matches-grid.compact .match-card-header { margin-bottom: 0.5rem; }
+    .matches-grid.compact .match-po { font-size: 0.9375rem; }
+    .matches-grid.compact .match-customer { font-size: 0.75rem; }
+    .matches-grid.compact .confidence-badge { padding: 0.25rem 0.5rem; font-size: 0.8125rem; }
+    .matches-grid.compact .match-criteria { display: none; }
+    .matches-grid.compact .match-comparison { gap: 0.75rem; margin-bottom: 0.5rem; }
+    .matches-grid.compact .match-side { padding: 0.5rem 0.75rem; }
+    .matches-grid.compact .match-side-label { font-size: 0.6875rem; }
+    .matches-grid.compact .match-side-amount { font-size: 1rem; }
+    .matches-grid.compact .match-side-detail { font-size: 0.6875rem; }
+    .matches-grid.compact .match-actions { gap: 0.25rem; flex-wrap: wrap; }
+    .matches-grid.compact .match-actions .btn { padding: 0.375rem 0.625rem; font-size: 0.75rem; }
+    .matches-grid.compact .match-actions .include-checkbox { font-size: 0.75rem; }
+    
+    .view-btn { padding: 0.375rem 0.625rem !important; min-width: 2rem; }
+    .view-btn.active { background: #0088c2; color: white; }
+    
     .confidence-badge { padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 1rem; }
     .confidence-high { background: #e8f5e9; color: #2e7d32; }
     .confidence-medium { background: #fff3e0; color: #f57c00; }
@@ -316,8 +337,13 @@ const dashboardHTML = `
             <option value="high">High (80-99%)</option>
             <option value="medium">Medium (60-79%)</option>
             <option value="low">Low (&lt;60%)</option>
+            <option value="nomatch">No Match</option>
           </select>
           <div style="flex:1"></div>
+          <div class="view-toggle" style="display:flex;gap:0.25rem;margin-right:1rem;">
+            <button class="btn btn-secondary view-btn active" id="viewComfortable" onclick="setReviewView('comfortable')" title="Comfortable View">☰</button>
+            <button class="btn btn-secondary view-btn" id="viewCompact" onclick="setReviewView('compact')" title="Compact View">⊞</button>
+          </div>
           <button class="btn btn-secondary" onclick="clearMatchResults()">Clear Results</button>
         </div>
         <div id="matchReviewContent">
@@ -468,6 +494,7 @@ const dashboardHTML = `
     let currentRawFields = {};
     let selectedMatchIds = new Set(); // Track selected matches for bulk send
     let selectedMatchDrafts = new Map(); // Map ediOrderId -> zohoDraftId
+    let reviewViewMode = 'comfortable'; // 'comfortable' or 'compact'
     
     document.addEventListener('DOMContentLoaded', () => { 
       loadOrders(); 
@@ -1075,7 +1102,8 @@ const dashboardHTML = `
           </div>
         </div>\`;
       
-      if (showMatchesSection) {
+      if (showMatchesSection && matches.length > 0) {
+        html += \`<div class="matches-grid \${reviewViewMode === 'compact' ? 'compact' : ''}">\`;
         matches.forEach((match, idx) => {
           const actualIdx = allMatches.indexOf(match);
           const conf = match.confidence || 0;
@@ -1108,10 +1136,12 @@ const dashboardHTML = `
           </div>
         \`;
         });
+        html += \`</div>\`; // Close matches-grid
       }
       
       if (showNoMatchSection && filteredNoMatches.length > 0) {
         html += \`<h3 style="margin-top:2rem;margin-bottom:1rem;color:#ff9500">⚠️ No Match Found (\${filteredNoMatches.length})</h3><p style="color:#86868b;margin-bottom:1rem">No matching Zoho draft found. You can create new Sales Orders for these:</p>\`;
+        html += \`<div class="matches-grid \${reviewViewMode === 'compact' ? 'compact' : ''}">\`;
         filteredNoMatches.forEach((item, idx) => {
           html += \`
             <div class="match-card" style="border-left:4px solid #ff9500" id="no-match-card-\${item.ediOrder.id}">
@@ -1138,6 +1168,7 @@ const dashboardHTML = `
             </div>
           \`;
         });
+        html += \`</div>\`; // Close matches-grid for no-matches
       }
       
       html += \`<div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid #e5e5e5;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:600">\${allMatches.length + noMatches.length}</span> orders total</div><button class="btn btn-success btn-lg" onclick="confirmSelectedMatches()">✓ Confirm Selected Matches</button></div>\`;
@@ -1367,6 +1398,18 @@ const dashboardHTML = `
         dropdown.value = level;
       }
       filterMatchResults();
+    }
+    
+    function setReviewView(mode) {
+      reviewViewMode = mode;
+      // Update button states
+      document.getElementById('viewComfortable').classList.toggle('active', mode === 'comfortable');
+      document.getElementById('viewCompact').classList.toggle('active', mode === 'compact');
+      // Update grid class
+      const matchesGrid = document.querySelector('.matches-grid');
+      if (matchesGrid) {
+        matchesGrid.classList.toggle('compact', mode === 'compact');
+      }
     }
     
     // Selection functions
