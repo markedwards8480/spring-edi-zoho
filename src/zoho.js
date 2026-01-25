@@ -362,6 +362,107 @@ class ZohoClient {
   }
 
   /**
+   * Find matches using pre-cached draft data (no API calls)
+   * This is the optimized version that uses cached Zoho drafts
+   */
+  async findMatchingDraftsFromCache(ediOrders, cachedDrafts) {
+    logger.info('Starting draft matching from cache', { 
+      ediOrderCount: ediOrders.length,
+      cachedDraftsCount: cachedDrafts.length 
+    });
+
+    const matches = [];
+    const noMatches = [];
+
+    for (const ediOrder of ediOrders) {
+      const parsed = ediOrder.parsed_data || {};
+      const ediItems = parsed.items || [];
+      const ediPoNumber = ediOrder.edi_order_number || '';
+      const ediCustomer = ediOrder.edi_customer_name || '';
+      const ediTotal = ediItems.reduce((sum, item) => 
+        sum + ((item.quantityOrdered || 0) * (item.unitPrice || 0)), 0);
+      const ediShipDate = parsed.dates?.shipNotBefore || '';
+
+      let bestMatch = null;
+      let bestScore = 0;
+
+      for (const draft of cachedDrafts) {
+        // Convert cached draft format to match expected format
+        const draftForScoring = {
+          salesorder_id: draft.salesorder_id,
+          salesorder_number: draft.salesorder_number,
+          customer_id: draft.customer_id,
+          customer_name: draft.customer_name,
+          reference_number: draft.reference_number,
+          status: draft.status,
+          total: draft.total,
+          shipment_date: draft.shipment_date,
+          line_items: draft.line_items || []
+        };
+
+        const score = this.scoreMatch(ediOrder, draftForScoring);
+        
+        // STRICT RULES: Customer AND Style MUST match
+        if (score.details.customer && score.details.styles && score.total > bestScore) {
+          bestScore = score.total;
+          bestMatch = {
+            ediOrder: {
+              id: ediOrder.id,
+              poNumber: ediPoNumber,
+              customer: ediCustomer,
+              shipDate: ediShipDate,
+              cancelDate: parsed.dates?.cancelAfter || '',
+              itemCount: ediItems.length,
+              totalUnits: ediItems.reduce((s, i) => s + (i.quantityOrdered || 0), 0),
+              totalAmount: ediTotal,
+              items: ediItems
+            },
+            zohoDraft: {
+              id: draft.salesorder_id,
+              number: draft.salesorder_number,
+              reference: draft.reference_number || '',
+              customer: draft.customer_name,
+              shipDate: draft.shipment_date || '',
+              status: draft.status,
+              itemCount: (draft.line_items || []).length,
+              totalUnits: (draft.line_items || []).reduce((s, i) => s + (i.quantity || 0), 0),
+              totalAmount: parseFloat(draft.total) || 0,
+              items: draft.line_items || []
+            },
+            score: score,
+            confidence: score.total,
+            confidenceLevel: score.total >= 80 ? 'high' : score.total >= 60 ? 'medium' : 'low'
+          };
+        }
+      }
+
+      if (bestMatch) {
+        matches.push(bestMatch);
+      } else {
+        noMatches.push({
+          ediOrder: {
+            id: ediOrder.id,
+            poNumber: ediPoNumber,
+            customer: ediCustomer,
+            shipDate: ediShipDate,
+            itemCount: ediItems.length,
+            totalUnits: ediItems.reduce((s, i) => s + (i.quantityOrdered || 0), 0),
+            totalAmount: ediTotal,
+            items: ediItems
+          }
+        });
+      }
+    }
+
+    logger.info('Matching from cache complete', { 
+      matches: matches.length, 
+      noMatches: noMatches.length 
+    });
+
+    return { matches, noMatches };
+  }
+
+  /**
    * Score how well an EDI order matches a Zoho draft
    * 
    * SCORING (out of 100):
