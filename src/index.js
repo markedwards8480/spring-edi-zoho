@@ -142,7 +142,7 @@ app.post('/find-matches', async (req, res) => {
     }
     
     if (orders.length === 0) {
-      return res.json({ success: true, matches: [], noMatches: [] });
+      return res.json({ success: true, matches: [], noMatches: [], sessionId: null });
     }
     
     await auditLogger.log(ACTIONS.MATCH_SEARCH_STARTED, {
@@ -154,9 +154,17 @@ app.post('/find-matches', async (req, res) => {
     const zoho = new ZohoClient();
     const matchResults = await zoho.findMatchingDrafts(orders);
     
+    // Save match results server-side
+    const session = await auditLogger.saveMatchSession(
+      matchResults.matches,
+      matchResults.noMatches,
+      'user'
+    );
+    
     await auditLogger.log(ACTIONS.MATCH_SEARCH_COMPLETED, {
       severity: SEVERITY.SUCCESS,
       details: {
+        sessionId: session.sessionId,
         ordersSearched: orders.length,
         matchesFound: matchResults.matches?.length || 0,
         noMatchCount: matchResults.noMatches?.length || 0
@@ -177,7 +185,12 @@ app.post('/find-matches', async (req, res) => {
       });
     }
     
-    res.json({ success: true, matches: matchResults.matches, noMatches: matchResults.noMatches });
+    res.json({ 
+      success: true, 
+      matches: matchResults.matches, 
+      noMatches: matchResults.noMatches,
+      sessionId: session.sessionId
+    });
   } catch (error) {
     logger.error('Find matches failed', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
@@ -464,6 +477,63 @@ app.get('/audit/check/:poNumber', async (req, res) => {
       alreadySent: !!result,
       details: result 
     });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================
+// MATCH SESSION ENDPOINTS
+// ============================================================
+
+// Get active match session (for page load/refresh)
+app.get('/match-session', async (req, res) => {
+  try {
+    const session = await auditLogger.getActiveMatchSession();
+    if (!session) {
+      return res.json({ success: true, hasSession: false, matches: [], noMatches: [] });
+    }
+    res.json({ 
+      success: true, 
+      hasSession: true,
+      sessionId: session.id,
+      matches: session.matches,
+      noMatches: session.noMatches,
+      totalMatches: session.totalMatches,
+      totalNoMatches: session.totalNoMatches,
+      createdAt: session.createdAt
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Clear the active match session
+app.post('/match-session/clear', async (req, res) => {
+  try {
+    await auditLogger.clearMatchSession();
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Toggle include/exclude for a match
+app.post('/match-session/toggle', async (req, res) => {
+  try {
+    const { ediOrderId, included } = req.body;
+    await auditLogger.toggleMatchIncluded(ediOrderId, included);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get match session history
+app.get('/match-session/history', async (req, res) => {
+  try {
+    const history = await auditLogger.getMatchSessionHistory(20);
+    res.json({ success: true, history });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
