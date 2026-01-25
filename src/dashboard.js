@@ -267,7 +267,7 @@ const dashboardHTML = `
           <select class="filter-select" id="customerFilter" onchange="filterOrders()"><option value="">All Customers</option></select>
           <select class="filter-select" id="statusFilter" onchange="filterOrders()">
             <option value="">All Status</option>
-            <option value="pending">Pending</option>
+            <option value="pending" selected>Pending</option>
             <option value="processed">Sent to Zoho</option>
           </select>
           <div style="flex:1"></div>
@@ -1001,9 +1001,12 @@ const dashboardHTML = `
       const highCount = allMatches.filter(m => { const c = m.confidence || 0; return c >= 80 && c < 100; }).length;
       const mediumCount = allMatches.filter(m => { const c = m.confidence || 0; return c >= 60 && c < 80; }).length;
       const lowCount = allMatches.filter(m => (m.confidence || 0) < 60).length;
+      const noMatchCount = noMatches.length;
       
-      // Update customer filter with unique customers from matches
-      const customers = [...new Set(allMatches.map(m => m.ediOrder.customer).filter(Boolean))].sort();
+      // Update customer filter with unique customers from matches AND noMatches
+      const matchCustomers = allMatches.map(m => m.ediOrder.customer);
+      const noMatchCustomers = noMatches.map(m => m.ediOrder.customer);
+      const customers = [...new Set([...matchCustomers, ...noMatchCustomers].filter(Boolean))].sort();
       document.getElementById('reviewCustomerFilter').innerHTML = '<option value="">All Customers</option>' + customers.map(c => '<option value="' + c + '">' + c + '</option>').join('');
       
       // Apply filters
@@ -1011,10 +1014,17 @@ const dashboardHTML = `
       const customer = document.getElementById('reviewCustomerFilter')?.value || '';
       const confidence = document.getElementById('confidenceFilter')?.value || '';
       
+      // Filter for No Match orders separately
+      let filteredNoMatches = noMatches.filter(m => {
+        if (search && !(m.ediOrder.poNumber || '').toLowerCase().includes(search)) return false;
+        if (customer && m.ediOrder.customer !== customer) return false;
+        return true;
+      });
+      
       let matches = allMatches.filter(m => {
         if (search && !(m.ediOrder.poNumber || '').toLowerCase().includes(search)) return false;
         if (customer && m.ediOrder.customer !== customer) return false;
-        if (confidence) {
+        if (confidence && confidence !== 'nomatch') {
           const conf = m.confidence || 0;
           if (confidence === 'perfect' && conf < 100) return false;
           if (confidence === 'high' && (conf < 80 || conf >= 100)) return false;
@@ -1024,10 +1034,14 @@ const dashboardHTML = `
         return true;
       });
       
+      // If nomatch filter is selected, hide matches section
+      const showMatchesSection = confidence !== 'nomatch';
+      const showNoMatchSection = confidence === '' || confidence === 'nomatch';
+      
       // Confidence summary tiles
       const currentFilter = document.getElementById('confidenceFilter')?.value || '';
       let html = \`
-        <div class="confidence-tiles" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem;margin-bottom:1.5rem;">
+        <div class="confidence-tiles" style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.75rem;margin-bottom:1.5rem;">
           <div class="conf-tile \${currentFilter === 'perfect' ? 'active' : ''}" onclick="setConfidenceFilter('perfect')" style="background:\${currentFilter === 'perfect' ? '#34c759' : '#f0fdf4'};border:2px solid \${currentFilter === 'perfect' ? '#34c759' : '#bbf7d0'};border-radius:8px;padding:1rem;cursor:pointer;text-align:center;">
             <div style="font-size:1.75rem;font-weight:700;color:#15803d">\${perfectCount}</div>
             <div style="font-size:0.75rem;color:#166534">🟢 Perfect (100%+)</div>
@@ -1044,6 +1058,10 @@ const dashboardHTML = `
             <div style="font-size:1.75rem;font-weight:700;color:#dc2626">\${lowCount}</div>
             <div style="font-size:0.75rem;color:#991b1b">🔴 Low (&lt;60%)</div>
           </div>
+          <div class="conf-tile \${currentFilter === 'nomatch' ? 'active' : ''}" onclick="setConfidenceFilter('nomatch')" style="background:\${currentFilter === 'nomatch' ? '#6b7280' : '#f3f4f6'};border:2px solid \${currentFilter === 'nomatch' ? '#6b7280' : '#d1d5db'};border-radius:8px;padding:1rem;cursor:pointer;text-align:center;">
+            <div style="font-size:1.75rem;font-weight:700;color:#374151">\${noMatchCount}</div>
+            <div style="font-size:0.75rem;color:#4b5563">⚠️ No Match</div>
+          </div>
         </div>
         <div class="match-summary" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
           <div>
@@ -1057,15 +1075,16 @@ const dashboardHTML = `
           </div>
         </div>\`;
       
-      matches.forEach((match, idx) => {
-        const actualIdx = allMatches.indexOf(match);
-        const conf = match.confidence || 0;
-        const confLevel = conf >= 100 ? 'high' : conf >= 80 ? 'high' : conf >= 60 ? 'medium' : 'low';
-        const confLabel = conf >= 100 ? 'Perfect Match' : conf >= 80 ? 'High' : conf >= 60 ? 'Medium' : 'Low';
-        const isChecked = selectedMatchIds.has(match.ediOrder.id);
-        html += \`
-          <div class="match-card \${isChecked ? 'selected' : ''}" data-match-id="\${match.ediOrder.id}">
-            <div class="match-card-header">
+      if (showMatchesSection) {
+        matches.forEach((match, idx) => {
+          const actualIdx = allMatches.indexOf(match);
+          const conf = match.confidence || 0;
+          const confLevel = conf >= 100 ? 'high' : conf >= 80 ? 'high' : conf >= 60 ? 'medium' : 'low';
+          const confLabel = conf >= 100 ? 'Perfect Match' : conf >= 80 ? 'High' : conf >= 60 ? 'Medium' : 'Low';
+          const isChecked = selectedMatchIds.has(match.ediOrder.id);
+          html += \`
+            <div class="match-card \${isChecked ? 'selected' : ''}" data-match-id="\${match.ediOrder.id}">
+              <div class="match-card-header">
               <div><div class="match-po">PO# \${match.ediOrder.poNumber}</div><div class="match-customer">\${match.ediOrder.customer}</div></div>
               <div style="text-align:right"><div class="confidence-badge confidence-\${confLevel}">\${conf}%</div><div style="font-size:0.75rem;color:#86868b;margin-top:0.25rem">\${confLabel} Confidence</div></div>
             </div>
@@ -1088,11 +1107,12 @@ const dashboardHTML = `
             </div>
           </div>
         \`;
-      });
+        });
+      }
       
-      if (noMatches.length > 0) {
-        html += \`<h3 style="margin-top:2rem;margin-bottom:1rem;color:#ff9500">⚠️ No Match Found (\${noMatches.length})</h3><p style="color:#86868b;margin-bottom:1rem">No matching Zoho draft found. You can create new Sales Orders for these:</p>\`;
-        noMatches.forEach((item, idx) => {
+      if (showNoMatchSection && filteredNoMatches.length > 0) {
+        html += \`<h3 style="margin-top:2rem;margin-bottom:1rem;color:#ff9500">⚠️ No Match Found (\${filteredNoMatches.length})</h3><p style="color:#86868b;margin-bottom:1rem">No matching Zoho draft found. You can create new Sales Orders for these:</p>\`;
+        filteredNoMatches.forEach((item, idx) => {
           html += \`
             <div class="match-card" style="border-left:4px solid #ff9500" id="no-match-card-\${item.ediOrder.id}">
               <div class="match-card-header">
