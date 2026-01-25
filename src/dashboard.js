@@ -1455,24 +1455,25 @@ const dashboardHTML = `
       const edi = match.ediOrder;
       const zoho = match.zohoDraft;
       
-      // Fetch full order details to get raw fields for prepack info
-      let rawFields = {};
+      // Fetch full order details to get parsed_data for prepack info
       let fullOrder = null;
+      let parsedData = null;
       try {
         const orderRes = await fetch('/orders/' + edi.id);
         if (orderRes.ok) {
           fullOrder = await orderRes.json();
-          rawFields = fullOrder.raw_fields || {};
+          parsedData = fullOrder.parsed_data || {};
         }
       } catch (e) { console.log('Could not fetch full order details'); }
       
-      // Extract prepack pricing info
-      const uom = rawFields['po_item_po_item_uom'] || (edi.items && edi.items[0]?.unitOfMeasure) || 'EA';
-      const packPrice = parseFloat(rawFields['po_item_po_item_unit_price']) || 0;
-      const itemPrice = parseFloat(rawFields['product_pack_product_pack_unit_price']) || 0;
-      const packQty = parseInt(rawFields['product_pack_product_pack_product_qty']) || 0;
-      const totalItems = parseInt(rawFields['product_pack_product_pack_product_qty_calculated']) || 0;
-      const retailPrice = parseFloat(rawFields['po_item_attributes_retail_price']) || 0;
+      // Extract prepack pricing info from parsed_data (same as EDI Details modal)
+      const items = parsedData?.items || edi.items || [];
+      const firstItem = items[0] || {};
+      const uom = firstItem.unitOfMeasure || 'EA';
+      const packPrice = firstItem.unitPrice || 0;
+      const itemPrice = firstItem.packInfo?.unitPrice || firstItem.itemPrice || 0;
+      const packQty = parseInt(firstItem.packInfo?.pack) || 0;
+      const totalItems = items.reduce((s, i) => s + (i.quantityOrdered || 0), 0);
       const isPrepack = uom === 'AS' || uom === 'ST' || packQty > 0;
       const uomLabel = uom === 'AS' ? 'Prepack' : uom === 'EA' ? 'Each' : uom === 'ST' ? 'Set' : uom;
       
@@ -1552,11 +1553,11 @@ const dashboardHTML = `
                 </div>
                 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;text-align:center;">
                   <div>
-                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Pack Price</div>
+                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Unit Price (per \${uom})</div>
                     <div style="font-size:1rem;font-weight:600;color:#1d1d1f;">$\${packPrice.toFixed(2)}</div>
                   </div>
                   <div>
-                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Per-Item Price</div>
+                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Item Price (per each)</div>
                     <div style="font-size:1rem;font-weight:600;color:\${itemPrice > 0 ? '#34c759' : '#86868b'};">\${itemPrice > 0 ? '$' + itemPrice.toFixed(2) : 'N/A'}</div>
                   </div>
                   <div>
@@ -1564,8 +1565,8 @@ const dashboardHTML = `
                     <div style="font-size:1rem;font-weight:600;color:#1d1d1f;">\${packQty > 0 ? packQty : 'N/A'}</div>
                   </div>
                   <div>
-                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Retail Price</div>
-                    <div style="font-size:1rem;font-weight:600;color:#86868b;">\${retailPrice > 0 ? '$' + retailPrice.toFixed(2) : 'N/A'}</div>
+                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Total Units</div>
+                    <div style="font-size:1rem;font-weight:600;color:#1d1d1f;">\${totalItems.toLocaleString()}</div>
                   </div>
                 </div>
                 \${itemPrice > 0 && packQty > 0 ? \`
