@@ -912,16 +912,12 @@ app.get('/zoho/customers', async (req, res) => {
     const zoho = new ZohoClient();
     const accessToken = await zoho.getAccessToken();
     const orgId = process.env.ZOHO_ORG_ID;
-    
     const axios = require('axios');
     const response = await axios.get('https://www.zohoapis.com/books/v3/contacts', {
       headers: { 'Authorization': 'Zoho-oauthtoken ' + accessToken },
       params: { organization_id: orgId, filter_by: 'Status.Active', per_page: 200 }
     });
-    
-    const customers = response.data.contacts || [];
-    logger.info('Fetched Zoho customers', { count: customers.length });
-    res.json({ success: true, customers: customers });
+    res.json({ success: true, customers: response.data.contacts || [] });
   } catch (error) {
     logger.error('Failed to get Zoho customers', { error: error.message });
     res.status(500).json({ success: false, error: error.message, customers: [] });
