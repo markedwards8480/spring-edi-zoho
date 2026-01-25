@@ -7,12 +7,14 @@ const { setupOAuthRoutes } = require('./oauth');
 const logger = require('./logger');
 const dashboardHTML = require('./dashboard');
 const { AuditLogger, ACTIONS, SEVERITY } = require('./audit-logger');
+const ZohoDraftsCache = require('./zoho-cache');
 
 const app = express();
 app.use(express.json());
 
-// Initialize audit logger
+// Initialize audit logger and cache
 const auditLogger = new AuditLogger(pool);
+const zohoDraftsCache = new ZohoDraftsCache(pool);
 
 // Serve dashboard
 app.get('/', (req, res) => {
@@ -125,12 +127,12 @@ app.post('/process', async (req, res) => {
 });
 
 // ============================================================
-// MATCHING SYSTEM
+// MATCHING SYSTEM (with caching)
 // ============================================================
 
 app.post('/find-matches', async (req, res) => {
   try {
-    const { orderIds } = req.body;
+    const { orderIds, forceRefresh } = req.body;
     
     let orders;
     if (orderIds && orderIds.length > 0) {
@@ -152,7 +154,30 @@ app.post('/find-matches', async (req, res) => {
     
     const ZohoClient = require('./zoho');
     const zoho = new ZohoClient();
-    const matchResults = await zoho.findMatchingDrafts(orders);
+    
+    // Use cached drafts if available, otherwise fetch fresh
+    let drafts;
+    const cacheStatus = await zohoDraftsCache.getCacheStatus();
+    
+    if (!forceRefresh && !cacheStatus.isStale && cacheStatus.draftsCount > 0) {
+      // Use cache
+      logger.info('Using cached Zoho drafts', { 
+        draftsCount: cacheStatus.draftsCount,
+        minutesOld: cacheStatus.minutesSinceRefresh 
+      });
+      drafts = await zohoDraftsCache.getCachedDrafts();
+    } else {
+      // Fetch fresh and update cache
+      logger.info('Fetching fresh Zoho drafts', { 
+        reason: cacheStatus.isStale ? 'cache stale' : 'no cache',
+        forceRefresh 
+      });
+      await zohoDraftsCache.refreshCache(zoho);
+      drafts = await zohoDraftsCache.getCachedDrafts();
+    }
+    
+    // Run matching against cached drafts
+    const matchResults = await zoho.findMatchingDraftsFromCache(orders, drafts);
     
     // Save match results server-side
     const session = await auditLogger.saveMatchSession(
@@ -167,7 +192,8 @@ app.post('/find-matches', async (req, res) => {
         sessionId: session.sessionId,
         ordersSearched: orders.length,
         matchesFound: matchResults.matches?.length || 0,
-        noMatchCount: matchResults.noMatches?.length || 0
+        noMatchCount: matchResults.noMatches?.length || 0,
+        usedCache: !forceRefresh && !cacheStatus.isStale
       }
     });
     
@@ -483,6 +509,60 @@ app.get('/audit/check/:poNumber', async (req, res) => {
 });
 
 // ============================================================
+// ZOHO CACHE ENDPOINTS
+// ============================================================
+
+// Get cache status
+app.get('/cache/status', async (req, res) => {
+  try {
+    const status = await zohoDraftsCache.getCacheStatus();
+    res.json({ success: true, ...status });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Manually refresh the cache
+app.post('/cache/refresh', async (req, res) => {
+  try {
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
+    
+    logger.info('Manual cache refresh triggered');
+    const result = await zohoDraftsCache.refreshCache(zoho);
+    
+    await auditLogger.log('cache_refreshed', {
+      severity: SEVERITY.INFO,
+      details: {
+        draftsCount: result.draftsCount,
+        durationMs: result.durationMs,
+        trigger: 'manual'
+      }
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'Cache refreshed',
+      draftsCount: result.draftsCount,
+      durationMs: result.durationMs
+    });
+  } catch (error) {
+    logger.error('Manual cache refresh failed', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get cached drafts (for debugging)
+app.get('/cache/drafts', async (req, res) => {
+  try {
+    const drafts = await zohoDraftsCache.getCachedDrafts();
+    res.json({ success: true, drafts, count: drafts.length });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================
 // MATCH SESSION ENDPOINTS
 // ============================================================
 
@@ -607,7 +687,14 @@ async function startServer() {
       logger.info('Audit system initialized');
     } catch (auditError) {
       logger.error('Audit system initialization failed', { error: auditError.message });
-      // Continue anyway - audit is not critical for app to work
+    }
+    
+    // Initialize Zoho drafts cache
+    try {
+      await zohoDraftsCache.initialize();
+      logger.info('Zoho cache system initialized');
+    } catch (cacheError) {
+      logger.error('Zoho cache initialization failed', { error: cacheError.message });
     }
     
     // Add columns if needed
@@ -619,9 +706,10 @@ async function startServer() {
       `);
     } catch (e) { /* ignore */ }
     
+    // SFTP fetch cron job (every 15 min)
     const schedule = process.env.CRON_SCHEDULE || '*/15 * * * *';
     cron.schedule(schedule, async () => {
-      logger.info('Scheduled job triggered');
+      logger.info('Scheduled SFTP job triggered');
       
       await auditLogger.log(ACTIONS.SFTP_FETCH_STARTED, {
         severity: SEVERITY.INFO,
@@ -648,7 +736,31 @@ async function startServer() {
         });
       }
     });
-    logger.info('Cron job scheduled: ' + schedule);
+    logger.info('SFTP cron job scheduled: ' + schedule);
+    
+    // Zoho cache refresh cron job (every 30 min)
+    cron.schedule('*/30 * * * *', async () => {
+      logger.info('Scheduled Zoho cache refresh triggered');
+      try {
+        const ZohoClient = require('./zoho');
+        const zoho = new ZohoClient();
+        const result = await zohoDraftsCache.refreshCache(zoho);
+        
+        await auditLogger.log('cache_refreshed', {
+          severity: SEVERITY.INFO,
+          details: {
+            draftsCount: result.draftsCount,
+            durationMs: result.durationMs,
+            trigger: 'scheduled'
+          }
+        });
+        
+        logger.info('Zoho cache refreshed', { draftsCount: result.draftsCount });
+      } catch (error) {
+        logger.error('Scheduled cache refresh failed', { error: error.message });
+      }
+    });
+    logger.info('Zoho cache refresh cron scheduled: every 30 minutes');
     
     const port = process.env.PORT || 3000;
     app.listen(port, () => {
