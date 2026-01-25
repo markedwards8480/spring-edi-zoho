@@ -1614,7 +1614,7 @@ const dashboardHTML = `
     
     async function loadSentOrders() {
       try {
-        const sentOrders = orders.filter(o => o.status === 'processed');
+        const sentOrders = orders.filter(o => o.status === 'processed' || o.zoho_so_number);
         const tbody = document.getElementById('sentOrdersTable');
         if (!sentOrders.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No orders sent yet</td></tr>'; return; }
         tbody.innerHTML = sentOrders.map(o => {
