@@ -227,7 +227,7 @@ const dashboardHTML = `
       <div class="nav-item active" onclick="showTab('orders', this)">
         📥 EDI Orders <span class="nav-badge" id="pendingBadge">0</span>
       </div>
-      <div class="nav-item" id="navReview" onclick="showTab('review', this)">🔍 Review Matches</div>
+      <div class="nav-item" id="navReview" onclick="showTab('review', this)">🔍 Review Matches <span class="nav-badge" id="reviewBadge" style="display:none;background:#0088c2">0</span></div>
       <div class="nav-item" onclick="showTab('sent', this)">✅ Sent to Zoho</div>
       <div class="nav-title">Settings</div>
       <div class="nav-item" onclick="showTab('mappings', this)">🔗 Customer Mappings</div>
@@ -294,6 +294,19 @@ const dashboardHTML = `
       
       <!-- Review Matches Tab -->
       <div id="tabReview" style="display:none">
+        <div class="toolbar" id="reviewToolbar" style="display:none">
+          <input type="text" class="search-box" placeholder="Search PO#..." id="reviewSearchBox" onkeyup="filterMatchResults()">
+          <select class="filter-select" id="reviewCustomerFilter" onchange="filterMatchResults()"><option value="">All Customers</option></select>
+          <select class="filter-select" id="confidenceFilter" onchange="filterMatchResults()">
+            <option value="">All Confidence</option>
+            <option value="perfect">Perfect (100%)</option>
+            <option value="high">High (80-99%)</option>
+            <option value="medium">Medium (60-79%)</option>
+            <option value="low">Low (&lt;60%)</option>
+          </select>
+          <div style="flex:1"></div>
+          <button class="btn btn-secondary" onclick="clearMatchResults()">Clear Results</button>
+        </div>
         <div id="matchReviewContent">
           <div class="empty-state">
             <p style="font-size:1.25rem;margin-bottom:1rem;">No matches to review</p>
@@ -747,19 +760,49 @@ const dashboardHTML = `
     }
     
     function showMatchReview(data) {
-      const matches = data.matches || [];
+      const allMatches = data.matches || [];
       const noMatches = data.noMatches || [];
       
-      let html = \`<div class="match-summary"><h3>Found \${matches.length} potential matches</h3><p>\${noMatches.length} EDI orders have no match (will create new)</p></div>\`;
+      // Show toolbar and update badge
+      document.getElementById('reviewToolbar').style.display = 'flex';
+      const reviewBadge = document.getElementById('reviewBadge');
+      reviewBadge.textContent = allMatches.length;
+      reviewBadge.style.display = allMatches.length > 0 ? 'inline' : 'none';
+      
+      // Update customer filter with unique customers from matches
+      const customers = [...new Set(allMatches.map(m => m.ediOrder.customer).filter(Boolean))].sort();
+      document.getElementById('reviewCustomerFilter').innerHTML = '<option value="">All Customers</option>' + customers.map(c => '<option value="' + c + '">' + c + '</option>').join('');
+      
+      // Apply filters
+      const search = (document.getElementById('reviewSearchBox')?.value || '').toLowerCase();
+      const customer = document.getElementById('reviewCustomerFilter')?.value || '';
+      const confidence = document.getElementById('confidenceFilter')?.value || '';
+      
+      let matches = allMatches.filter(m => {
+        if (search && !(m.ediOrder.poNumber || '').toLowerCase().includes(search)) return false;
+        if (customer && m.ediOrder.customer !== customer) return false;
+        if (confidence) {
+          const conf = m.confidence || 0;
+          if (confidence === 'perfect' && conf !== 100) return false;
+          if (confidence === 'high' && (conf < 80 || conf === 100)) return false;
+          if (confidence === 'medium' && (conf < 60 || conf >= 80)) return false;
+          if (confidence === 'low' && conf >= 60) return false;
+        }
+        return true;
+      });
+      
+      let html = \`<div class="match-summary"><h3>Found \${allMatches.length} potential matches</h3><p>\${matches.length !== allMatches.length ? 'Showing ' + matches.length + ' filtered • ' : ''}\${noMatches.length} EDI orders have no match (will create new)</p></div>\`;
       
       matches.forEach((match, idx) => {
+        const actualIdx = allMatches.indexOf(match);
         const conf = match.confidence || 0;
-        const confLevel = conf >= 80 ? 'high' : conf >= 60 ? 'medium' : 'low';
+        const confLevel = conf === 100 ? 'high' : conf >= 80 ? 'high' : conf >= 60 ? 'medium' : 'low';
+        const confLabel = conf === 100 ? 'Perfect Match' : conf >= 80 ? 'High' : conf >= 60 ? 'Medium' : 'Low';
         html += \`
           <div class="match-card">
             <div class="match-card-header">
               <div><div class="match-po">PO# \${match.ediOrder.poNumber}</div><div class="match-customer">\${match.ediOrder.customer}</div></div>
-              <div style="text-align:right"><div class="confidence-badge confidence-\${confLevel}">\${conf}%</div><div style="font-size:0.75rem;color:#86868b;margin-top:0.25rem">\${conf >= 80 ? 'High' : conf >= 60 ? 'Medium' : 'Low'} Confidence</div></div>
+              <div style="text-align:right"><div class="confidence-badge confidence-\${confLevel}">\${conf}%</div><div style="font-size:0.75rem;color:#86868b;margin-top:0.25rem">\${confLabel} Confidence</div></div>
             </div>
             <div class="match-criteria">
               <span class="criteria-badge \${match.score.details.poNumber ? 'criteria-matched' : 'criteria-unmatched'}">\${match.score.details.poNumber ? '✓' : '○'} PO Number</span>
@@ -775,9 +818,9 @@ const dashboardHTML = `
             <div class="match-actions">
               <button class="btn btn-secondary" onclick="viewOrder(\${match.ediOrder.id})">📄 EDI Details</button>
               <button class="btn btn-secondary" onclick="window.open('https://books.zoho.com/app/677681121#/salesorders/\${match.zohoDraft.id}','_blank')">🔗 Zoho Order</button>
-              <button class="btn btn-primary" onclick="showComparison(\${idx})">Compare Side-by-Side</button>
+              <button class="btn btn-primary" onclick="showComparison(\${actualIdx})">Compare Side-by-Side</button>
               <div style="flex:1"></div>
-              <label class="include-checkbox"><input type="checkbox" class="checkbox" id="include-\${idx}" checked> Include</label>
+              <label class="include-checkbox"><input type="checkbox" class="checkbox" id="include-\${actualIdx}" checked> Include</label>
             </div>
           </div>
         \`;
@@ -803,9 +846,21 @@ const dashboardHTML = `
         });
       }
       
-      html += \`<div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid #e5e5e5;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:600">\${matches.length + noMatches.length}</span> orders selected</div><button class="btn btn-success btn-lg" onclick="confirmSelectedMatches()">✓ Confirm Selected Matches</button></div>\`;
+      html += \`<div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid #e5e5e5;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:600">\${allMatches.length + noMatches.length}</span> orders total</div><button class="btn btn-success btn-lg" onclick="confirmSelectedMatches()">✓ Confirm Selected Matches</button></div>\`;
       
       document.getElementById('matchReviewContent').innerHTML = html;
+    }
+    
+    function filterMatchResults() {
+      if (matchResults) showMatchReview(matchResults);
+    }
+    
+    function clearMatchResults() {
+      if (!confirm('Clear all match results? You will need to run Find Matches again.')) return;
+      matchResults = null;
+      document.getElementById('reviewToolbar').style.display = 'none';
+      document.getElementById('reviewBadge').style.display = 'none';
+      document.getElementById('matchReviewContent').innerHTML = '<div class="empty-state"><p style="font-size:1.25rem;margin-bottom:1rem;">No matches to review</p><p>Go to <strong>EDI Orders</strong> and click <strong>"Find Matches"</strong> to search for matching Zoho drafts.</p></div>';
     }
     
     function showComparison(matchIndex) {
