@@ -915,7 +915,7 @@ app.get('/zoho/customers', async (req, res) => {
     const axios = require('axios');
     const response = await axios.get('https://www.zohoapis.com/books/v3/contacts', {
       headers: { 'Authorization': 'Zoho-oauthtoken ' + accessToken },
-      params: { organization_id: orgId, filter_by: 'Status.Active', per_page: 200 }
+      params: { organization_id: orgId, contact_type: 'customer', status: 'active', per_page: 200 }
     });
     res.json({ success: true, customers: response.data.contacts || [] });
   } catch (error) {
