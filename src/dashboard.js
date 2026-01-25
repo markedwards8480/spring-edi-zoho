@@ -446,7 +446,29 @@ const dashboardHTML = `
     let currentOrder = null;
     let currentRawFields = {};
     
-    document.addEventListener('DOMContentLoaded', () => { loadOrders(); loadStats(); });
+    document.addEventListener('DOMContentLoaded', () => { 
+      loadOrders(); 
+      loadStats(); 
+      loadMatchSession(); // Load saved match results
+    });
+    
+    // Load saved match session from server
+    async function loadMatchSession() {
+      try {
+        const res = await fetch('/match-session');
+        const data = await res.json();
+        if (data.success && data.hasSession && (data.matches?.length > 0 || data.noMatches?.length > 0)) {
+          matchResults = {
+            matches: data.matches || [],
+            noMatches: data.noMatches || []
+          };
+          showMatchReview(matchResults);
+          toast('Loaded ' + (data.matches?.length || 0) + ' saved matches');
+        }
+      } catch (e) {
+        console.log('No saved match session');
+      }
+    }
     
     function showTab(tab, el) {
       document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -952,8 +974,14 @@ const dashboardHTML = `
       if (matchResults) showMatchReview(matchResults);
     }
     
-    function clearMatchResults() {
+    async function clearMatchResults() {
       if (!confirm('Clear all match results? You will need to run Find Matches again.')) return;
+      
+      // Clear on server
+      try {
+        await fetch('/match-session/clear', { method: 'POST' });
+      } catch (e) { console.error('Failed to clear server session'); }
+      
       matchResults = null;
       document.getElementById('reviewToolbar').style.display = 'none';
       document.getElementById('reviewBadge').style.display = 'none';
