@@ -906,6 +906,15 @@ app.post('/customer-mappings', async (req, res) => {
 // ZOHO CUSTOMERS
 // ============================================================
 
+app.get('/fix-db', async (req, res) => {
+  try {
+    await pool.query(`ALTER TABLE customer_mappings ADD COLUMN IF NOT EXISTS zoho_customer_id VARCHAR(255)`);
+    res.json({ success: true, message: 'Column added' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 app.get('/zoho/customers', async (req, res) => {
   try {
     const ZohoClient = require('./zoho');
