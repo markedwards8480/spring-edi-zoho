@@ -72,6 +72,9 @@ const dashboardHTML = `
     /* Modal */
     .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
     .modal { background: white; border-radius: 18px; max-width: 1100px; width: 95%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+    .modal.show { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; background: transparent; max-width: none; width: 100%; border-radius: 0; }
+    .modal-backdrop { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); }
+    .modal-content { position: relative; background: white; border-radius: 18px; padding: 1.5rem; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
     .modal-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
     .modal-header h2 { font-size: 1.25rem; font-weight: 600; color: #1e3a5f; display: flex; align-items: center; gap: 0.75rem; }
     .modal-close { background: #f5f5f7; border: none; color: #86868b; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 1.25rem; }
