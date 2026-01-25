@@ -335,7 +335,8 @@ const dashboardHTML = `
           <input type="text" class="search-box" placeholder="Search PO#..." id="sentSearchBox" onkeyup="filterSentOrders()">
           <select class="filter-select" id="sentCustomerFilter" onchange="filterSentOrders()"><option value="">All Customers</option></select>
           <div style="flex:1"></div>
-          <span id="sentOrderCount" style="color:#86868b;font-size:0.875rem;"></span>
+          <span id="sentOrderCount" style="color:#86868b;font-size:0.875rem;margin-right:1rem;"></span>
+          <button class="btn btn-secondary" onclick="exportSentToExcel()">📊 Export to Excel</button>
         </div>
         <div class="table-container">
           <table class="orders-table">
@@ -1732,6 +1733,58 @@ const dashboardHTML = `
       }).join('');
       
       document.getElementById('sentOrderCount').textContent = 'Showing ' + filtered.length + ' of ' + sentOrdersData.length + ' orders';
+    }
+    
+    function exportSentToExcel() {
+      const search = (document.getElementById('sentSearchBox')?.value || '').toLowerCase();
+      const customer = document.getElementById('sentCustomerFilter')?.value || '';
+      
+      // Get filtered data (same filter logic as filterSentOrders)
+      let filtered = sentOrdersData.filter(o => {
+        if (search && !(o.edi_order_number || '').toLowerCase().includes(search)) return false;
+        if (customer && o.edi_customer_name !== customer) return false;
+        return true;
+      });
+      
+      if (!filtered.length) {
+        toast('No orders to export');
+        return;
+      }
+      
+      // Build CSV content
+      const headers = ['PO #', 'Customer', 'Zoho SO#', 'Value', 'Items', 'Units', 'Sent At', 'Matched Draft'];
+      const rows = filtered.map(o => {
+        const items = o.parsed_data?.items || [];
+        const amt = items.reduce((s,i) => s + (i.quantityOrdered||0)*(i.unitPrice||0), 0);
+        const units = items.reduce((s,i) => s + (i.quantityOrdered||0), 0);
+        return [
+          o.edi_order_number || '',
+          o.edi_customer_name || '',
+          o.zoho_so_number || o.zoho_so_id || '',
+          amt.toFixed(2),
+          items.length,
+          units,
+          o.processed_at ? new Date(o.processed_at).toLocaleString() : '',
+          o.matched_draft_id || ''
+        ];
+      });
+      
+      // Create CSV string
+      const csvContent = [headers, ...rows].map(row => 
+        row.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(',')
+      ).join('\\n');
+      
+      // Download as file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const customerSuffix = customer ? '_' + customer.replace(/[^a-zA-Z0-9]/g, '') : '';
+      link.download = 'sent_to_zoho' + customerSuffix + '_' + new Date().toISOString().split('T')[0] + '.csv';
+      link.click();
+      URL.revokeObjectURL(url);
+      
+      toast('Exported ' + filtered.length + ' orders');
     }
     
     var zohoCustomersCache = [];
