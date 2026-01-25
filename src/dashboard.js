@@ -1455,25 +1455,34 @@ const dashboardHTML = `
       const edi = match.ediOrder;
       const zoho = match.zohoDraft;
       
-      // Fetch full order details to get parsed_data for prepack info
+      // Fetch full order details to get raw_edi for prepack info (same as EDI Details modal)
       let fullOrder = null;
-      let parsedData = null;
+      let rawFields = {};
       try {
         const orderRes = await fetch('/orders/' + edi.id);
         if (orderRes.ok) {
           fullOrder = await orderRes.json();
-          parsedData = fullOrder.parsed_data || {};
+          // Parse raw_edi the same way as viewOrder does
+          if (fullOrder.raw_edi) {
+            const lines = fullOrder.raw_edi.split('\\n');
+            if (lines.length >= 2) {
+              const headers = parseCSVLine(lines[0]);
+              const values = parseCSVLine(lines[1]);
+              headers.forEach((h, i) => { rawFields[h.trim()] = values[i] || ''; });
+            }
+          }
         }
       } catch (e) { console.log('Could not fetch full order details'); }
       
-      // Extract prepack pricing info from parsed_data (same as EDI Details modal)
-      const items = parsedData?.items || edi.items || [];
-      const firstItem = items[0] || {};
-      const uom = firstItem.unitOfMeasure || 'EA';
-      const packPrice = firstItem.unitPrice || 0;
-      const itemPrice = firstItem.packInfo?.unitPrice || firstItem.itemPrice || 0;
-      const packQty = parseInt(firstItem.packInfo?.pack) || 0;
-      const totalItems = items.reduce((s, i) => s + (i.quantityOrdered || 0), 0);
+      // Extract prepack pricing info from rawFields (same as EDI Details modal)
+      const items = fullOrder?.parsed_data?.items || edi.items || [];
+      const uom = rawFields['po_item_po_item_uom'] || items[0]?.unitOfMeasure || 'EA';
+      const packPrice = parseFloat(rawFields['po_item_po_item_unit_price']) || 0;
+      const itemPrice = parseFloat(rawFields['product_pack_product_pack_unit_price']) || 0;
+      const packQty = parseInt(rawFields['product_pack_product_pack_product_qty']) || 0;
+      const totalItems = parseInt(rawFields['product_pack_product_pack_product_qty_calculated']) || items.reduce((s, i) => s + (i.quantityOrdered || 0), 0);
+      const retailPrice = parseFloat(rawFields['po_item_attributes_retail_price']) || 0;
+      const lineAmount = parseFloat(rawFields['po_item_attributes_amount']) || 0;
       const isPrepack = uom === 'AS' || uom === 'ST' || packQty > 0;
       const uomLabel = uom === 'AS' ? 'Prepack' : uom === 'EA' ? 'Each' : uom === 'ST' ? 'Set' : uom;
       
@@ -1551,7 +1560,7 @@ const dashboardHTML = `
                   <span style="background:rgba(88,86,214,0.12);color:#5856d6;padding:0.25rem 0.75rem;border-radius:20px;font-size:0.75rem;font-weight:600;">📦 \${uomLabel}</span>
                   <h4 style="font-size:0.875rem;font-weight:600;color:#1d1d1f;">Pack & Pricing Details</h4>
                 </div>
-                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;text-align:center;">
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;text-align:center;">
                   <div>
                     <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Unit Price (per \${uom})</div>
                     <div style="font-size:1rem;font-weight:600;color:#1d1d1f;">$\${packPrice.toFixed(2)}</div>
@@ -1564,9 +1573,19 @@ const dashboardHTML = `
                     <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Items/Pack</div>
                     <div style="font-size:1rem;font-weight:600;color:#1d1d1f;">\${packQty > 0 ? packQty : 'N/A'}</div>
                   </div>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;text-align:center;margin-top:0.75rem;">
                   <div>
-                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Total Units</div>
-                    <div style="font-size:1rem;font-weight:600;color:#1d1d1f;">\${totalItems.toLocaleString()}</div>
+                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Total Items</div>
+                    <div style="font-size:1rem;font-weight:600;color:#1d1d1f;">\${totalItems > 0 ? totalItems.toLocaleString() : 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Retail Price</div>
+                    <div style="font-size:1rem;font-weight:600;color:#ff9500;">\${retailPrice > 0 ? '$' + retailPrice.toFixed(2) : 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Line Amount</div>
+                    <div style="font-size:1rem;font-weight:600;color:#1d1d1f;">\${lineAmount > 0 ? '$' + lineAmount.toLocaleString('en-US', {minimumFractionDigits:2}) : 'N/A'}</div>
                   </div>
                 </div>
                 \${itemPrice > 0 && packQty > 0 ? \`
