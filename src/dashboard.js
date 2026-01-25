@@ -334,8 +334,104 @@ const dashboardHTML = `
       
       <!-- Activity Tab -->
       <div id="tabActivity" style="display:none">
-        <h2 style="margin-bottom:1rem;font-weight:600">Activity Log</h2>
-        <div id="activityContent"><p style="color:#86868b">Activity log coming soon...</p></div>
+        <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom:1.5rem;">
+          <div class="stat-card">
+            <div class="stat-label">📊 All-Time Orders Sent</div>
+            <div class="stat-value" id="statAllTimeSent">-</div>
+          </div>
+          <div class="stat-card success">
+            <div class="stat-label">💰 All-Time Value</div>
+            <div class="stat-value" id="statAllTimeValue">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">📅 Last 30 Days Sent</div>
+            <div class="stat-value" id="stat30DaySent">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">⚠️ Errors (30 days)</div>
+            <div class="stat-value" id="stat30DayErrors">-</div>
+          </div>
+        </div>
+        
+        <div class="sub-tabs" style="margin-bottom:1.5rem">
+          <div class="sub-tab active" onclick="showActivityTab('zoho', this)">✅ Sent to Zoho</div>
+          <div class="sub-tab" onclick="showActivityTab('activity', this)">📋 Activity Log</div>
+        </div>
+        
+        <!-- Sent to Zoho Sub-tab -->
+        <div id="activityZohoTab">
+          <div class="toolbar">
+            <input type="text" class="search-box" placeholder="Search PO#..." id="zohoLogSearchBox" onkeyup="filterZohoLog()">
+            <select class="filter-select" id="zohoLogCustomerFilter" onchange="filterZohoLog()"><option value="">All Customers</option></select>
+            <input type="date" class="search-box" style="width:150px" id="zohoLogFromDate" onchange="filterZohoLog()">
+            <span style="color:#86868b">to</span>
+            <input type="date" class="search-box" style="width:150px" id="zohoLogToDate" onchange="filterZohoLog()">
+            <div style="flex:1"></div>
+            <button class="btn btn-secondary" onclick="exportZohoLog()">📥 Export CSV</button>
+            <button class="btn btn-primary" onclick="loadZohoLog()">🔄 Refresh</button>
+          </div>
+          <div class="table-container" style="margin-top:1rem">
+            <table class="orders-table" id="zohoLogTable">
+              <thead>
+                <tr>
+                  <th>Sent At</th>
+                  <th>PO #</th>
+                  <th>Customer</th>
+                  <th>Zoho SO#</th>
+                  <th>Amount</th>
+                  <th>Items</th>
+                  <th>Match</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="zohoLogBody">
+                <tr><td colspan="8" class="empty-state">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="margin-top:1rem;color:#86868b;font-size:0.8125rem" id="zohoLogCount"></div>
+        </div>
+        
+        <!-- Activity Log Sub-tab -->
+        <div id="activityLogTab" style="display:none">
+          <div class="toolbar">
+            <select class="filter-select" id="activityActionFilter" onchange="filterActivityLog()">
+              <option value="">All Actions</option>
+              <option value="sent_to_zoho">Sent to Zoho</option>
+              <option value="match_found">Match Found</option>
+              <option value="no_match_found">No Match</option>
+              <option value="order_imported">Order Imported</option>
+              <option value="sftp_fetch_completed">SFTP Fetch</option>
+              <option value="zoho_error">Errors</option>
+            </select>
+            <select class="filter-select" id="activitySeverityFilter" onchange="filterActivityLog()">
+              <option value="">All Severity</option>
+              <option value="success">✓ Success</option>
+              <option value="info">ℹ️ Info</option>
+              <option value="warning">⚠️ Warning</option>
+              <option value="error">❌ Error</option>
+            </select>
+            <div style="flex:1"></div>
+            <button class="btn btn-primary" onclick="loadActivityLog()">🔄 Refresh</button>
+          </div>
+          <div class="table-container" style="margin-top:1rem">
+            <table class="orders-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Action</th>
+                  <th>PO #</th>
+                  <th>Customer</th>
+                  <th>Details</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="activityLogBody">
+                <tr><td colspan="6" class="empty-state">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -363,6 +459,7 @@ const dashboardHTML = `
       document.getElementById(tabId).style.display = 'block';
       if (tab === 'sent') loadSentOrders();
       if (tab === 'mappings') loadMappings();
+      if (tab === 'activity') { loadZohoLog(); loadAuditStats(); }
     }
     
     async function loadOrders() {
@@ -1045,6 +1142,214 @@ const dashboardHTML = `
         const mappings = await res.json();
         document.getElementById('mappingsContent').innerHTML = mappings.length ? '<div class="table-container"><table class="orders-table"><thead><tr><th>EDI Customer</th><th>Zoho Customer</th></tr></thead><tbody>' + mappings.map(m => '<tr><td>' + m.edi_customer_name + '</td><td>' + m.zoho_customer_name + '</td></tr>').join('') + '</tbody></table></div>' : '<p style="color:#86868b">No mappings configured.</p>';
       } catch (e) {}
+    }
+    
+    // ============================================================
+    // ACTIVITY LOG FUNCTIONS
+    // ============================================================
+    
+    let zohoLogData = [];
+    let activityLogData = [];
+    
+    function showActivityTab(tab, el) {
+      document.querySelectorAll('#tabActivity .sub-tab').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      document.getElementById('activityZohoTab').style.display = tab === 'zoho' ? 'block' : 'none';
+      document.getElementById('activityLogTab').style.display = tab === 'activity' ? 'block' : 'none';
+      if (tab === 'zoho') loadZohoLog();
+      if (tab === 'activity') loadActivityLog();
+    }
+    
+    async function loadAuditStats() {
+      try {
+        const res = await fetch('/audit/stats');
+        const data = await res.json();
+        if (data.success && data.stats) {
+          document.getElementById('statAllTimeSent').textContent = data.stats.all_time_zoho_orders || 0;
+          document.getElementById('statAllTimeValue').textContent = '$' + (data.stats.all_time_zoho_value || 0).toLocaleString('en-US', {minimumFractionDigits:0});
+          document.getElementById('stat30DaySent').textContent = data.stats.total_sent || 0;
+          document.getElementById('stat30DayErrors').textContent = data.stats.total_failed || 0;
+        }
+      } catch (e) { console.error('Failed to load audit stats:', e); }
+    }
+    
+    async function loadZohoLog() {
+      try {
+        const res = await fetch('/audit/zoho-orders?limit=500');
+        const data = await res.json();
+        if (data.success) {
+          zohoLogData = data.orders || [];
+          renderZohoLog();
+          updateZohoLogCustomerFilter();
+          loadAuditStats();
+        }
+      } catch (e) {
+        document.getElementById('zohoLogBody').innerHTML = '<tr><td colspan="8" class="empty-state">Failed to load. Audit system may not be initialized.</td></tr>';
+      }
+    }
+    
+    function updateZohoLogCustomerFilter() {
+      const customers = [...new Set(zohoLogData.map(o => o.customer_name).filter(Boolean))].sort();
+      document.getElementById('zohoLogCustomerFilter').innerHTML = '<option value="">All Customers</option>' + customers.map(c => '<option value="' + c + '">' + c + '</option>').join('');
+    }
+    
+    function filterZohoLog() {
+      renderZohoLog();
+    }
+    
+    function renderZohoLog() {
+      const search = (document.getElementById('zohoLogSearchBox')?.value || '').toLowerCase();
+      const customer = document.getElementById('zohoLogCustomerFilter')?.value || '';
+      const fromDate = document.getElementById('zohoLogFromDate')?.value;
+      const toDate = document.getElementById('zohoLogToDate')?.value;
+      
+      let filtered = zohoLogData.filter(o => {
+        if (search && !(o.edi_order_number || '').toLowerCase().includes(search) && !(o.edi_po_number || '').toLowerCase().includes(search)) return false;
+        if (customer && o.customer_name !== customer) return false;
+        if (fromDate && new Date(o.sent_at) < new Date(fromDate)) return false;
+        if (toDate && new Date(o.sent_at) > new Date(toDate + 'T23:59:59')) return false;
+        return true;
+      });
+      
+      const tbody = document.getElementById('zohoLogBody');
+      if (!filtered.length) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No orders found</td></tr>';
+        document.getElementById('zohoLogCount').textContent = '';
+        return;
+      }
+      
+      tbody.innerHTML = filtered.map(o => {
+        const sentAt = new Date(o.sent_at).toLocaleString();
+        const matchInfo = o.was_new_order ? '<span style="color:#ff9500">New</span>' : (o.match_confidence ? o.match_confidence + '%' : 'Draft');
+        return '<tr>' +
+          '<td style="white-space:nowrap">' + sentAt + '</td>' +
+          '<td><strong>' + (o.edi_order_number || o.edi_po_number || 'N/A') + '</strong></td>' +
+          '<td>' + (o.customer_name || 'Unknown') + '</td>' +
+          '<td><a href="https://books.zoho.com/app/677681121#/salesorders/' + o.zoho_so_id + '" target="_blank">' + (o.zoho_so_number || o.zoho_so_id) + '</a></td>' +
+          '<td>$' + (o.order_amount || 0).toLocaleString('en-US', {minimumFractionDigits:2}) + '</td>' +
+          '<td>' + (o.item_count || 0) + ' items</td>' +
+          '<td>' + matchInfo + '</td>' +
+          '<td><button class="btn btn-secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="viewZohoLogDetails(' + o.id + ')">Details</button></td>' +
+          '</tr>';
+      }).join('');
+      
+      document.getElementById('zohoLogCount').textContent = 'Showing ' + filtered.length + ' of ' + zohoLogData.length + ' orders';
+    }
+    
+    function viewZohoLogDetails(id) {
+      const order = zohoLogData.find(o => o.id === id);
+      if (!order) return;
+      
+      const html = '<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()" style="max-width:600px">' +
+        '<div class="modal-header"><h2>Order Details</h2><button class="modal-close" onclick="closeModal()">×</button></div>' +
+        '<div class="modal-body">' +
+        '<div class="info-grid" style="grid-template-columns:1fr 1fr">' +
+        '<div class="info-box"><div class="info-label">PO Number</div><div class="info-value">' + (order.edi_order_number || 'N/A') + '</div></div>' +
+        '<div class="info-box"><div class="info-label">Customer</div><div class="info-value">' + (order.customer_name || 'N/A') + '</div></div>' +
+        '<div class="info-box"><div class="info-label">Zoho SO#</div><div class="info-value">' + (order.zoho_so_number || order.zoho_so_id) + '</div></div>' +
+        '<div class="info-box"><div class="info-label">Sent At</div><div class="info-value">' + new Date(order.sent_at).toLocaleString() + '</div></div>' +
+        '<div class="info-box"><div class="info-label">Amount</div><div class="info-value">$' + (order.order_amount || 0).toLocaleString('en-US', {minimumFractionDigits:2}) + '</div></div>' +
+        '<div class="info-box"><div class="info-label">Items</div><div class="info-value">' + (order.item_count || 0) + ' items, ' + (order.unit_count || 0) + ' units</div></div>' +
+        '<div class="info-box"><div class="info-label">Match Type</div><div class="info-value">' + (order.was_new_order ? 'New Order' : 'Matched Draft #' + (order.matched_draft_number || order.matched_draft_id || 'N/A')) + '</div></div>' +
+        '<div class="info-box"><div class="info-label">Confidence</div><div class="info-value">' + (order.match_confidence || 'N/A') + '%</div></div>' +
+        '</div></div>' +
+        '<div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
+        '<button class="btn btn-primary" onclick="window.open(\\'https://books.zoho.com/app/677681121#/salesorders/' + order.zoho_so_id + '\\',\\'_blank\\')">Open in Zoho</button></div>' +
+        '</div></div>';
+      
+      document.getElementById('modalContainer').innerHTML = html;
+    }
+    
+    async function loadActivityLog() {
+      try {
+        const action = document.getElementById('activityActionFilter')?.value || '';
+        const severity = document.getElementById('activitySeverityFilter')?.value || '';
+        let url = '/audit/activity?limit=200';
+        if (action) url += '&action=' + action;
+        if (severity) url += '&severity=' + severity;
+        
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.success) {
+          activityLogData = data.activity || [];
+          renderActivityLog();
+        }
+      } catch (e) {
+        document.getElementById('activityLogBody').innerHTML = '<tr><td colspan="6" class="empty-state">Failed to load activity log</td></tr>';
+      }
+    }
+    
+    function filterActivityLog() {
+      loadActivityLog();
+    }
+    
+    function renderActivityLog() {
+      const tbody = document.getElementById('activityLogBody');
+      if (!activityLogData.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No activity found</td></tr>';
+        return;
+      }
+      
+      const severityBadge = (s) => {
+        if (s === 'success') return '<span class="status-badge status-processed">✓ Success</span>';
+        if (s === 'error') return '<span class="status-badge status-failed">❌ Error</span>';
+        if (s === 'warning') return '<span class="status-badge status-pending">⚠️ Warning</span>';
+        return '<span class="status-badge" style="background:#f0f0f0;color:#666">ℹ️ Info</span>';
+      };
+      
+      const actionLabel = (a) => {
+        const labels = {
+          'sent_to_zoho': '✅ Sent to Zoho',
+          'match_found': '🔗 Match Found',
+          'no_match_found': '⚠️ No Match',
+          'order_imported': '📥 Imported',
+          'sftp_fetch_completed': '📡 SFTP Fetch',
+          'zoho_error': '❌ Zoho Error',
+          'draft_updated': '📝 Draft Updated',
+          'new_order_created': '➕ New Order'
+        };
+        return labels[a] || a;
+      };
+      
+      tbody.innerHTML = activityLogData.map(a => {
+        const time = new Date(a.created_at).toLocaleString();
+        const details = a.zoho_so_number ? 'SO#' + a.zoho_so_number : (a.error_message ? a.error_message.substring(0, 50) : '-');
+        return '<tr>' +
+          '<td style="white-space:nowrap">' + time + '</td>' +
+          '<td>' + actionLabel(a.action) + '</td>' +
+          '<td><strong>' + (a.edi_order_number || a.edi_po_number || '-') + '</strong></td>' +
+          '<td>' + (a.customer_name || '-') + '</td>' +
+          '<td>' + details + '</td>' +
+          '<td>' + severityBadge(a.severity) + '</td>' +
+          '</tr>';
+      }).join('');
+    }
+    
+    function exportZohoLog() {
+      if (!zohoLogData.length) { toast('No data to export'); return; }
+      
+      const headers = ['Sent At', 'PO Number', 'Customer', 'Zoho SO#', 'Amount', 'Items', 'Units', 'Match Type', 'Confidence'];
+      const rows = zohoLogData.map(o => [
+        new Date(o.sent_at).toISOString(),
+        o.edi_order_number || o.edi_po_number || '',
+        o.customer_name || '',
+        o.zoho_so_number || o.zoho_so_id || '',
+        o.order_amount || 0,
+        o.item_count || 0,
+        o.unit_count || 0,
+        o.was_new_order ? 'New' : 'Matched',
+        o.match_confidence || ''
+      ]);
+      
+      const csv = [headers.join(','), ...rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(','))].join('\\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'zoho-orders-' + new Date().toISOString().split('T')[0] + '.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('Exported ' + zohoLogData.length + ' records');
     }
     
     function toast(msg) {
