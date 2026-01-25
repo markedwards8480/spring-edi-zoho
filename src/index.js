@@ -925,8 +925,8 @@ app.post('/mark-for-review', async (req, res) => {
       await pool.query(`UPDATE edi_orders SET status = 'review' WHERE id = ANY($1)`, [orderIds]);
       res.json({ success: true, count: orderIds.length });
     } else {
-      // Mark all orders with zoho_so_id as review (test orders)
-      const result = await pool.query(`UPDATE edi_orders SET status = 'review' WHERE zoho_so_id IS NOT NULL AND status = 'pending'`);
+      // Mark all orders with zoho_so_number as review (test orders sent to Zoho)
+      const result = await pool.query(`UPDATE edi_orders SET status = 'review' WHERE zoho_so_number IS NOT NULL AND status = 'pending'`);
       res.json({ success: true, count: result.rowCount });
     }
   } catch (error) {
