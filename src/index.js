@@ -6,9 +6,13 @@ const { processEDIOrders } = require('./processor');
 const { setupOAuthRoutes } = require('./oauth');
 const logger = require('./logger');
 const dashboardHTML = require('./dashboard');
+const { AuditLogger, ACTIONS, SEVERITY } = require('./audit-logger');
 
 const app = express();
 app.use(express.json());
+
+// Initialize audit logger
+const auditLogger = new AuditLogger(pool);
 
 // Serve dashboard
 app.get('/', (req, res) => {
@@ -35,7 +39,7 @@ app.get('/status', async (req, res) => {
         COUNT(*) FILTER (WHERE status = 'failed') as failed,
         COUNT(*) FILTER (WHERE status = 'pending') as pending,
         COUNT(*) FILTER (WHERE status = 'matched') as matched
-      FROM edi_orders
+      FROM edi_orders 
       WHERE created_at > NOW() - INTERVAL '7 days'
     `);
     res.json({ last24Hours: result.rows[0], timestamp: new Date().toISOString() });
@@ -54,7 +58,9 @@ app.get('/orders', async (req, res) => {
       SELECT id, filename, edi_order_number, edi_customer_name, status, 
              zoho_so_id, zoho_so_number, error_message, created_at, 
              processed_at, parsed_data, matched_draft_id, raw_edi
-      FROM edi_orders ORDER BY created_at DESC LIMIT 200
+      FROM edi_orders 
+      ORDER BY created_at DESC 
+      LIMIT 200
     `);
     res.json(result.rows);
   } catch (error) {
@@ -79,10 +85,32 @@ app.get('/orders/:id', async (req, res) => {
 app.post('/fetch-sftp', async (req, res) => {
   try {
     logger.info('Manual SFTP fetch triggered');
+    
+    await auditLogger.log(ACTIONS.SFTP_FETCH_STARTED, {
+      severity: SEVERITY.INFO,
+      details: { trigger: 'manual' }
+    });
+    
     const result = await processEDIOrders();
+    
+    await auditLogger.log(ACTIONS.SFTP_FETCH_COMPLETED, {
+      severity: SEVERITY.SUCCESS,
+      details: {
+        filesProcessed: result.filesProcessed || 0,
+        ordersCreated: result.ordersCreated || 0,
+        errors: result.errors?.length || 0
+      }
+    });
+    
     res.json({ success: true, result });
   } catch (error) {
     logger.error('SFTP fetch failed', { error: error.message });
+    
+    await auditLogger.log(ACTIONS.SFTP_ERROR, {
+      severity: SEVERITY.ERROR,
+      errorMessage: error.message
+    });
+    
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -117,9 +145,37 @@ app.post('/find-matches', async (req, res) => {
       return res.json({ success: true, matches: [], noMatches: [] });
     }
     
+    await auditLogger.log(ACTIONS.MATCH_SEARCH_STARTED, {
+      severity: SEVERITY.INFO,
+      details: { orderCount: orders.length }
+    });
+    
     const ZohoClient = require('./zoho');
     const zoho = new ZohoClient();
     const matchResults = await zoho.findMatchingDrafts(orders);
+    
+    await auditLogger.log(ACTIONS.MATCH_SEARCH_COMPLETED, {
+      severity: SEVERITY.SUCCESS,
+      details: {
+        ordersSearched: orders.length,
+        matchesFound: matchResults.matches?.length || 0,
+        noMatchCount: matchResults.noMatches?.length || 0
+      }
+    });
+    
+    // Log each match found
+    for (const match of (matchResults.matches || [])) {
+      await auditLogger.log(ACTIONS.MATCH_FOUND, {
+        ediOrderId: match.ediOrder.id,
+        ediOrderNumber: match.ediOrder.poNumber,
+        customerName: match.ediOrder.customer,
+        orderAmount: match.ediOrder.totalAmount,
+        zohoDraftId: match.zohoDraft.id,
+        zohoDraftNumber: match.zohoDraft.number,
+        matchConfidence: match.confidence,
+        matchCriteria: match.score?.details
+      });
+    }
     
     res.json({ success: true, matches: matchResults.matches, noMatches: matchResults.noMatches });
   } catch (error) {
@@ -131,6 +187,7 @@ app.post('/find-matches', async (req, res) => {
 app.post('/confirm-matches', async (req, res) => {
   try {
     const { matches, newOrders } = req.body;
+    
     const ZohoClient = require('./zoho');
     const zoho = new ZohoClient();
     
@@ -144,19 +201,56 @@ app.post('/confirm-matches', async (req, res) => {
         if (orderResult.rows.length === 0) continue;
         
         const ediOrder = orderResult.rows[0];
+        const parsed = ediOrder.parsed_data || {};
+        const items = parsed.items || [];
+        const totalAmount = items.reduce((sum, item) => sum + ((item.quantityOrdered || 0) * (item.unitPrice || 0)), 0);
+        const totalUnits = items.reduce((sum, item) => sum + (item.quantityOrdered || 0), 0);
+        
         const updated = await zoho.updateDraftWithEdiData(match.zohoDraftId, ediOrder);
         
         await pool.query(`
-          UPDATE edi_orders SET status = 'processed', zoho_so_id = $1, zoho_so_number = $2,
-          matched_draft_id = $3, processed_at = NOW() WHERE id = $4
+          UPDATE edi_orders 
+          SET status = 'processed', zoho_so_id = $1, zoho_so_number = $2, matched_draft_id = $3, processed_at = NOW()
+          WHERE id = $4
         `, [updated.salesorder_id, updated.salesorder_number, match.zohoDraftId, match.ediOrderId]);
+        
+        // Record in permanent audit log
+        await auditLogger.recordZohoSend({
+          ediOrderId: ediOrder.id,
+          ediOrderNumber: ediOrder.edi_order_number,
+          poNumber: ediOrder.edi_order_number,
+          customerName: ediOrder.edi_customer_name,
+          orderAmount: totalAmount,
+          itemCount: items.length,
+          unitCount: totalUnits,
+          shipDate: parsed.dates?.shipNotBefore || parsed.dates?.shipDate,
+          zohoSoId: updated.salesorder_id,
+          zohoSoNumber: updated.salesorder_number,
+          zohoCustomerId: updated.customer_id,
+          zohoCustomerName: updated.customer_name,
+          matchedDraftId: match.zohoDraftId,
+          matchedDraftNumber: updated.salesorder_number,
+          matchConfidence: match.confidence,
+          wasNewOrder: false,
+          ediRawData: parsed,
+          zohoResponse: updated
+        });
         
         processed++;
         results.push({ ediOrderId: match.ediOrderId, success: true, zohoId: updated.salesorder_id });
         logger.info('Match confirmed', { ediOrderId: match.ediOrderId, zohoSoNumber: updated.salesorder_number });
+        
       } catch (error) {
         failed++;
         results.push({ ediOrderId: match.ediOrderId, success: false, error: error.message });
+        
+        await auditLogger.log(ACTIONS.ZOHO_ERROR, {
+          severity: SEVERITY.ERROR,
+          ediOrderId: match.ediOrderId,
+          errorMessage: error.message,
+          details: { operation: 'update_draft', draftId: match.zohoDraftId }
+        });
+        
         logger.error('Failed to process match', { ediOrderId: match.ediOrderId, error: error.message });
       }
     }
@@ -169,36 +263,82 @@ app.post('/confirm-matches', async (req, res) => {
         
         const ediOrder = orderResult.rows[0];
         const parsed = ediOrder.parsed_data || {};
+        const items = parsed.items || [];
+        const totalAmount = items.reduce((sum, item) => sum + ((item.quantityOrdered || 0) * (item.unitPrice || 0)), 0);
+        const totalUnits = items.reduce((sum, item) => sum + (item.quantityOrdered || 0), 0);
         
         const mappingResult = await pool.query(
-          'SELECT zoho_customer_id FROM customer_mappings WHERE edi_customer_name = $1',
+          'SELECT zoho_customer_id, zoho_customer_name FROM customer_mappings WHERE edi_customer_name = $1',
           [ediOrder.edi_customer_name]
         );
         
         if (mappingResult.rows.length === 0) {
           failed++;
           results.push({ ediOrderId: newOrder.ediOrderId, success: false, error: 'No customer mapping' });
+          
+          await auditLogger.log(ACTIONS.ZOHO_ERROR, {
+            severity: SEVERITY.ERROR,
+            ediOrderId: newOrder.ediOrderId,
+            ediOrderNumber: ediOrder.edi_order_number,
+            customerName: ediOrder.edi_customer_name,
+            errorMessage: 'No customer mapping found',
+            details: { operation: 'create_new' }
+          });
+          
           continue;
         }
         
+        const customerMapping = mappingResult.rows[0];
+        
         const created = await zoho.createBooksSalesOrder({
-          customerId: mappingResult.rows[0].zoho_customer_id,
+          customerId: customerMapping.zoho_customer_id,
           poNumber: ediOrder.edi_order_number,
           orderDate: parsed.dates?.orderDate,
           shipDate: parsed.dates?.shipNotBefore,
-          items: parsed.items || []
+          items: items
         });
         
         await pool.query(`
-          UPDATE edi_orders SET status = 'processed', zoho_so_id = $1, zoho_so_number = $2, processed_at = NOW()
+          UPDATE edi_orders 
+          SET status = 'processed', zoho_so_id = $1, zoho_so_number = $2, processed_at = NOW()
           WHERE id = $3
         `, [created.salesorder_id, created.salesorder_number, newOrder.ediOrderId]);
         
+        // Record in permanent audit log
+        await auditLogger.recordZohoSend({
+          ediOrderId: ediOrder.id,
+          ediOrderNumber: ediOrder.edi_order_number,
+          poNumber: ediOrder.edi_order_number,
+          customerName: ediOrder.edi_customer_name,
+          orderAmount: totalAmount,
+          itemCount: items.length,
+          unitCount: totalUnits,
+          shipDate: parsed.dates?.shipNotBefore || parsed.dates?.shipDate,
+          zohoSoId: created.salesorder_id,
+          zohoSoNumber: created.salesorder_number,
+          zohoCustomerId: customerMapping.zoho_customer_id,
+          zohoCustomerName: customerMapping.zoho_customer_name,
+          matchedDraftId: null,
+          matchedDraftNumber: null,
+          matchConfidence: null,
+          wasNewOrder: true,
+          ediRawData: parsed,
+          zohoResponse: created
+        });
+        
         processed++;
         results.push({ ediOrderId: newOrder.ediOrderId, success: true, zohoId: created.salesorder_id });
+        
       } catch (error) {
         failed++;
         results.push({ ediOrderId: newOrder.ediOrderId, success: false, error: error.message });
+        
+        await auditLogger.log(ACTIONS.ZOHO_ERROR, {
+          severity: SEVERITY.ERROR,
+          ediOrderId: newOrder.ediOrderId,
+          errorMessage: error.message,
+          details: { operation: 'create_new' }
+        });
       }
     }
     
@@ -212,19 +352,118 @@ app.post('/confirm-matches', async (req, res) => {
 app.post('/update-draft', async (req, res) => {
   try {
     const { ediOrderId, zohoDraftId } = req.body;
+    
     const orderResult = await pool.query('SELECT * FROM edi_orders WHERE id = $1', [ediOrderId]);
     if (orderResult.rows.length === 0) return res.status(404).json({ success: false, error: 'Not found' });
     
+    const ediOrder = orderResult.rows[0];
+    const parsed = ediOrder.parsed_data || {};
+    const items = parsed.items || [];
+    const totalAmount = items.reduce((sum, item) => sum + ((item.quantityOrdered || 0) * (item.unitPrice || 0)), 0);
+    const totalUnits = items.reduce((sum, item) => sum + (item.quantityOrdered || 0), 0);
+    
     const ZohoClient = require('./zoho');
     const zoho = new ZohoClient();
-    const updated = await zoho.updateDraftWithEdiData(zohoDraftId, orderResult.rows[0]);
+    const updated = await zoho.updateDraftWithEdiData(zohoDraftId, ediOrder);
     
     await pool.query(`
-      UPDATE edi_orders SET status = 'processed', zoho_so_id = $1, zoho_so_number = $2,
-      matched_draft_id = $3, processed_at = NOW() WHERE id = $4
+      UPDATE edi_orders 
+      SET status = 'processed', zoho_so_id = $1, zoho_so_number = $2, matched_draft_id = $3, processed_at = NOW()
+      WHERE id = $4
     `, [updated.salesorder_id, updated.salesorder_number, zohoDraftId, ediOrderId]);
     
+    // Record in permanent audit log
+    await auditLogger.recordZohoSend({
+      ediOrderId: ediOrder.id,
+      ediOrderNumber: ediOrder.edi_order_number,
+      poNumber: ediOrder.edi_order_number,
+      customerName: ediOrder.edi_customer_name,
+      orderAmount: totalAmount,
+      itemCount: items.length,
+      unitCount: totalUnits,
+      shipDate: parsed.dates?.shipNotBefore || parsed.dates?.shipDate,
+      zohoSoId: updated.salesorder_id,
+      zohoSoNumber: updated.salesorder_number,
+      zohoCustomerId: updated.customer_id,
+      zohoCustomerName: updated.customer_name,
+      matchedDraftId: zohoDraftId,
+      matchedDraftNumber: updated.salesorder_number,
+      matchConfidence: null,
+      wasNewOrder: false,
+      ediRawData: parsed,
+      zohoResponse: updated
+    });
+    
     res.json({ success: true, zohoOrder: updated });
+  } catch (error) {
+    await auditLogger.log(ACTIONS.ZOHO_ERROR, {
+      severity: SEVERITY.ERROR,
+      ediOrderId: req.body.ediOrderId,
+      errorMessage: error.message,
+      details: { operation: 'update_draft', draftId: req.body.zohoDraftId }
+    });
+    
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================
+// AUDIT LOG ENDPOINTS
+// ============================================================
+
+app.get('/audit/stats', async (req, res) => {
+  try {
+    const days = parseInt(req.query.days) || 30;
+    const stats = await auditLogger.getSummaryStats(days);
+    res.json({ success: true, stats });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/audit/zoho-orders', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 500;
+    const filters = {
+      customerName: req.query.customer,
+      poNumber: req.query.po,
+      zohoSoNumber: req.query.so,
+      fromDate: req.query.from,
+      toDate: req.query.to
+    };
+    const orders = await auditLogger.getZohoOrdersSent(limit, filters);
+    res.json({ success: true, orders, count: orders.length });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/audit/activity', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 200;
+    const filters = {
+      action: req.query.action,
+      severity: req.query.severity,
+      customerName: req.query.customer,
+      poNumber: req.query.po,
+      fromDate: req.query.from,
+      toDate: req.query.to
+    };
+    const activity = await auditLogger.getRecentActivity(limit, filters);
+    res.json({ success: true, activity });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.get('/audit/check/:poNumber', async (req, res) => {
+  try {
+    const result = await auditLogger.wasOrderSentToZoho(req.params.poNumber);
+    res.json({ 
+      success: true, 
+      alreadySent: !!result,
+      details: result 
+    });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -248,7 +487,8 @@ app.post('/customer-mappings', async (req, res) => {
     const { ediCustomerName, zohoCustomerId, zohoCustomerName } = req.body;
     await pool.query(`
       INSERT INTO customer_mappings (edi_customer_name, zoho_customer_id, zoho_customer_name)
-      VALUES ($1, $2, $3) ON CONFLICT (edi_customer_name) DO UPDATE SET zoho_customer_id = $2, zoho_customer_name = $3
+      VALUES ($1, $2, $3)
+      ON CONFLICT (edi_customer_name) DO UPDATE SET zoho_customer_id = $2, zoho_customer_name = $3
     `, [ediCustomerName, zohoCustomerId, zohoCustomerName]);
     res.json({ success: true });
   } catch (error) {
@@ -290,7 +530,16 @@ async function startServer() {
   try {
     await initDatabase();
     logger.info('Database initialized');
-
+    
+    // Initialize audit tables
+    try {
+      await auditLogger.initialize();
+      logger.info('Audit system initialized');
+    } catch (auditError) {
+      logger.error('Audit system initialization failed', { error: auditError.message });
+      // Continue anyway - audit is not critical for app to work
+    }
+    
     // Add columns if needed
     try {
       await pool.query(`
@@ -299,16 +548,42 @@ async function startServer() {
         ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP;
       `);
     } catch (e) { /* ignore */ }
-
+    
     const schedule = process.env.CRON_SCHEDULE || '*/15 * * * *';
     cron.schedule(schedule, async () => {
       logger.info('Scheduled job triggered');
-      try { await processEDIOrders(); } catch (error) { logger.error('Scheduled processing failed', { error: error.message }); }
+      
+      await auditLogger.log(ACTIONS.SFTP_FETCH_STARTED, {
+        severity: SEVERITY.INFO,
+        details: { trigger: 'scheduled' }
+      });
+      
+      try {
+        const result = await processEDIOrders();
+        
+        await auditLogger.log(ACTIONS.SFTP_FETCH_COMPLETED, {
+          severity: SEVERITY.SUCCESS,
+          details: {
+            filesProcessed: result.filesProcessed || 0,
+            ordersCreated: result.ordersCreated || 0
+          }
+        });
+      } catch (error) {
+        logger.error('Scheduled processing failed', { error: error.message });
+        
+        await auditLogger.log(ACTIONS.SFTP_ERROR, {
+          severity: SEVERITY.ERROR,
+          errorMessage: error.message,
+          details: { trigger: 'scheduled' }
+        });
+      }
     });
     logger.info('Cron job scheduled: ' + schedule);
-
+    
     const port = process.env.PORT || 3000;
-    app.listen(port, () => { logger.info('Server running on port ' + port); });
+    app.listen(port, () => {
+      logger.info('Server running on port ' + port);
+    });
   } catch (error) {
     logger.error('Failed to start server', { error: error.message });
     process.exit(1);
