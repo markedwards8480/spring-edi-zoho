@@ -1058,19 +1058,29 @@ const dashboardHTML = `
       });
       
       if (noMatches.length > 0) {
-        html += \`<h3 style="margin-top:2rem;margin-bottom:1rem;color:#ff9500">⚠️ No Match Found (\${noMatches.length})</h3><p style="color:#86868b;margin-bottom:1rem">These will create new Sales Orders:</p>\`;
+        html += \`<h3 style="margin-top:2rem;margin-bottom:1rem;color:#ff9500">⚠️ No Match Found (\${noMatches.length})</h3><p style="color:#86868b;margin-bottom:1rem">No matching Zoho draft found. You can create new Sales Orders for these:</p>\`;
         noMatches.forEach((item, idx) => {
           html += \`
-            <div class="match-card" style="border-left:4px solid #ff9500">
+            <div class="match-card" style="border-left:4px solid #ff9500" id="no-match-card-\${item.ediOrder.id}">
               <div class="match-card-header">
                 <div><div class="match-po">PO# \${item.ediOrder.poNumber}</div><div class="match-customer">\${item.ediOrder.customer}</div></div>
-                <span class="status-badge status-pending">New Order</span>
+                <span class="status-badge status-pending">No Draft Found</span>
               </div>
-              <div class="match-side edi" style="max-width:400px"><div class="match-side-label">EDI Order</div><div class="match-side-amount">$\${item.ediOrder.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</div><div class="match-side-detail">\${item.ediOrder.itemCount} items</div></div>
+              <div class="match-comparison">
+                <div class="match-side edi">
+                  <div class="match-side-label">EDI Order</div>
+                  <div class="match-side-amount">$\${item.ediOrder.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</div>
+                  <div class="match-side-detail">\${item.ediOrder.itemCount} items • \${(item.ediOrder.totalUnits || 0).toLocaleString()} units</div>
+                  <div class="match-side-detail" style="margin-top:0.5rem">Ship: \${item.ediOrder.shipDate || 'Not specified'}</div>
+                </div>
+                <div class="match-side" style="background:#fff3e0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:0.5rem;">
+                  <div style="color:#f57c00;font-weight:500;">No Matching Draft</div>
+                  <div style="font-size:0.75rem;color:#86868b;">Click Preview to create new</div>
+                </div>
+              </div>
               <div class="match-actions">
                 <button class="btn btn-secondary" onclick="viewOrder(\${item.ediOrder.id})">📄 EDI Details</button>
-                <div style="flex:1"></div>
-                <label class="include-checkbox"><input type="checkbox" class="checkbox" id="include-new-\${idx}" checked> Include</label>
+                <button class="btn btn-primary" onclick="previewNewOrder(\${item.ediOrder.id})">👁️ Preview & Create in Zoho</button>
               </div>
             </div>
           \`;
@@ -1080,6 +1090,199 @@ const dashboardHTML = `
       html += \`<div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid #e5e5e5;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:600">\${allMatches.length + noMatches.length}</span> orders total</div><button class="btn btn-success btn-lg" onclick="confirmSelectedMatches()">✓ Confirm Selected Matches</button></div>\`;
       
       document.getElementById('matchReviewContent').innerHTML = html;
+    }
+    
+    // Preview and create new order for unmatched EDI orders
+    async function previewNewOrder(ediOrderId) {
+      try {
+        const res = await fetch('/preview-new-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ediOrderId })
+        });
+        const data = await res.json();
+        
+        if (!data.success) {
+          toast('Error: ' + data.error);
+          return;
+        }
+        
+        const preview = data.preview;
+        showCreateOrderModal(preview);
+        
+      } catch (e) {
+        toast('Error loading preview: ' + e.message);
+      }
+    }
+    
+    function showCreateOrderModal(preview) {
+      const canCreate = preview.canCreate;
+      const customer = preview.customer;
+      
+      let itemsHtml = '';
+      preview.lineItems.forEach((item, idx) => {
+        itemsHtml += \`
+          <tr>
+            <td style="font-weight:500">\${item.style}</td>
+            <td>\${item.color || '-'}</td>
+            <td>\${item.size || '-'}</td>
+            <td style="text-align:right">\${item.quantity}</td>
+            <td style="text-align:right">$\${item.unitPrice.toFixed(2)}</td>
+            <td style="text-align:right;font-weight:500">$\${item.lineTotal.toFixed(2)}</td>
+          </tr>
+        \`;
+      });
+      
+      const modalHtml = \`
+        <div class="modal-backdrop" onclick="closeCreateOrderModal()"></div>
+        <div class="modal-content" style="max-width:900px;max-height:85vh;overflow-y:auto;">
+          <div class="modal-header">
+            <h2>Create New Sales Order in Zoho</h2>
+            <button class="modal-close" onclick="closeCreateOrderModal()">×</button>
+          </div>
+          
+          \${!canCreate ? \`
+            <div style="background:#ffebee;border:1px solid #ef9a9a;border-radius:8px;padding:1rem;margin-bottom:1.5rem;">
+              <div style="color:#c62828;font-weight:600;">⚠️ Cannot Create Order</div>
+              <div style="color:#b71c1c;margin-top:0.5rem;">\${preview.customerError}</div>
+              <div style="margin-top:1rem;">
+                <a href="#" onclick="closeCreateOrderModal();showTab('mappings', document.querySelector('[onclick*=mappings]'));return false;" style="color:#1976d2;">
+                  → Go to Customer Mappings to add this customer
+                </a>
+              </div>
+            </div>
+          \` : ''}
+          
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;">
+            <div style="background:#f5f5f7;padding:1rem;border-radius:8px;">
+              <div style="font-size:0.75rem;color:#86868b;margin-bottom:0.25rem;">PO NUMBER</div>
+              <div style="font-size:1.125rem;font-weight:600;color:#1e3a5f;">\${preview.poNumber}</div>
+            </div>
+            <div style="background:\${canCreate ? '#e8f5e9' : '#ffebee'};padding:1rem;border-radius:8px;">
+              <div style="font-size:0.75rem;color:#86868b;margin-bottom:0.25rem;">ZOHO CUSTOMER</div>
+              <div style="font-size:1.125rem;font-weight:600;color:\${canCreate ? '#2e7d32' : '#c62828'};">
+                \${canCreate ? customer.zohoName : 'NOT FOUND'}
+              </div>
+              \${canCreate ? '<div style="font-size:0.75rem;color:#86868b;margin-top:0.25rem;">ID: ' + customer.zohoId + '</div>' : ''}
+            </div>
+          </div>
+          
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem;">
+            <div style="background:#f5f5f7;padding:0.75rem;border-radius:8px;text-align:center;">
+              <div style="font-size:0.75rem;color:#86868b;">ORDER DATE</div>
+              <div style="font-weight:600;">\${preview.dates.orderDate || 'Today'}</div>
+            </div>
+            <div style="background:#f5f5f7;padding:0.75rem;border-radius:8px;text-align:center;">
+              <div style="font-size:0.75rem;color:#86868b;">SHIP DATE</div>
+              <div style="font-weight:600;">\${preview.dates.shipDate || 'Not set'}</div>
+            </div>
+            <div style="background:#f5f5f7;padding:0.75rem;border-radius:8px;text-align:center;">
+              <div style="font-size:0.75rem;color:#86868b;">ITEMS / UNITS</div>
+              <div style="font-weight:600;">\${preview.summary.itemCount} / \${preview.summary.totalUnits.toLocaleString()}</div>
+            </div>
+            <div style="background:#e3f2fd;padding:0.75rem;border-radius:8px;text-align:center;">
+              <div style="font-size:0.75rem;color:#86868b;">TOTAL AMOUNT</div>
+              <div style="font-weight:700;color:#1976d2;font-size:1.125rem;">$\${preview.summary.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</div>
+            </div>
+          </div>
+          
+          <div style="margin-bottom:1rem;">
+            <h3 style="margin-bottom:0.75rem;font-size:1rem;">Line Items to be Created (\${preview.lineItems.length})</h3>
+            <div style="max-height:300px;overflow-y:auto;border:1px solid #e5e5e5;border-radius:8px;">
+              <table class="orders-table" style="margin:0;">
+                <thead>
+                  <tr>
+                    <th>Style</th>
+                    <th>Color</th>
+                    <th>Size</th>
+                    <th style="text-align:right">Qty</th>
+                    <th style="text-align:right">Price</th>
+                    <th style="text-align:right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>\${itemsHtml}</tbody>
+              </table>
+            </div>
+          </div>
+          
+          <div style="display:flex;justify-content:flex-end;gap:1rem;padding-top:1rem;border-top:1px solid #e5e5e5;">
+            <button class="btn btn-secondary" onclick="closeCreateOrderModal()">Cancel</button>
+            \${canCreate ? \`
+              <button class="btn btn-success btn-lg" onclick="confirmCreateOrder(\${preview.ediOrderId})" id="createOrderBtn">
+                ✓ Create Sales Order in Zoho
+              </button>
+            \` : \`
+              <button class="btn btn-success btn-lg" disabled style="opacity:0.5;">
+                ✓ Create Sales Order in Zoho
+              </button>
+            \`}
+          </div>
+        </div>
+      \`;
+      
+      const modal = document.createElement('div');
+      modal.className = 'modal';
+      modal.id = 'createOrderModal';
+      modal.innerHTML = modalHtml;
+      document.body.appendChild(modal);
+      modal.classList.add('show');
+    }
+    
+    function closeCreateOrderModal() {
+      const modal = document.getElementById('createOrderModal');
+      if (modal) {
+        modal.classList.remove('show');
+        setTimeout(() => modal.remove(), 200);
+      }
+    }
+    
+    async function confirmCreateOrder(ediOrderId) {
+      const btn = document.getElementById('createOrderBtn');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Creating...';
+      
+      try {
+        const res = await fetch('/create-new-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ediOrderId, confirmed: true })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          closeCreateOrderModal();
+          toast('✅ Order created! Zoho SO#: ' + data.zohoSalesOrder.number);
+          
+          // Remove this order from the no-match list
+          const card = document.getElementById('no-match-card-' + ediOrderId);
+          if (card) {
+            card.style.transition = 'all 0.3s ease';
+            card.style.opacity = '0';
+            card.style.transform = 'translateX(20px)';
+            setTimeout(() => card.remove(), 300);
+          }
+          
+          // Update the noMatches in matchResults
+          if (matchResults && matchResults.noMatches) {
+            matchResults.noMatches = matchResults.noMatches.filter(m => m.ediOrder.id !== ediOrderId);
+          }
+          
+          // Refresh data
+          loadOrders();
+          loadStats();
+          
+        } else {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+          toast('❌ Error: ' + data.error);
+        }
+        
+      } catch (e) {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        toast('❌ Error: ' + e.message);
+      }
     }
     
     function filterMatchResults() {
