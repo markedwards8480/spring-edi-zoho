@@ -903,6 +903,35 @@ app.post('/customer-mappings', async (req, res) => {
 });
 
 // ============================================================
+// ZOHO CUSTOMERS
+// ============================================================
+
+app.get('/zoho/customers', async (req, res) => {
+  try {
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
+    
+    // Get access token
+    const accessToken = await zoho.getAccessToken();
+    const orgId = process.env.ZOHO_ORG_ID;
+    
+    // Fetch customers from Zoho Books
+    const axios = require('axios');
+    const response = await axios.get('https://www.zohoapis.com/books/v3/contacts', {
+      headers: { 'Authorization': `Zoho-oauthtoken ${accessToken}` },
+      params: { organization_id: orgId, filter_by: 'Status.Active', per_page: 200 }
+    });
+    
+    const customers = response.data.contacts || [];
+    logger.info('Fetched Zoho customers', { count: customers.length });
+    res.json({ success: true, customers });
+  } catch (error) {
+    logger.error('Failed to get Zoho customers', { error: error.message });
+    res.status(500).json({ success: false, error: error.message, customers: [] });
+  }
+});
+
+// ============================================================
 // RESET UTILITIES
 // ============================================================
 
