@@ -447,6 +447,262 @@ app.post('/update-draft', async (req, res) => {
 });
 
 // ============================================================
+// CREATE NEW ORDER (for unmatched EDI orders)
+// ============================================================
+
+// Preview what would be created in Zoho (before actually creating)
+app.post('/preview-new-order', async (req, res) => {
+  try {
+    const { ediOrderId } = req.body;
+    
+    // Get the EDI order
+    const orderResult = await pool.query('SELECT * FROM edi_orders WHERE id = $1', [ediOrderId]);
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'EDI order not found' });
+    }
+    
+    const ediOrder = orderResult.rows[0];
+    const parsed = ediOrder.parsed_data || {};
+    const items = parsed.items || [];
+    
+    // Check customer mapping
+    const mappingResult = await pool.query(
+      'SELECT * FROM customer_mappings WHERE LOWER(edi_customer_name) = LOWER($1)',
+      [ediOrder.edi_customer_name]
+    );
+    
+    let customerInfo = null;
+    let customerError = null;
+    
+    if (mappingResult.rows.length === 0) {
+      customerError = 'Customer not found in mappings. Please add a customer mapping for "' + ediOrder.edi_customer_name + '" first.';
+    } else {
+      customerInfo = {
+        ediName: ediOrder.edi_customer_name,
+        zohoId: mappingResult.rows[0].zoho_customer_id,
+        zohoName: mappingResult.rows[0].zoho_customer_name
+      };
+    }
+    
+    // Build preview of what would be sent
+    const lineItems = items.map(item => ({
+      style: item.productIds?.sku || item.productIds?.vendorItemNumber || 'Unknown',
+      description: item.description || '',
+      color: item.color || '',
+      size: item.size || '',
+      quantity: item.quantityOrdered || 0,
+      unitPrice: item.unitPrice || 0,
+      lineTotal: (item.quantityOrdered || 0) * (item.unitPrice || 0)
+    }));
+    
+    const totalAmount = lineItems.reduce((sum, item) => sum + item.lineTotal, 0);
+    const totalUnits = lineItems.reduce((sum, item) => sum + item.quantity, 0);
+    
+    const preview = {
+      ediOrderId: ediOrder.id,
+      poNumber: ediOrder.edi_order_number,
+      customer: customerInfo,
+      customerError: customerError,
+      canCreate: !customerError,
+      dates: {
+        orderDate: parsed.dates?.orderDate || new Date().toISOString().split('T')[0],
+        shipDate: parsed.dates?.shipNotBefore || parsed.dates?.shipDate || null,
+        cancelDate: parsed.dates?.cancelAfter || null
+      },
+      summary: {
+        itemCount: lineItems.length,
+        totalUnits: totalUnits,
+        totalAmount: totalAmount
+      },
+      lineItems: lineItems,
+      rawEdiData: parsed
+    };
+    
+    res.json({ success: true, preview });
+    
+  } catch (error) {
+    logger.error('Preview new order failed', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Actually create the new order in Zoho
+app.post('/create-new-order', async (req, res) => {
+  try {
+    const { ediOrderId, confirmed } = req.body;
+    
+    if (!confirmed) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Order creation must be confirmed. Use preview-new-order first, then set confirmed: true' 
+      });
+    }
+    
+    // Get the EDI order
+    const orderResult = await pool.query('SELECT * FROM edi_orders WHERE id = $1', [ediOrderId]);
+    if (orderResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'EDI order not found' });
+    }
+    
+    const ediOrder = orderResult.rows[0];
+    const parsed = ediOrder.parsed_data || {};
+    const items = parsed.items || [];
+    
+    // Check if already processed
+    if (ediOrder.status === 'processed' && ediOrder.zoho_so_id) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Order already processed. Zoho SO#: ' + ediOrder.zoho_so_number 
+      });
+    }
+    
+    // Check customer mapping - REQUIRED
+    const mappingResult = await pool.query(
+      'SELECT * FROM customer_mappings WHERE LOWER(edi_customer_name) = LOWER($1)',
+      [ediOrder.edi_customer_name]
+    );
+    
+    if (mappingResult.rows.length === 0) {
+      // Log the failure
+      await auditLogger.log(ACTIONS.ZOHO_ERROR, {
+        severity: SEVERITY.ERROR,
+        ediOrderId: ediOrder.id,
+        ediOrderNumber: ediOrder.edi_order_number,
+        customerName: ediOrder.edi_customer_name,
+        errorMessage: 'Customer not found in mappings - order not created',
+        details: { 
+          operation: 'create_new_order',
+          reason: 'no_customer_mapping',
+          ediCustomerName: ediOrder.edi_customer_name
+        }
+      });
+      
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Order NOT created - Customer "' + ediOrder.edi_customer_name + '" not found in Zoho mappings. Please add a customer mapping first.',
+        reason: 'customer_not_found'
+      });
+    }
+    
+    const customerMapping = mappingResult.rows[0];
+    
+    // Calculate totals for audit
+    const totalAmount = items.reduce((sum, item) => 
+      sum + ((item.quantityOrdered || 0) * (item.unitPrice || 0)), 0);
+    const totalUnits = items.reduce((sum, item) => sum + (item.quantityOrdered || 0), 0);
+    
+    // Create the order in Zoho
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
+    
+    const created = await zoho.createBooksSalesOrder({
+      customerId: customerMapping.zoho_customer_id,
+      poNumber: ediOrder.edi_order_number,
+      orderDate: parsed.dates?.orderDate || new Date().toISOString().split('T')[0],
+      shipDate: parsed.dates?.shipNotBefore || parsed.dates?.shipDate,
+      notes: 'Created from EDI order ' + ediOrder.edi_order_number + ' on ' + new Date().toISOString(),
+      items: items.map(item => ({
+        style: item.productIds?.sku || item.productIds?.vendorItemNumber || 'Item',
+        description: (item.description || '') + ' ' + (item.color || '') + ' ' + (item.size || ''),
+        quantityOrdered: item.quantityOrdered || 0,
+        unitPrice: item.unitPrice || 0
+      }))
+    });
+    
+    // Update EDI order status
+    await pool.query(`
+      UPDATE edi_orders 
+      SET status = 'processed', 
+          zoho_so_id = $1, 
+          zoho_so_number = $2, 
+          processed_at = NOW()
+      WHERE id = $3
+    `, [created.salesorder_id, created.salesorder_number, ediOrderId]);
+    
+    // Record in PERMANENT audit log
+    await auditLogger.recordZohoSend({
+      ediOrderId: ediOrder.id,
+      ediOrderNumber: ediOrder.edi_order_number,
+      poNumber: ediOrder.edi_order_number,
+      customerName: ediOrder.edi_customer_name,
+      orderAmount: totalAmount,
+      itemCount: items.length,
+      unitCount: totalUnits,
+      shipDate: parsed.dates?.shipNotBefore || parsed.dates?.shipDate,
+      zohoSoId: created.salesorder_id,
+      zohoSoNumber: created.salesorder_number,
+      zohoCustomerId: customerMapping.zoho_customer_id,
+      zohoCustomerName: customerMapping.zoho_customer_name,
+      matchedDraftId: null,
+      matchedDraftNumber: null,
+      matchConfidence: null,
+      wasNewOrder: true,
+      ediRawData: parsed,
+      zohoResponse: created
+    });
+    
+    // Also log to activity log with full details
+    await auditLogger.log(ACTIONS.NEW_ORDER_CREATED, {
+      severity: SEVERITY.SUCCESS,
+      ediOrderId: ediOrder.id,
+      ediOrderNumber: ediOrder.edi_order_number,
+      customerName: ediOrder.edi_customer_name,
+      zohoSoId: created.salesorder_id,
+      zohoSoNumber: created.salesorder_number,
+      orderAmount: totalAmount,
+      details: {
+        operation: 'create_new_order',
+        matchType: 'no_match_created_new',
+        itemCount: items.length,
+        unitCount: totalUnits,
+        zohoCustomerId: customerMapping.zoho_customer_id,
+        zohoCustomerName: customerMapping.zoho_customer_name,
+        shipDate: parsed.dates?.shipNotBefore,
+        lineItemsSent: items.length
+      }
+    });
+    
+    logger.info('New order created in Zoho', {
+      ediOrderId: ediOrder.id,
+      poNumber: ediOrder.edi_order_number,
+      zohoSoId: created.salesorder_id,
+      zohoSoNumber: created.salesorder_number
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'Order created successfully in Zoho',
+      zohoSalesOrder: {
+        id: created.salesorder_id,
+        number: created.salesorder_number,
+        customer: customerMapping.zoho_customer_name,
+        total: created.total
+      },
+      ediOrder: {
+        id: ediOrder.id,
+        poNumber: ediOrder.edi_order_number
+      }
+    });
+    
+  } catch (error) {
+    logger.error('Create new order failed', { error: error.message, ediOrderId: req.body.ediOrderId });
+    
+    // Log the error
+    await auditLogger.log(ACTIONS.ZOHO_ERROR, {
+      severity: SEVERITY.ERROR,
+      ediOrderId: req.body.ediOrderId,
+      errorMessage: error.message,
+      details: { 
+        operation: 'create_new_order',
+        zohoError: error.response?.data || error.message
+      }
+    });
+    
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================
 // AUDIT LOG ENDPOINTS
 // ============================================================
 
