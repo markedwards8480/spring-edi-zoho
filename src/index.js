@@ -982,6 +982,9 @@ async function startServer() {
         ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS zoho_so_number VARCHAR(255);
         ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS processed_at TIMESTAMP;
       `);
+      await pool.query(`
+        ALTER TABLE customer_mappings ADD COLUMN IF NOT EXISTS zoho_customer_id VARCHAR(255);
+      `);
     } catch (e) { /* ignore */ }
     
     // SFTP fetch cron job (every 15 min)
