@@ -149,8 +149,9 @@ const dashboardHTML = `
     .match-summary h3 { margin: 0 0 0.5rem 0; color: #1e3a5f; }
     .match-summary p { margin: 0; color: #6e6e73; }
     
-    .match-card { background: white; border: 1px solid #e5e5e5; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; }
+    .match-card { background: white; border: 1px solid #e5e5e5; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; transition: all 0.15s ease; }
     .match-card:hover { border-color: #0088c2; }
+    .match-card.selected { border-color: #34c759; background: #f0fdf4; box-shadow: 0 0 0 2px rgba(52, 199, 89, 0.2); }
     .match-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
     .match-po { font-size: 1.125rem; font-weight: 600; color: #1e3a5f; }
     .match-customer { font-size: 0.875rem; color: #86868b; }
@@ -445,6 +446,8 @@ const dashboardHTML = `
     let matchResults = null;
     let currentOrder = null;
     let currentRawFields = {};
+    let selectedMatchIds = new Set(); // Track selected matches for bulk send
+    let selectedMatchDrafts = new Map(); // Map ediOrderId -> zohoDraftId
     
     document.addEventListener('DOMContentLoaded', () => { 
       loadOrders(); 
@@ -888,6 +891,12 @@ const dashboardHTML = `
       reviewBadge.textContent = allMatches.length;
       reviewBadge.style.display = allMatches.length > 0 ? 'inline' : 'none';
       
+      // Calculate confidence counts
+      const perfectCount = allMatches.filter(m => (m.confidence || 0) >= 100).length;
+      const highCount = allMatches.filter(m => { const c = m.confidence || 0; return c >= 80 && c < 100; }).length;
+      const mediumCount = allMatches.filter(m => { const c = m.confidence || 0; return c >= 60 && c < 80; }).length;
+      const lowCount = allMatches.filter(m => (m.confidence || 0) < 60).length;
+      
       // Update customer filter with unique customers from matches
       const customers = [...new Set(allMatches.map(m => m.ediOrder.customer).filter(Boolean))].sort();
       document.getElementById('reviewCustomerFilter').innerHTML = '<option value="">All Customers</option>' + customers.map(c => '<option value="' + c + '">' + c + '</option>').join('');
@@ -902,23 +911,55 @@ const dashboardHTML = `
         if (customer && m.ediOrder.customer !== customer) return false;
         if (confidence) {
           const conf = m.confidence || 0;
-          if (confidence === 'perfect' && conf !== 100) return false;
-          if (confidence === 'high' && (conf < 80 || conf === 100)) return false;
+          if (confidence === 'perfect' && conf < 100) return false;
+          if (confidence === 'high' && (conf < 80 || conf >= 100)) return false;
           if (confidence === 'medium' && (conf < 60 || conf >= 80)) return false;
           if (confidence === 'low' && conf >= 60) return false;
         }
         return true;
       });
       
-      let html = \`<div class="match-summary"><h3>Found \${allMatches.length} potential matches</h3><p>\${matches.length !== allMatches.length ? 'Showing ' + matches.length + ' filtered • ' : ''}\${noMatches.length} EDI orders have no match (will create new)</p></div>\`;
+      // Confidence summary tiles
+      const currentFilter = document.getElementById('confidenceFilter')?.value || '';
+      let html = \`
+        <div class="confidence-tiles" style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem;margin-bottom:1.5rem;">
+          <div class="conf-tile \${currentFilter === 'perfect' ? 'active' : ''}" onclick="setConfidenceFilter('perfect')" style="background:\${currentFilter === 'perfect' ? '#34c759' : '#f0fdf4'};border:2px solid \${currentFilter === 'perfect' ? '#34c759' : '#bbf7d0'};border-radius:8px;padding:1rem;cursor:pointer;text-align:center;">
+            <div style="font-size:1.75rem;font-weight:700;color:#15803d">\${perfectCount}</div>
+            <div style="font-size:0.75rem;color:#166534">🟢 Perfect (100%+)</div>
+          </div>
+          <div class="conf-tile \${currentFilter === 'high' ? 'active' : ''}" onclick="setConfidenceFilter('high')" style="background:\${currentFilter === 'high' ? '#3b82f6' : '#eff6ff'};border:2px solid \${currentFilter === 'high' ? '#3b82f6' : '#bfdbfe'};border-radius:8px;padding:1rem;cursor:pointer;text-align:center;">
+            <div style="font-size:1.75rem;font-weight:700;color:#1d4ed8">\${highCount}</div>
+            <div style="font-size:0.75rem;color:#1e40af">🔵 High (80-99%)</div>
+          </div>
+          <div class="conf-tile \${currentFilter === 'medium' ? 'active' : ''}" onclick="setConfidenceFilter('medium')" style="background:\${currentFilter === 'medium' ? '#f59e0b' : '#fffbeb'};border:2px solid \${currentFilter === 'medium' ? '#f59e0b' : '#fde68a'};border-radius:8px;padding:1rem;cursor:pointer;text-align:center;">
+            <div style="font-size:1.75rem;font-weight:700;color:#b45309">\${mediumCount}</div>
+            <div style="font-size:0.75rem;color:#92400e">🟡 Medium (60-79%)</div>
+          </div>
+          <div class="conf-tile \${currentFilter === 'low' ? 'active' : ''}" onclick="setConfidenceFilter('low')" style="background:\${currentFilter === 'low' ? '#ef4444' : '#fef2f2'};border:2px solid \${currentFilter === 'low' ? '#ef4444' : '#fecaca'};border-radius:8px;padding:1rem;cursor:pointer;text-align:center;">
+            <div style="font-size:1.75rem;font-weight:700;color:#dc2626">\${lowCount}</div>
+            <div style="font-size:0.75rem;color:#991b1b">🔴 Low (&lt;60%)</div>
+          </div>
+        </div>
+        <div class="match-summary" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+          <div>
+            <h3 style="margin:0">Found \${allMatches.length} potential matches</h3>
+            <p style="margin:0.25rem 0 0;color:#86868b">\${matches.length !== allMatches.length ? 'Showing ' + matches.length + ' filtered • ' : ''}\${noMatches.length} EDI orders have no match</p>
+          </div>
+          <div style="display:flex;gap:0.5rem;align-items:center;">
+            <button class="btn btn-secondary" onclick="selectAllMatches()">Select All Visible</button>
+            <button class="btn btn-secondary" onclick="deselectAllMatches()">Deselect All</button>
+            <button class="btn btn-success" onclick="sendSelectedToZoho()" id="sendSelectedBtn" disabled>Send Selected to Zoho (0)</button>
+          </div>
+        </div>\`;
       
       matches.forEach((match, idx) => {
         const actualIdx = allMatches.indexOf(match);
         const conf = match.confidence || 0;
-        const confLevel = conf === 100 ? 'high' : conf >= 80 ? 'high' : conf >= 60 ? 'medium' : 'low';
-        const confLabel = conf === 100 ? 'Perfect Match' : conf >= 80 ? 'High' : conf >= 60 ? 'Medium' : 'Low';
+        const confLevel = conf >= 100 ? 'high' : conf >= 80 ? 'high' : conf >= 60 ? 'medium' : 'low';
+        const confLabel = conf >= 100 ? 'Perfect Match' : conf >= 80 ? 'High' : conf >= 60 ? 'Medium' : 'Low';
+        const isChecked = selectedMatchIds.has(match.ediOrder.id);
         html += \`
-          <div class="match-card">
+          <div class="match-card \${isChecked ? 'selected' : ''}" data-match-id="\${match.ediOrder.id}">
             <div class="match-card-header">
               <div><div class="match-po">PO# \${match.ediOrder.poNumber}</div><div class="match-customer">\${match.ediOrder.customer}</div></div>
               <div style="text-align:right"><div class="confidence-badge confidence-\${confLevel}">\${conf}%</div><div style="font-size:0.75rem;color:#86868b;margin-top:0.25rem">\${confLabel} Confidence</div></div>
@@ -935,11 +976,10 @@ const dashboardHTML = `
               <div class="match-side zoho"><div class="match-side-label">Zoho #\${match.zohoDraft.number}</div><div class="match-side-amount">$\${match.zohoDraft.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</div><div class="match-side-detail">\${match.zohoDraft.itemCount} items • \${match.zohoDraft.status}</div></div>
             </div>
             <div class="match-actions">
+              <label class="include-checkbox" style="margin-right:1rem;"><input type="checkbox" class="match-select-checkbox" data-edi-id="\${match.ediOrder.id}" data-draft-id="\${match.zohoDraft.id}" \${isChecked ? 'checked' : ''} onchange="toggleMatchSelection(\${match.ediOrder.id}, '\${match.zohoDraft.id}', this.checked)"> Select</label>
               <button class="btn btn-secondary" onclick="viewOrder(\${match.ediOrder.id})">📄 EDI Details</button>
               <button class="btn btn-secondary" onclick="window.open('https://books.zoho.com/app/677681121#/salesorders/\${match.zohoDraft.id}','_blank')">🔗 Zoho Order</button>
               <button class="btn btn-primary" onclick="showComparison(\${actualIdx})">Compare Side-by-Side</button>
-              <div style="flex:1"></div>
-              <label class="include-checkbox"><input type="checkbox" class="checkbox" id="include-\${actualIdx}" checked> Include</label>
             </div>
           </div>
         \`;
@@ -983,9 +1023,129 @@ const dashboardHTML = `
       } catch (e) { console.error('Failed to clear server session'); }
       
       matchResults = null;
+      selectedMatchIds.clear();
+      selectedMatchDrafts.clear();
       document.getElementById('reviewToolbar').style.display = 'none';
       document.getElementById('reviewBadge').style.display = 'none';
       document.getElementById('matchReviewContent').innerHTML = '<div class="empty-state"><p style="font-size:1.25rem;margin-bottom:1rem;">No matches to review</p><p>Go to <strong>EDI Orders</strong> and click <strong>"Find Matches"</strong> to search for matching Zoho drafts.</p></div>';
+    }
+    
+    // Confidence tile click handler
+    function setConfidenceFilter(level) {
+      const dropdown = document.getElementById('confidenceFilter');
+      if (dropdown.value === level) {
+        dropdown.value = ''; // Toggle off if already selected
+      } else {
+        dropdown.value = level;
+      }
+      filterMatchResults();
+    }
+    
+    // Selection functions
+    function toggleMatchSelection(ediOrderId, draftId, checked) {
+      if (checked) {
+        selectedMatchIds.add(ediOrderId);
+        selectedMatchDrafts.set(ediOrderId, draftId);
+      } else {
+        selectedMatchIds.delete(ediOrderId);
+        selectedMatchDrafts.delete(ediOrderId);
+      }
+      updateSendSelectedButton();
+      // Update card visual
+      const card = document.querySelector('[data-match-id="' + ediOrderId + '"]');
+      if (card) card.classList.toggle('selected', checked);
+    }
+    
+    function selectAllMatches() {
+      const checkboxes = document.querySelectorAll('.match-select-checkbox');
+      checkboxes.forEach(cb => {
+        cb.checked = true;
+        const ediId = parseInt(cb.dataset.ediId);
+        const draftId = cb.dataset.draftId;
+        selectedMatchIds.add(ediId);
+        selectedMatchDrafts.set(ediId, draftId);
+        const card = document.querySelector('[data-match-id="' + ediId + '"]');
+        if (card) card.classList.add('selected');
+      });
+      updateSendSelectedButton();
+    }
+    
+    function deselectAllMatches() {
+      const checkboxes = document.querySelectorAll('.match-select-checkbox');
+      checkboxes.forEach(cb => {
+        cb.checked = false;
+        const ediId = parseInt(cb.dataset.ediId);
+        selectedMatchIds.delete(ediId);
+        selectedMatchDrafts.delete(ediId);
+        const card = document.querySelector('[data-match-id="' + ediId + '"]');
+        if (card) card.classList.remove('selected');
+      });
+      updateSendSelectedButton();
+    }
+    
+    function updateSendSelectedButton() {
+      const btn = document.getElementById('sendSelectedBtn');
+      if (btn) {
+        const count = selectedMatchIds.size;
+        btn.textContent = 'Send Selected to Zoho (' + count + ')';
+        btn.disabled = count === 0;
+      }
+    }
+    
+    async function sendSelectedToZoho() {
+      if (selectedMatchIds.size === 0) {
+        toast('No matches selected');
+        return;
+      }
+      
+      if (!confirm('Send ' + selectedMatchIds.size + ' selected orders to Zoho?')) return;
+      
+      const btn = document.getElementById('sendSelectedBtn');
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Sending...';
+      
+      let success = 0, failed = 0;
+      
+      for (const [ediOrderId, draftId] of selectedMatchDrafts) {
+        try {
+          const res = await fetch('/update-draft', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ediOrderId: ediOrderId, zohoDraftId: draftId })
+          });
+          const data = await res.json();
+          if (data.success) {
+            success++;
+            // Remove from selection
+            selectedMatchIds.delete(ediOrderId);
+            selectedMatchDrafts.delete(ediOrderId);
+          } else {
+            failed++;
+          }
+        } catch (e) {
+          failed++;
+        }
+      }
+      
+      btn.disabled = false;
+      btn.textContent = originalText;
+      updateSendSelectedButton();
+      
+      toast(success + ' orders sent to Zoho' + (failed > 0 ? ', ' + failed + ' failed' : ''));
+      
+      // Refresh data
+      loadOrders();
+      loadStats();
+      
+      // Re-run find matches to update the list
+      if (success > 0) {
+        // Clear the sent orders from the match results
+        if (matchResults && matchResults.matches) {
+          matchResults.matches = matchResults.matches.filter(m => !selectedMatchIds.has(m.ediOrder.id) && !selectedMatchDrafts.has(m.ediOrder.id));
+          showMatchReview(matchResults);
+        }
+      }
     }
     
     function showComparison(matchIndex) {
