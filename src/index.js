@@ -37,9 +37,9 @@ app.get('/status', async (req, res) => {
     const result = await pool.query(`
       SELECT 
         COUNT(*) as total,
-        COUNT(*) FILTER (WHERE status = 'processed') as processed,
+        COUNT(*) FILTER (WHERE status = 'processed' OR zoho_so_number IS NOT NULL) as processed,
         COUNT(*) FILTER (WHERE status = 'failed') as failed,
-        COUNT(*) FILTER (WHERE status = 'pending') as pending,
+        COUNT(*) FILTER (WHERE status = 'pending' AND zoho_so_number IS NULL) as pending,
         COUNT(*) FILTER (WHERE status = 'matched') as matched,
         COUNT(*) FILTER (WHERE status = 'review') as review
       FROM edi_orders 
