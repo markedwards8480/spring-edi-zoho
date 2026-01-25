@@ -268,7 +268,6 @@ const dashboardHTML = `
           <select class="filter-select" id="statusFilter" onchange="filterOrders()">
             <option value="">All Status</option>
             <option value="pending">Pending</option>
-            <option value="review">Review</option>
             <option value="processed">Sent to Zoho</option>
           </select>
           <div style="flex:1"></div>
