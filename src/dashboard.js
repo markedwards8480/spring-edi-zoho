@@ -271,6 +271,14 @@ const dashboardHTML = `
           <button class="btn btn-success btn-lg" onclick="findMatches()">🔍 Find Matches</button>
         </div>
         
+        <!-- Cache Status Bar -->
+        <div id="cacheStatusBar" style="background:#f5f5f7;border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
+          <div id="cacheStatusText" style="font-size:0.875rem;color:#86868b;">
+            <span id="cacheIndicator">⏳</span> Zoho Drafts: <span id="cacheDraftsCount">-</span> cached • Last updated: <span id="cacheLastRefresh">Never</span>
+          </div>
+          <button class="btn btn-secondary" onclick="refreshZohoCache()" id="refreshCacheBtn" style="padding:0.375rem 0.75rem;font-size:0.8125rem;">🔄 Refresh Zoho Data</button>
+        </div>
+        
         <div class="table-container">
           <table class="orders-table">
             <thead>
@@ -554,6 +562,70 @@ const dashboardHTML = `
         document.getElementById('statProcessed').textContent = d.processed || 0;
         document.getElementById('pendingBadge').textContent = d.pending || 0;
       } catch(e) {}
+      
+      // Also load cache status
+      loadCacheStatus();
+    }
+    
+    async function loadCacheStatus() {
+      try {
+        const res = await fetch('/cache/status');
+        const data = await res.json();
+        
+        if (data.success) {
+          const indicator = document.getElementById('cacheIndicator');
+          const countEl = document.getElementById('cacheDraftsCount');
+          const refreshEl = document.getElementById('cacheLastRefresh');
+          
+          countEl.textContent = data.draftsCount || 0;
+          
+          if (!data.lastRefresh) {
+            indicator.textContent = '⚠️';
+            indicator.style.color = '#f59e0b';
+            refreshEl.textContent = 'Never (click Refresh)';
+          } else if (data.isStale) {
+            indicator.textContent = '🟡';
+            indicator.style.color = '#f59e0b';
+            refreshEl.textContent = data.minutesSinceRefresh + ' min ago (stale)';
+          } else {
+            indicator.textContent = '🟢';
+            indicator.style.color = '#34c759';
+            refreshEl.textContent = data.minutesSinceRefresh + ' min ago';
+          }
+          
+          if (data.lastError) {
+            refreshEl.textContent += ' (Error: ' + data.lastError.substring(0, 30) + ')';
+          }
+        }
+      } catch (e) {
+        document.getElementById('cacheIndicator').textContent = '❌';
+        document.getElementById('cacheLastRefresh').textContent = 'Error loading status';
+      }
+    }
+    
+    async function refreshZohoCache() {
+      const btn = document.getElementById('refreshCacheBtn');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '⏳ Refreshing...';
+      
+      try {
+        const res = await fetch('/cache/refresh', { method: 'POST' });
+        const data = await res.json();
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        
+        if (data.success) {
+          toast('Cache refreshed: ' + data.draftsCount + ' drafts loaded in ' + (data.durationMs / 1000).toFixed(1) + 's');
+          loadCacheStatus();
+        } else {
+          toast('Cache refresh failed: ' + data.error);
+        }
+      } catch (e) {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        toast('Cache refresh failed: ' + e.message);
+      }
     }
     
     async function fetchFromSftp() {
