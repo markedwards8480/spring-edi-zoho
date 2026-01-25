@@ -1449,11 +1449,32 @@ const dashboardHTML = `
       }
     }
     
-    function showComparison(matchIndex) {
+    async function showComparison(matchIndex) {
       const match = matchResults.matches[matchIndex];
       if (!match) return;
       const edi = match.ediOrder;
       const zoho = match.zohoDraft;
+      
+      // Fetch full order details to get raw fields for prepack info
+      let rawFields = {};
+      let fullOrder = null;
+      try {
+        const orderRes = await fetch('/orders/' + edi.id);
+        if (orderRes.ok) {
+          fullOrder = await orderRes.json();
+          rawFields = fullOrder.raw_fields || {};
+        }
+      } catch (e) { console.log('Could not fetch full order details'); }
+      
+      // Extract prepack pricing info
+      const uom = rawFields['po_item_po_item_uom'] || (edi.items && edi.items[0]?.unitOfMeasure) || 'EA';
+      const packPrice = parseFloat(rawFields['po_item_po_item_unit_price']) || 0;
+      const itemPrice = parseFloat(rawFields['product_pack_product_pack_unit_price']) || 0;
+      const packQty = parseInt(rawFields['product_pack_product_pack_product_qty']) || 0;
+      const totalItems = parseInt(rawFields['product_pack_product_pack_product_qty_calculated']) || 0;
+      const retailPrice = parseFloat(rawFields['po_item_attributes_retail_price']) || 0;
+      const isPrepack = uom === 'AS' || uom === 'ST' || packQty > 0;
+      const uomLabel = uom === 'AS' ? 'Prepack' : uom === 'EA' ? 'Each' : uom === 'ST' ? 'Set' : uom;
       
       // Calculate all differences
       const amtDiff = Math.abs(edi.totalAmount - zoho.totalAmount);
@@ -1497,7 +1518,10 @@ const dashboardHTML = `
       const html = \`
         <div class="modal-overlay" onclick="closeModal()">
           <div class="modal comparison-modal" onclick="event.stopPropagation()">
-            <div class="modal-header"><h2>Compare: EDI Order vs Draft</h2><button class="modal-close" onclick="closeModal()">×</button></div>
+            <div class="modal-header">
+              <h2>Compare: EDI Order vs Draft \${isPrepack ? '<span style="background:rgba(88,86,214,0.12);color:#5856d6;padding:0.25rem 0.75rem;border-radius:20px;font-size:0.75rem;font-weight:600;margin-left:0.5rem;">📦 ' + uomLabel + '</span>' : ''}</h2>
+              <button class="modal-close" onclick="closeModal()">×</button>
+            </div>
             <div class="modal-body">
               \${warningsHtml}
               
@@ -1519,6 +1543,38 @@ const dashboardHTML = `
                   <div class="comparison-total" style="\${hasAmtDiff ? 'color:#f57c00' : ''}">Total: $\${zoho.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</div>
                 </div>
               </div>
+              
+              \${isPrepack ? \`
+              <div style="background:#f5f5f7;border-radius:8px;padding:1rem;margin:1.5rem 0;">
+                <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
+                  <span style="background:rgba(88,86,214,0.12);color:#5856d6;padding:0.25rem 0.75rem;border-radius:20px;font-size:0.75rem;font-weight:600;">📦 \${uomLabel}</span>
+                  <h4 style="font-size:0.875rem;font-weight:600;color:#1d1d1f;">Pack & Pricing Details</h4>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;text-align:center;">
+                  <div>
+                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Pack Price</div>
+                    <div style="font-size:1rem;font-weight:600;color:#1d1d1f;">$\${packPrice.toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Per-Item Price</div>
+                    <div style="font-size:1rem;font-weight:600;color:\${itemPrice > 0 ? '#34c759' : '#86868b'};">\${itemPrice > 0 ? '$' + itemPrice.toFixed(2) : 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Items/Pack</div>
+                    <div style="font-size:1rem;font-weight:600;color:#1d1d1f;">\${packQty > 0 ? packQty : 'N/A'}</div>
+                  </div>
+                  <div>
+                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Retail Price</div>
+                    <div style="font-size:1rem;font-weight:600;color:#86868b;">\${retailPrice > 0 ? '$' + retailPrice.toFixed(2) : 'N/A'}</div>
+                  </div>
+                </div>
+                \${itemPrice > 0 && packQty > 0 ? \`
+                <div style="display:flex;align-items:center;justify-content:center;gap:0.5rem;padding:0.75rem;background:rgba(52,199,89,0.1);border-radius:8px;margin-top:1rem;">
+                  <span style="font-size:0.875rem;font-weight:500;color:#34c759;">✓ Price breakdown: $\${itemPrice.toFixed(2)}/item × \${packQty} items = $\${(itemPrice * packQty).toFixed(2)}/pack</span>
+                </div>
+                \` : ''}
+              </div>
+              \` : ''}
               
               <h3 style="margin:1.5rem 0 1rem">Line Item Comparison:</h3>
               <div class="table-container">
