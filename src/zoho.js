@@ -254,13 +254,15 @@ class ZohoClient {
   }
 
   // ============================================================
-  // MATCHING SYSTEM
+  // MATCHING SYSTEM - STRICT MATCHING
   // ============================================================
 
   /**
    * Find potential matching draft orders for EDI orders
-   * @param {Array} ediOrders - Array of EDI orders from our database
-   * @returns {Object} - { matches: [], noMatches: [] }
+   * RULES:
+   * - Customer MUST match (required)
+   * - At least one Style MUST match (required)
+   * - Ship date and amount affect confidence but don't disqualify
    */
   async findMatchingDrafts(ediOrders) {
     logger.info('Starting draft matching process', { ediOrderCount: ediOrders.length });
@@ -298,7 +300,9 @@ class ZohoClient {
       for (const draft of draftDetails) {
         const score = this.scoreMatch(ediOrder, draft);
         
-        if (score.total > bestScore && score.total >= 40) {
+        // STRICT RULES: Customer AND Style MUST match
+        // Only consider it a match if both required criteria are met
+        if (score.details.customer && score.details.styles && score.total > bestScore) {
           bestScore = score.total;
           bestMatch = {
             ediOrder: {
@@ -359,7 +363,15 @@ class ZohoClient {
 
   /**
    * Score how well an EDI order matches a Zoho draft
-   * @returns {Object} - { total, details }
+   * 
+   * SCORING (out of 100):
+   * - Customer match: 25 points (REQUIRED)
+   * - Style match: 30 points (REQUIRED - at least one style must match)
+   * - Ship date: 25 points (within 7 days = 25, within 30 days = 15, >30 days = 0)
+   * - Total amount: 20 points (within 5% = 20, within 15% = 10, >15% = 0)
+   * 
+   * Bonus:
+   * - PO Number exact match: +10 points (can exceed 100)
    */
   scoreMatch(ediOrder, zohoDraft) {
     const score = {
@@ -369,7 +381,9 @@ class ZohoClient {
         customer: false,
         shipDate: false,
         totalAmount: false,
-        styles: false
+        styles: false,
+        shipDateDiffDays: null,
+        amountDiffPercent: null
       }
     };
 
@@ -387,82 +401,141 @@ class ZohoClient {
     const zohoShipDate = zohoDraft.shipment_date || '';
     const zohoItems = zohoDraft.line_items || [];
 
-    // PO Number match (25 points)
-    if (ediPoNumber && zohoRef && (ediPoNumber === zohoRef || zohoRef.includes(ediPoNumber) || ediPoNumber.includes(zohoRef))) {
-      score.total += 25;
-      score.details.poNumber = true;
-    }
-
-    // Customer match (20 points)
+    // ============================================================
+    // CUSTOMER MATCH (25 points) - REQUIRED
+    // ============================================================
     if (ediCustomer && zohoCustomer) {
-      // Fuzzy match - check if significant parts match
       const ediParts = ediCustomer.split(/[\s,]+/).filter(p => p.length > 2);
       const zohoParts = zohoCustomer.split(/[\s,]+/).filter(p => p.length > 2);
       const matchingParts = ediParts.filter(ep => 
         zohoParts.some(zp => zp.includes(ep) || ep.includes(zp))
       );
       if (matchingParts.length > 0 || ediCustomer.includes(zohoCustomer) || zohoCustomer.includes(ediCustomer)) {
-        score.total += 20;
+        score.total += 25;
         score.details.customer = true;
       }
     }
 
-    // Ship date match (15 points) - within 7 days
-    if (ediShipDate && zohoShipDate) {
-      const ediDate = new Date(ediShipDate);
-      const zohoDate = new Date(zohoShipDate);
-      const diffDays = Math.abs((ediDate - zohoDate) / (1000 * 60 * 60 * 24));
-      if (diffDays <= 7) {
-        score.total += 15;
-        score.details.shipDate = true;
-      }
-    }
-
-    // Total amount match (20 points) - within 10%
-    if (ediTotal > 0 && zohoTotal > 0) {
-      const diff = Math.abs(ediTotal - zohoTotal);
-      const percentDiff = diff / Math.max(ediTotal, zohoTotal);
-      if (percentDiff <= 0.10) {
-        score.total += 20;
-        score.details.totalAmount = true;
-      } else if (percentDiff <= 0.25) {
-        score.total += 10; // Partial credit
-      }
-    }
-
-    // Style/SKU match (20 points)
+    // ============================================================
+    // STYLE/SKU MATCH (30 points) - REQUIRED
+    // At least one style must match for this to be considered a match
+    // ============================================================
     if (ediItems.length > 0 && zohoItems.length > 0) {
-      const ediStyles = new Set(ediItems.map(i => 
-        (i.productIds?.sku || i.productIds?.vendorItemNumber || '').toLowerCase()
-      ).filter(Boolean));
+      // Extract EDI styles
+      const ediStyles = new Set();
+      ediItems.forEach(i => {
+        const sku = (i.productIds?.sku || i.productIds?.vendorItemNumber || '').toLowerCase().trim();
+        if (sku) {
+          ediStyles.add(sku);
+          // Also add the base style (before any color/size suffix)
+          const baseStyle = sku.split('-')[0];
+          if (baseStyle) ediStyles.add(baseStyle);
+        }
+      });
       
-      const zohoStyles = new Set(zohoItems.map(i => {
-        const name = (i.name || '').toLowerCase();
-        const desc = (i.description || '').toLowerCase();
-        // Extract style from name or description
-        const match = name.match(/^([a-z0-9-]+)/i) || desc.match(/^([a-z0-9-]+)/i);
-        return match ? match[1] : name.split(' ')[0];
-      }).filter(Boolean));
+      // Extract Zoho styles
+      const zohoStyles = new Set();
+      zohoItems.forEach(i => {
+        const name = (i.name || '').toLowerCase().trim();
+        const desc = (i.description || '').toLowerCase().trim();
+        
+        // Try to extract style from name (usually first part)
+        if (name) {
+          zohoStyles.add(name.split(' ')[0]);
+          zohoStyles.add(name.split('-')[0]);
+          // Also try full name
+          const fullStyle = name.match(/^([a-z0-9]+-?[a-z0-9]*)/i);
+          if (fullStyle) zohoStyles.add(fullStyle[1]);
+        }
+        
+        // Also check description
+        if (desc) {
+          const descStyle = desc.match(/^([a-z0-9]+-?[a-z0-9]*)/i);
+          if (descStyle) zohoStyles.add(descStyle[1]);
+        }
+      });
 
+      // Check for ANY overlap
       let matchCount = 0;
       ediStyles.forEach(es => {
+        if (!es || es.length < 3) return; // Skip very short codes
         zohoStyles.forEach(zs => {
-          if (es === zs || es.includes(zs) || zs.includes(es)) {
+          if (!zs || zs.length < 3) return;
+          // Exact match or one contains the other
+          if (es === zs || (es.length >= 5 && zs.includes(es)) || (zs.length >= 5 && es.includes(zs))) {
             matchCount++;
           }
         });
       });
 
       if (matchCount > 0) {
-        const matchPercent = matchCount / Math.max(ediStyles.size, zohoStyles.size);
-        if (matchPercent >= 0.5) {
+        score.details.styles = true;
+        // More matches = higher score
+        const matchRatio = matchCount / Math.max(ediStyles.size, 1);
+        if (matchRatio >= 0.5) {
+          score.total += 30;
+        } else if (matchRatio >= 0.25) {
           score.total += 20;
-          score.details.styles = true;
-        } else if (matchPercent >= 0.25) {
-          score.total += 10;
-          score.details.styles = true;
+        } else {
+          score.total += 15; // At least some match
         }
       }
+      // If no styles match at all, score.details.styles stays false
+      // This will disqualify the match in findMatchingDrafts
+    }
+
+    // ============================================================
+    // SHIP DATE (25 points) - Not required, affects confidence
+    // ============================================================
+    if (ediShipDate && zohoShipDate) {
+      const ediDate = new Date(ediShipDate);
+      const zohoDate = new Date(zohoShipDate);
+      const diffDays = Math.abs((ediDate - zohoDate) / (1000 * 60 * 60 * 24));
+      score.details.shipDateDiffDays = Math.round(diffDays);
+      
+      if (diffDays <= 7) {
+        score.total += 25;
+        score.details.shipDate = true;
+      } else if (diffDays <= 30) {
+        score.total += 15;
+        score.details.shipDate = true; // Still considered a match, just not perfect
+      } else if (diffDays <= 60) {
+        score.total += 5;
+        // shipDate stays false for display purposes (warning)
+      }
+      // >60 days = 0 points, shipDate = false (will show warning)
+    } else if (!ediShipDate || !zohoShipDate) {
+      // If either is missing, give partial credit
+      score.total += 10;
+    }
+
+    // ============================================================
+    // TOTAL AMOUNT (20 points) - Not required, affects confidence
+    // ============================================================
+    if (ediTotal > 0 && zohoTotal > 0) {
+      const diff = Math.abs(ediTotal - zohoTotal);
+      const percentDiff = diff / Math.max(ediTotal, zohoTotal);
+      score.details.amountDiffPercent = Math.round(percentDiff * 100);
+      
+      if (percentDiff <= 0.05) {
+        score.total += 20;
+        score.details.totalAmount = true;
+      } else if (percentDiff <= 0.15) {
+        score.total += 10;
+        score.details.totalAmount = true;
+      } else if (percentDiff <= 0.25) {
+        score.total += 5;
+        // totalAmount stays false (will show warning)
+      }
+      // >25% difference = 0 points
+    }
+
+    // ============================================================
+    // PO NUMBER BONUS (+10 points)
+    // ============================================================
+    if (ediPoNumber && zohoRef && (ediPoNumber === zohoRef || zohoRef.includes(ediPoNumber) || ediPoNumber.includes(zohoRef))) {
+      score.total += 10;
+      score.details.poNumber = true;
     }
 
     return score;
@@ -531,7 +604,6 @@ class ZohoClient {
     zohoItems.forEach(item => {
       const name = item.name || '';
       const desc = item.description || '';
-      // Try to extract SKU, color, size from Zoho item
       const parts = desc.split(/[\s|]+/);
       const sku = name.split(' ')[0] || parts[0] || '';
       const colorMatch = desc.match(/color[:\s]*(\w+)/i);
