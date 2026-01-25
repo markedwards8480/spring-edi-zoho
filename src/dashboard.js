@@ -63,6 +63,7 @@ const dashboardHTML = `
     .status-pending { background: rgba(255,149,0,0.12); color: #ff9500; }
     .status-processed { background: rgba(52,199,89,0.12); color: #34c759; }
     .status-matched { background: rgba(0,136,194,0.12); color: #0088c2; }
+    .status-review { background: rgba(142,142,147,0.12); color: #8e8e93; }
     
     .checkbox { width: 18px; height: 18px; accent-color: #0088c2; cursor: pointer; }
     .toolbar { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: center; flex-wrap: wrap; }
@@ -267,6 +268,7 @@ const dashboardHTML = `
           <select class="filter-select" id="statusFilter" onchange="filterOrders()">
             <option value="">All Status</option>
             <option value="pending">Pending</option>
+            <option value="review">Review</option>
             <option value="processed">Sent to Zoho</option>
           </select>
           <div style="flex:1"></div>
@@ -517,7 +519,14 @@ const dashboardHTML = `
       let filtered = orders.filter(o => {
         if (search && !(o.edi_order_number || '').toLowerCase().includes(search)) return false;
         if (customer && o.edi_customer_name !== customer) return false;
-        if (status && o.status !== status) return false;
+        if (status) {
+          if (status === 'processed') {
+            // "Sent to Zoho" includes orders with zoho_so_number OR status=processed
+            if (!o.zoho_so_number && o.status !== 'processed') return false;
+          } else {
+            if (o.status !== status) return false;
+          }
+        }
         return true;
       });
       
@@ -530,8 +539,21 @@ const dashboardHTML = `
       tbody.innerHTML = filtered.map(o => {
         const items = o.parsed_data?.items || [];
         const amt = items.reduce((s,i) => s + (i.quantityOrdered||0)*(i.unitPrice||0), 0);
-        const statusClass = o.status === 'processed' ? 'processed' : o.status === 'matched' ? 'matched' : 'pending';
-        const statusText = o.status === 'processed' ? '✓ Sent' : o.status === 'matched' ? '🔗 Matched' : '⏳ Pending';
+        var statusClass = 'pending';
+        var statusText = '⏳ Pending';
+        if (o.zoho_so_number) {
+          statusClass = 'processed';
+          statusText = '✓ SO#' + o.zoho_so_number;
+        } else if (o.status === 'processed') {
+          statusClass = 'processed';
+          statusText = '✓ Sent';
+        } else if (o.status === 'matched') {
+          statusClass = 'matched';
+          statusText = '🔗 Matched';
+        } else if (o.status === 'review') {
+          statusClass = 'review';
+          statusText = '📋 Review';
+        }
         return \`<tr>
           <td><input type="checkbox" class="checkbox" \${selectedIds.has(o.id)?'checked':''} onchange="toggleSelect(\${o.id})"></td>
           <td><strong>\${o.edi_order_number||'N/A'}</strong></td>
