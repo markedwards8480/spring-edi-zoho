@@ -40,7 +40,8 @@ app.get('/status', async (req, res) => {
         COUNT(*) FILTER (WHERE status = 'processed') as processed,
         COUNT(*) FILTER (WHERE status = 'failed') as failed,
         COUNT(*) FILTER (WHERE status = 'pending') as pending,
-        COUNT(*) FILTER (WHERE status = 'matched') as matched
+        COUNT(*) FILTER (WHERE status = 'matched') as matched,
+        COUNT(*) FILTER (WHERE status = 'review') as review
       FROM edi_orders 
       WHERE created_at > NOW() - INTERVAL '7 days'
     `);
@@ -911,6 +912,38 @@ app.get('/fix-db', async (req, res) => {
     await pool.query(`ALTER TABLE customer_mappings ADD COLUMN IF NOT EXISTS zoho_customer_id VARCHAR(255)`);
     await pool.query(`ALTER TABLE customer_mappings ADD COLUMN IF NOT EXISTS zoho_customer_name VARCHAR(255)`);
     res.json({ success: true, message: 'Columns added' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Mark orders as "review" (for test orders that need cleanup)
+app.post('/mark-for-review', async (req, res) => {
+  try {
+    const { orderIds } = req.body;
+    if (orderIds && orderIds.length > 0) {
+      await pool.query(`UPDATE edi_orders SET status = 'review' WHERE id = ANY($1)`, [orderIds]);
+      res.json({ success: true, count: orderIds.length });
+    } else {
+      // Mark all orders with zoho_so_id as review (test orders)
+      const result = await pool.query(`UPDATE edi_orders SET status = 'review' WHERE zoho_so_id IS NOT NULL AND status = 'pending'`);
+      res.json({ success: true, count: result.rowCount });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Mark orders back to pending (after cleanup)
+app.post('/mark-as-pending', async (req, res) => {
+  try {
+    const { orderIds } = req.body;
+    if (orderIds && orderIds.length > 0) {
+      await pool.query(`UPDATE edi_orders SET status = 'pending', zoho_so_id = NULL, zoho_so_number = NULL WHERE id = ANY($1)`, [orderIds]);
+      res.json({ success: true, count: orderIds.length });
+    } else {
+      res.json({ success: false, error: 'No order IDs provided' });
+    }
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
