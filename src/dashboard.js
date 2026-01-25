@@ -331,6 +331,12 @@ const dashboardHTML = `
       <!-- Sent to Zoho Tab -->
       <div id="tabSent" style="display:none">
         <h2 style="margin-bottom:1rem;font-weight:600">Orders Sent to Zoho</h2>
+        <div class="toolbar" style="margin-bottom:1rem;">
+          <input type="text" class="search-box" placeholder="Search PO#..." id="sentSearchBox" onkeyup="filterSentOrders()">
+          <select class="filter-select" id="sentCustomerFilter" onchange="filterSentOrders()"><option value="">All Customers</option></select>
+          <div style="flex:1"></div>
+          <span id="sentOrderCount" style="color:#86868b;font-size:0.875rem;"></span>
+        </div>
         <div class="table-container">
           <table class="orders-table">
             <thead><tr><th>PO #</th><th>Customer</th><th>Zoho SO#</th><th>Value</th><th>Sent At</th><th>Matched Draft</th></tr></thead>
@@ -1688,17 +1694,44 @@ const dashboardHTML = `
     // OTHER TABS
     // ============================================================
     
+    var sentOrdersData = [];
+    
     async function loadSentOrders() {
       try {
-        const sentOrders = orders.filter(o => o.status === 'processed' || o.zoho_so_number);
-        const tbody = document.getElementById('sentOrdersTable');
-        if (!sentOrders.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No orders sent yet</td></tr>'; return; }
-        tbody.innerHTML = sentOrders.map(o => {
-          const items = o.parsed_data?.items || [];
-          const amt = items.reduce((s,i) => s + (i.quantityOrdered||0)*(i.unitPrice||0), 0);
-          return \`<tr><td><strong>\${o.edi_order_number||'N/A'}</strong></td><td>\${o.edi_customer_name||'Unknown'}</td><td>\${o.zoho_so_number || o.zoho_so_id || 'N/A'}</td><td>$\${amt.toLocaleString('en-US',{minimumFractionDigits:2})}</td><td>\${o.processed_at ? new Date(o.processed_at).toLocaleString() : '-'}</td><td>\${o.matched_draft_id || '-'}</td></tr>\`;
-        }).join('');
+        sentOrdersData = orders.filter(o => o.status === 'processed' || o.zoho_so_number);
+        
+        // Populate customer filter dropdown
+        const customers = [...new Set(sentOrdersData.map(o => o.edi_customer_name).filter(Boolean))].sort();
+        document.getElementById('sentCustomerFilter').innerHTML = '<option value="">All Customers</option>' + customers.map(c => '<option value="' + c + '">' + c + '</option>').join('');
+        
+        filterSentOrders();
       } catch (e) { toast('Failed to load sent orders'); }
+    }
+    
+    function filterSentOrders() {
+      const search = (document.getElementById('sentSearchBox')?.value || '').toLowerCase();
+      const customer = document.getElementById('sentCustomerFilter')?.value || '';
+      
+      let filtered = sentOrdersData.filter(o => {
+        if (search && !(o.edi_order_number || '').toLowerCase().includes(search)) return false;
+        if (customer && o.edi_customer_name !== customer) return false;
+        return true;
+      });
+      
+      const tbody = document.getElementById('sentOrdersTable');
+      if (!filtered.length) { 
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No orders found</td></tr>'; 
+        document.getElementById('sentOrderCount').textContent = '';
+        return; 
+      }
+      
+      tbody.innerHTML = filtered.map(o => {
+        const items = o.parsed_data?.items || [];
+        const amt = items.reduce((s,i) => s + (i.quantityOrdered||0)*(i.unitPrice||0), 0);
+        return \`<tr><td><strong>\${o.edi_order_number||'N/A'}</strong></td><td>\${o.edi_customer_name||'Unknown'}</td><td>\${o.zoho_so_number || o.zoho_so_id || 'N/A'}</td><td>$\${amt.toLocaleString('en-US',{minimumFractionDigits:2})}</td><td>\${o.processed_at ? new Date(o.processed_at).toLocaleString() : '-'}</td><td>\${o.matched_draft_id || '-'}</td></tr>\`;
+      }).join('');
+      
+      document.getElementById('sentOrderCount').textContent = 'Showing ' + filtered.length + ' of ' + sentOrdersData.length + ' orders';
     }
     
     var zohoCustomersCache = [];
