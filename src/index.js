@@ -909,7 +909,8 @@ app.post('/customer-mappings', async (req, res) => {
 app.get('/fix-db', async (req, res) => {
   try {
     await pool.query(`ALTER TABLE customer_mappings ADD COLUMN IF NOT EXISTS zoho_customer_id VARCHAR(255)`);
-    res.json({ success: true, message: 'Column added' });
+    await pool.query(`ALTER TABLE customer_mappings ADD COLUMN IF NOT EXISTS zoho_customer_name VARCHAR(255)`);
+    res.json({ success: true, message: 'Columns added' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
