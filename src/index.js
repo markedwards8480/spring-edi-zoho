@@ -1408,6 +1408,271 @@ app.get('/zoho/customers', async (req, res) => {
 });
 
 // ============================================================
+// TEST SCENARIO GENERATOR
+// ============================================================
+
+// Test configuration - hardcoded for safety
+const TEST_CONFIG = {
+  customer: {
+    id: '1603308000361176107',
+    name: 'Hero Test Account'
+  },
+  items: [
+    { item_id: '1603308000428835693', sku: '87553J-AA-BLACK-XS', name: '87553J-AA-BLACK-XS', rate: 4.00, description: 'Soft pants' },
+    { item_id: '1603308000428807472', sku: '87553J-AA-BLACK-S', name: '87553J-AA-BLACK-S', rate: 4.00, description: 'Soft pants' },
+    { item_id: '1603308000428824893', sku: '87553J-AA-BLACK-M', name: '87553J-AA-BLACK-M', rate: 4.00, description: 'Soft pants' }
+  ]
+};
+
+// Generate test PO number
+function generateTestPoNumber() {
+  const date = new Date();
+  const dateStr = date.toISOString().slice(0, 10).replace(/-/g, '');
+  const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+  return `TEST-${dateStr}-${random}`;
+}
+
+// POST /generate-test-scenario - Creates both Zoho draft and EDI record
+app.post('/generate-test-scenario', async (req, res) => {
+  try {
+    const { scenario = 'perfect', itemCount = 3, qtyPerItem = 100 } = req.body;
+    
+    const poNumber = generateTestPoNumber();
+    const shipDate = new Date();
+    shipDate.setDate(shipDate.getDate() + 14); // 2 weeks from now
+    const shipDateStr = shipDate.toISOString().slice(0, 10);
+    
+    // Build line items for Zoho
+    const lineItems = TEST_CONFIG.items.slice(0, Math.min(itemCount, 3)).map((item, idx) => {
+      let qty = qtyPerItem;
+      let rate = item.rate;
+      
+      // Modify based on scenario
+      if (scenario === 'qty_mismatch' && idx === 0) {
+        qty = qtyPerItem + 50; // First item has different qty in Zoho
+      }
+      if (scenario === 'price_mismatch' && idx === 0) {
+        rate = item.rate + 2; // First item has different price in Zoho
+      }
+      
+      return {
+        item_id: item.item_id,
+        name: item.name,
+        description: item.description,
+        rate: rate,
+        quantity: qty,
+        unit: 'EA'
+      };
+    });
+    
+    const zohoTotalAmount = lineItems.reduce((sum, item) => sum + (item.rate * item.quantity), 0);
+    
+    // 1. Create Draft Sales Order in Zoho
+    logger.info('[TEST] Creating draft in Zoho for PO: ' + poNumber);
+    
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
+    const accessToken = await zoho.ensureValidToken();
+    const orgId = process.env.ZOHO_ORG_ID;
+    
+    const axios = require('axios');
+    const zohoPayload = {
+      customer_id: TEST_CONFIG.customer.id,
+      reference_number: poNumber,
+      date: new Date().toISOString().slice(0, 10),
+      shipment_date: shipDateStr,
+      notes: '🧪 TEST ORDER - Generated for testing. Safe to delete. Scenario: ' + scenario,
+      line_items: lineItems
+    };
+    
+    const zohoResponse = await axios.post(
+      'https://www.zohoapis.com/books/v3/salesorders',
+      zohoPayload,
+      {
+        headers: { 
+          'Authorization': 'Zoho-oauthtoken ' + accessToken,
+          'Content-Type': 'application/json'
+        },
+        params: { organization_id: orgId }
+      }
+    );
+    
+    if (!zohoResponse.data || !zohoResponse.data.salesorder) {
+      throw new Error('Failed to create Zoho draft: ' + JSON.stringify(zohoResponse.data));
+    }
+    
+    const zohoDraft = zohoResponse.data.salesorder;
+    logger.info('[TEST] Created Zoho draft: ' + zohoDraft.salesorder_number);
+    
+    // 2. Create matching EDI record in database
+    const ediItems = TEST_CONFIG.items.slice(0, Math.min(itemCount, 3)).map((item, idx) => {
+      return {
+        lineNumber: idx + 1,
+        productIds: {
+          sku: item.sku,
+          vendorItemNumber: item.sku
+        },
+        description: item.description,
+        quantityOrdered: qtyPerItem, // EDI always has the "base" qty
+        unitPrice: item.rate, // EDI always has the "base" price
+        unitOfMeasure: 'EA'
+      };
+    });
+    
+    const ediTotalAmount = ediItems.reduce((sum, item) => sum + (item.quantityOrdered * item.unitPrice), 0);
+    const ediTotalUnits = ediItems.reduce((sum, item) => sum + item.quantityOrdered, 0);
+    
+    const parsedData = {
+      poNumber: poNumber,
+      customer: TEST_CONFIG.customer.name,
+      dates: {
+        orderDate: new Date().toISOString().slice(0, 10),
+        shipDate: shipDateStr
+      },
+      items: ediItems,
+      totals: {
+        totalAmount: ediTotalAmount,
+        totalUnits: ediTotalUnits
+      },
+      isTest: true,
+      testScenario: scenario
+    };
+    
+    // Insert into edi_orders table
+    const insertResult = await pool.query(`
+      INSERT INTO edi_orders (
+        edi_order_number,
+        edi_customer_name,
+        parsed_data,
+        raw_edi,
+        status,
+        filename,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+      RETURNING id
+    `, [
+      poNumber,
+      TEST_CONFIG.customer.name,
+      JSON.stringify(parsedData),
+      '🧪 TEST ORDER - Synthetic EDI data for testing',
+      'pending',
+      'TEST-' + scenario + '-' + Date.now() + '.edi'
+    ]);
+    
+    const ediOrderId = insertResult.rows[0].id;
+    logger.info('[TEST] Created EDI order: ' + ediOrderId);
+    
+    // 3. Add customer mapping if not exists
+    await pool.query(`
+      INSERT INTO customer_mappings (edi_customer_name, zoho_customer_id, zoho_customer_name)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (edi_customer_name) DO NOTHING
+    `, [TEST_CONFIG.customer.name, TEST_CONFIG.customer.id, TEST_CONFIG.customer.name]);
+    
+    res.json({
+      success: true,
+      message: '🧪 Test scenario "' + scenario + '" created successfully!',
+      testOrder: {
+        poNumber,
+        scenario,
+        ediOrderId,
+        zohoDraft: {
+          id: zohoDraft.salesorder_id,
+          number: zohoDraft.salesorder_number,
+          status: zohoDraft.status
+        },
+        summary: {
+          customer: TEST_CONFIG.customer.name,
+          itemCount: lineItems.length,
+          totalUnits: ediTotalUnits,
+          ediTotal: ediTotalAmount,
+          zohoTotal: zohoTotalAmount,
+          shipDate: shipDateStr
+        }
+      }
+    });
+    
+  } catch (error) {
+    logger.error('[TEST] Error generating test scenario: ' + error.message);
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// GET /test-orders - List all test orders
+app.get('/test-orders', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, edi_order_number, edi_customer_name, status, created_at, parsed_data
+      FROM edi_orders 
+      WHERE edi_order_number LIKE 'TEST-%'
+      ORDER BY created_at DESC
+      LIMIT 50
+    `);
+    
+    res.json({
+      success: true,
+      testOrders: result.rows.map(row => ({
+        id: row.id,
+        poNumber: row.edi_order_number,
+        customer: row.edi_customer_name,
+        status: row.status,
+        createdAt: row.created_at,
+        scenario: row.parsed_data?.testScenario || 'unknown',
+        isTest: true
+      }))
+    });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// DELETE /test-orders/:id - Delete a test order from database
+app.delete('/test-orders/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Verify it's a test order
+    const check = await pool.query(
+      'SELECT edi_order_number FROM edi_orders WHERE id = $1',
+      [id]
+    );
+    
+    if (!check.rows.length) {
+      return res.json({ success: false, error: 'Order not found' });
+    }
+    
+    if (!check.rows[0].edi_order_number.startsWith('TEST-')) {
+      return res.json({ success: false, error: 'Can only delete TEST orders' });
+    }
+    
+    await pool.query('DELETE FROM edi_orders WHERE id = $1', [id]);
+    
+    res.json({ success: true, message: 'Test order deleted' });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// DELETE /test-orders/cleanup/all - Delete all test orders
+app.delete('/test-orders/cleanup/all', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      DELETE FROM edi_orders 
+      WHERE edi_order_number LIKE 'TEST-%'
+      RETURNING id
+    `);
+    
+    res.json({
+      success: true,
+      message: 'Deleted ' + result.rowCount + ' test orders',
+      deletedCount: result.rowCount
+    });
+  } catch (error) {
+    res.json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================
 // RESET UTILITIES
 // ============================================================
 
