@@ -1,5 +1,6 @@
 // Zoho Drafts Cache Module
-// Caches Zoho draft sales orders to reduce API calls
+// Caches Zoho draft AND confirmed sales orders to reduce API calls
+// Updated: Now includes confirmed orders for matching revised EDI 850s
 
 const logger = require('./logger');
 
@@ -84,24 +85,38 @@ class ZohoDraftsCache {
   }
 
   // Refresh the cache from Zoho
+  // Now fetches BOTH draft AND confirmed orders for matching revised EDI 850s
   async refreshCache(zohoClient) {
     const startTime = Date.now();
-    logger.info('Starting Zoho drafts cache refresh');
+    logger.info('Starting Zoho orders cache refresh (drafts + confirmed)');
 
     try {
-      // Get all draft orders from Zoho
+      // Get draft orders from Zoho
       const drafts = await zohoClient.getDraftSalesOrders();
-      logger.info('Fetched draft list from Zoho', { count: drafts.length });
+      logger.info('Fetched draft orders from Zoho', { count: drafts.length });
 
-      // Get details for each draft (includes line items)
-      const draftDetails = [];
-      for (const draft of drafts) {
+      // Get confirmed orders from Zoho (for matching revised 850s)
+      const confirmed = await zohoClient.getConfirmedSalesOrders();
+      logger.info('Fetched confirmed orders from Zoho', { count: confirmed.length });
+
+      // Combine both lists
+      const allOrders = [...drafts, ...confirmed];
+      logger.info('Total orders to cache', { 
+        drafts: drafts.length, 
+        confirmed: confirmed.length, 
+        total: allOrders.length 
+      });
+
+      // Get details for each order (includes line items)
+      const orderDetails = [];
+      for (const order of allOrders) {
         try {
-          const details = await zohoClient.getSalesOrderDetails(draft.salesorder_id);
-          draftDetails.push(details);
+          const details = await zohoClient.getSalesOrderDetails(order.salesorder_id);
+          orderDetails.push(details);
         } catch (error) {
-          logger.warn('Failed to get draft details', { 
-            draftId: draft.salesorder_id, 
+          logger.warn('Failed to get order details', { 
+            orderId: order.salesorder_id, 
+            status: order.status,
             error: error.message 
           });
         }
@@ -112,12 +127,12 @@ class ZohoDraftsCache {
       try {
         await client.query('BEGIN');
 
-        // Delete all existing cached drafts
+        // Delete all existing cached orders
         await client.query('DELETE FROM zoho_drafts_cache');
 
-        // Insert new drafts
-        for (const draft of draftDetails) {
-          const lineItems = draft.line_items || [];
+        // Insert all orders (drafts + confirmed)
+        for (const order of orderDetails) {
+          const lineItems = order.line_items || [];
           const totalUnits = lineItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
 
           await client.query(`
@@ -129,19 +144,19 @@ class ZohoDraftsCache {
               raw_data, fetched_at
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
           `, [
-            draft.salesorder_id,
-            draft.salesorder_number,
-            draft.customer_id,
-            draft.customer_name,
-            draft.reference_number || null,
-            draft.status,
-            parseFloat(draft.total) || 0,
-            draft.shipment_date || null,
-            draft.date || null,
+            order.salesorder_id,
+            order.salesorder_number,
+            order.customer_id,
+            order.customer_name,
+            order.reference_number || null,
+            order.status,
+            parseFloat(order.total) || 0,
+            order.shipment_date || null,
+            order.date || null,
             JSON.stringify(lineItems),
             lineItems.length,
             totalUnits,
-            JSON.stringify(draft)
+            JSON.stringify(order)
           ]);
         }
 
@@ -156,18 +171,20 @@ class ZohoDraftsCache {
               last_error = NULL,
               updated_at = NOW()
           WHERE cache_type = 'drafts'
-        `, [draftDetails.length, duration]);
+        `, [orderDetails.length, duration]);
 
         await client.query('COMMIT');
 
-        logger.info('Zoho drafts cache refreshed', { 
-          draftsCount: draftDetails.length,
+        logger.info('Zoho orders cache refreshed', { 
+          totalCount: orderDetails.length,
+          draftsCount: drafts.length,
+          confirmedCount: confirmed.length,
           durationMs: duration 
         });
 
         return {
           success: true,
-          draftsCount: draftDetails.length,
+          draftsCount: orderDetails.length,
           durationMs: duration
         };
 
@@ -188,12 +205,12 @@ class ZohoDraftsCache {
         `, [error.message]);
       } catch (e) { /* ignore */ }
 
-      logger.error('Failed to refresh Zoho drafts cache', { error: error.message });
+      logger.error('Failed to refresh Zoho orders cache', { error: error.message });
       throw error;
     }
   }
 
-  // Get all cached drafts
+  // Get all cached orders (drafts + confirmed)
   async getCachedDrafts() {
     try {
       const result = await this.pool.query(`
@@ -221,12 +238,12 @@ class ZohoDraftsCache {
       }));
 
     } catch (error) {
-      logger.error('Failed to get cached drafts', { error: error.message });
+      logger.error('Failed to get cached orders', { error: error.message });
       return [];
     }
   }
 
-  // Get a single cached draft by ID
+  // Get a single cached order by ID
   async getCachedDraft(salesorderId) {
     try {
       const result = await this.pool.query(`
@@ -239,7 +256,7 @@ class ZohoDraftsCache {
       }
       return null;
     } catch (error) {
-      logger.error('Failed to get cached draft', { error: error.message, salesorderId });
+      logger.error('Failed to get cached order', { error: error.message, salesorderId });
       return null;
     }
   }
@@ -303,7 +320,7 @@ class ZohoDraftsCache {
     return status.minutesSinceRefresh > maxAgeMinutes;
   }
 
-  // Remove a draft from cache (after it's been processed)
+  // Remove an order from cache (after it's been processed)
   async removeDraft(salesorderId) {
     try {
       await this.pool.query(`
@@ -312,12 +329,12 @@ class ZohoDraftsCache {
       `, [salesorderId]);
       return true;
     } catch (error) {
-      logger.error('Failed to remove draft from cache', { error: error.message, salesorderId });
+      logger.error('Failed to remove order from cache', { error: error.message, salesorderId });
       return false;
     }
   }
 
-  // Update drafts_count in metadata (for after removing drafts)
+  // Update drafts_count in metadata (for after removing orders)
   async updateDraftsCount() {
     try {
       const countResult = await this.pool.query('SELECT COUNT(*) as count FROM zoho_drafts_cache');
@@ -327,7 +344,7 @@ class ZohoDraftsCache {
         WHERE cache_type = 'drafts'
       `, [parseInt(countResult.rows[0].count)]);
     } catch (error) {
-      logger.error('Failed to update drafts count', { error: error.message });
+      logger.error('Failed to update orders count', { error: error.message });
     }
   }
 }
