@@ -259,6 +259,8 @@ const dashboardHTML = `
       <div class="nav-item" onclick="showTab('mappings', this)">🔗 Customer Mappings</div>
       <div class="nav-title">History</div>
       <div class="nav-item" onclick="showTab('activity', this)">📊 Activity Log</div>
+      <div class="nav-title">Tools</div>
+      <div class="nav-item" onclick="showTab('sftp', this)">📁 SFTP Browser</div>
     </div>
     
     <div class="content">
@@ -480,6 +482,95 @@ const dashboardHTML = `
           </div>
         </div>
       </div>
+      
+      <!-- SFTP Browser Tab -->
+      <div id="tabSftp" style="display:none">
+        <div class="toolbar">
+          <h3 style="margin:0;color:#1e3a5f;">📁 SFTP File Browser</h3>
+          <div style="flex:1"></div>
+          <button class="btn btn-secondary" onclick="refreshSftpStatus()">🔄 Refresh</button>
+          <button class="btn btn-primary" onclick="fetchFromSftp()">📥 Fetch New Orders</button>
+        </div>
+        
+        <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin: 1.5rem 0;">
+          <div class="stat-card">
+            <div class="stat-label">Incoming Files</div>
+            <div class="stat-value" id="sftpIncomingCount">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Archived Files</div>
+            <div class="stat-value" id="sftpArchivedCount">-</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Last Check</div>
+            <div class="stat-value" id="sftpLastCheck" style="font-size: 1rem;">-</div>
+          </div>
+        </div>
+        
+        <div style="display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px;">
+          <button class="btn btn-primary sftp-tab-btn active" id="sftpTabIncoming" onclick="showSftpTab('incoming')">
+            📥 Incoming <span id="sftpIncomingBadge" style="background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:10px;font-size:0.8rem;margin-left:5px;">0</span>
+          </button>
+          <button class="btn btn-secondary sftp-tab-btn" id="sftpTabArchive" onclick="showSftpTab('archive')">
+            📦 Archive <span id="sftpArchiveBadge" style="background:rgba(0,0,0,0.1);padding:2px 8px;border-radius:10px;font-size:0.8rem;margin-left:5px;">0</span>
+          </button>
+        </div>
+        
+        <div id="sftpIncomingPanel">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <span style="color: #666; font-size: 0.9rem;">Path: <code id="sftpOrdersPath">/orders</code></span>
+            <button class="btn btn-secondary" onclick="refetchSelectedIncoming()" id="refetchIncomingBtn" disabled style="padding:0.4rem 0.75rem;font-size:0.8125rem;">
+              📥 Re-fetch Selected (0)
+            </button>
+          </div>
+          <div class="table-container">
+            <table class="orders-table">
+              <thead>
+                <tr>
+                  <th style="width:40px"><input type="checkbox" class="checkbox" id="selectAllIncoming" onchange="toggleAllIncoming()"></th>
+                  <th>Filename</th>
+                  <th>Type</th>
+                  <th>Size</th>
+                  <th>Modified</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="sftpIncomingTable">
+                <tr><td colspan="6" class="empty-state">Click Refresh to load files...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        
+        <div id="sftpArchivePanel" style="display:none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <span style="color: #666; font-size: 0.9rem;">Path: <code id="sftpArchivePath">/archive</code></span>
+            <div style="display: flex; gap: 10px; align-items: center;">
+              <input type="text" id="archiveSearchBox" placeholder="Search files..." class="search-box" style="width:200px;" oninput="filterArchiveFiles()">
+              <button class="btn btn-primary" onclick="refetchSelectedArchive()" id="refetchArchiveBtn" disabled style="padding:0.4rem 0.75rem;font-size:0.8125rem;">
+                📥 Re-fetch Selected (0)
+              </button>
+            </div>
+          </div>
+          <div class="table-container">
+            <table class="orders-table">
+              <thead>
+                <tr>
+                  <th style="width:40px"><input type="checkbox" class="checkbox" id="selectAllArchive" onchange="toggleAllArchive()"></th>
+                  <th>Filename</th>
+                  <th>Type</th>
+                  <th>Size</th>
+                  <th>Modified</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="sftpArchiveTable">
+                <tr><td colspan="6" class="empty-state">Click Refresh to load files...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   
@@ -523,7 +614,7 @@ const dashboardHTML = `
     function showTab(tab, el) {
       document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
       if (el) el.classList.add('active');
-      ['tabOrders','tabReview','tabSent','tabMappings','tabActivity'].forEach(t => {
+      ['tabOrders','tabReview','tabSent','tabMappings','tabActivity','tabSftp'].forEach(t => {
         const elem = document.getElementById(t);
         if (elem) elem.style.display = 'none';
       });
@@ -532,6 +623,7 @@ const dashboardHTML = `
       if (tab === 'sent') loadSentOrders();
       if (tab === 'mappings') loadMappings();
       if (tab === 'activity') { loadZohoLog(); loadAuditStats(); }
+      if (tab === 'sftp') refreshSftpStatus();
     }
     
     async function loadOrders() {
@@ -2193,6 +2285,234 @@ const dashboardHTML = `
       a.click();
       URL.revokeObjectURL(url);
       toast('Exported ' + zohoLogData.length + ' records');
+    }
+    
+    // ============================================================
+    // SFTP BROWSER FUNCTIONS
+    // ============================================================
+    
+    let sftpIncomingFiles = [];
+    let sftpArchiveFiles = [];
+    let sftpSelectedIncoming = new Set();
+    let sftpSelectedArchive = new Set();
+    
+    function showSftpTab(tab) {
+      document.getElementById('sftpTabIncoming').className = tab === 'incoming' ? 'btn btn-primary sftp-tab-btn active' : 'btn btn-secondary sftp-tab-btn';
+      document.getElementById('sftpTabArchive').className = tab === 'archive' ? 'btn btn-primary sftp-tab-btn active' : 'btn btn-secondary sftp-tab-btn';
+      document.getElementById('sftpIncomingPanel').style.display = tab === 'incoming' ? 'block' : 'none';
+      document.getElementById('sftpArchivePanel').style.display = tab === 'archive' ? 'block' : 'none';
+    }
+    
+    async function refreshSftpStatus() {
+      try {
+        document.getElementById('sftpIncomingCount').textContent = '...';
+        document.getElementById('sftpArchivedCount').textContent = '...';
+        
+        const response = await fetch('/sftp/status');
+        const data = await response.json();
+        
+        if (data.success) {
+          document.getElementById('sftpIncomingCount').textContent = data.incoming.count;
+          document.getElementById('sftpArchivedCount').textContent = data.archived.count;
+          document.getElementById('sftpIncomingBadge').textContent = data.incoming.count;
+          document.getElementById('sftpArchiveBadge').textContent = data.archived.count;
+          document.getElementById('sftpLastCheck').textContent = new Date(data.timestamp).toLocaleTimeString();
+          document.getElementById('sftpOrdersPath').textContent = data.ordersPath;
+          document.getElementById('sftpArchivePath').textContent = data.archivePath;
+          
+          sftpIncomingFiles = data.incoming.files || [];
+          sftpArchiveFiles = data.archived.files || [];
+          
+          renderSftpIncomingFiles();
+          renderSftpArchiveFiles();
+        } else {
+          toast('SFTP Error: ' + data.error);
+        }
+      } catch (error) {
+        console.error('SFTP status error:', error);
+        toast('Failed to get SFTP status');
+      }
+    }
+    
+    function renderSftpIncomingFiles() {
+      const tbody = document.getElementById('sftpIncomingTable');
+      
+      if (sftpIncomingFiles.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">📭 No files waiting in incoming folder</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = sftpIncomingFiles.map(file => {
+        const fileType = getSftpFileType(file.name);
+        const typeClass = fileType === '850' ? 'status-matched' : fileType === '860' ? 'status-pending' : 'status-review';
+        const icon = fileType === '860' ? '⚡' : '📄';
+        
+        return '<tr>' +
+          '<td><input type="checkbox" class="checkbox" data-filename="' + file.name + '" onchange="toggleSftpIncoming(\\'' + file.name + '\\')" ' + (sftpSelectedIncoming.has(file.name) ? 'checked' : '') + '></td>' +
+          '<td><strong>' + icon + ' ' + file.name + '</strong></td>' +
+          '<td><span class="status-badge ' + typeClass + '">' + fileType + '</span></td>' +
+          '<td>' + formatSftpFileSize(file.size) + '</td>' +
+          '<td>' + formatSftpDate(file.modifyTime) + '</td>' +
+          '<td><button class="btn btn-primary" style="padding:0.35rem 0.75rem;font-size:0.8125rem" onclick="refetchSingleFile(\\'' + file.name + '\\', \\'incoming\\')">📥 Fetch</button></td>' +
+          '</tr>';
+      }).join('');
+    }
+    
+    function renderSftpArchiveFiles() {
+      const tbody = document.getElementById('sftpArchiveTable');
+      const searchTerm = (document.getElementById('archiveSearchBox')?.value || '').toLowerCase();
+      
+      let filteredFiles = sftpArchiveFiles;
+      if (searchTerm) {
+        filteredFiles = sftpArchiveFiles.filter(f => f.name.toLowerCase().includes(searchTerm));
+      }
+      
+      if (filteredFiles.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">📦 ' + (searchTerm ? 'No files match your search' : 'No archived files found') + '</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = filteredFiles.map(file => {
+        const fileType = getSftpFileType(file.name);
+        const typeClass = fileType === '850' ? 'status-matched' : fileType === '860' ? 'status-pending' : 'status-review';
+        const icon = fileType === '860' ? '⚡' : '📄';
+        
+        return '<tr>' +
+          '<td><input type="checkbox" class="checkbox archive-cb" data-filename="' + file.name + '" onchange="toggleSftpArchive(\\'' + file.name + '\\')" ' + (sftpSelectedArchive.has(file.name) ? 'checked' : '') + '></td>' +
+          '<td><strong>' + icon + ' ' + file.name + '</strong></td>' +
+          '<td><span class="status-badge ' + typeClass + '">' + fileType + '</span></td>' +
+          '<td>' + formatSftpFileSize(file.size) + '</td>' +
+          '<td>' + formatSftpDate(file.modifyTime) + '</td>' +
+          '<td><button class="btn btn-primary" style="padding:0.35rem 0.75rem;font-size:0.8125rem" onclick="refetchSingleFile(\\'' + file.name + '\\', \\'archive\\')">📥 Re-fetch</button></td>' +
+          '</tr>';
+      }).join('');
+    }
+    
+    function filterArchiveFiles() { renderSftpArchiveFiles(); }
+    
+    function toggleSftpIncoming(filename) {
+      if (sftpSelectedIncoming.has(filename)) sftpSelectedIncoming.delete(filename);
+      else sftpSelectedIncoming.add(filename);
+      updateSftpIncomingButton();
+    }
+    
+    function toggleSftpArchive(filename) {
+      if (sftpSelectedArchive.has(filename)) sftpSelectedArchive.delete(filename);
+      else sftpSelectedArchive.add(filename);
+      updateSftpArchiveButton();
+    }
+    
+    function toggleAllIncoming() {
+      const checked = document.getElementById('selectAllIncoming')?.checked;
+      sftpSelectedIncoming.clear();
+      if (checked) sftpIncomingFiles.forEach(f => sftpSelectedIncoming.add(f.name));
+      renderSftpIncomingFiles();
+      updateSftpIncomingButton();
+    }
+    
+    function toggleAllArchive() {
+      const checked = document.getElementById('selectAllArchive')?.checked;
+      sftpSelectedArchive.clear();
+      if (checked) {
+        const searchTerm = (document.getElementById('archiveSearchBox')?.value || '').toLowerCase();
+        let filteredFiles = sftpArchiveFiles;
+        if (searchTerm) filteredFiles = sftpArchiveFiles.filter(f => f.name.toLowerCase().includes(searchTerm));
+        filteredFiles.forEach(f => sftpSelectedArchive.add(f.name));
+      }
+      renderSftpArchiveFiles();
+      updateSftpArchiveButton();
+    }
+    
+    function updateSftpIncomingButton() {
+      const btn = document.getElementById('refetchIncomingBtn');
+      btn.disabled = sftpSelectedIncoming.size === 0;
+      btn.textContent = '📥 Re-fetch Selected (' + sftpSelectedIncoming.size + ')';
+    }
+    
+    function updateSftpArchiveButton() {
+      const btn = document.getElementById('refetchArchiveBtn');
+      btn.disabled = sftpSelectedArchive.size === 0;
+      btn.textContent = '📥 Re-fetch Selected (' + sftpSelectedArchive.size + ')';
+    }
+    
+    async function refetchSingleFile(filename, source) {
+      try {
+        toast('Fetching ' + filename + '...');
+        const endpoint = source === 'archive' ? '/sftp/refetch-from-archive' : '/sftp/refetch-from-incoming';
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename })
+        });
+        const data = await response.json();
+        if (data.success) {
+          toast('✅ ' + data.message + ': ' + data.parsed.poNumber);
+          refreshSftpStatus();
+          loadOrders();
+        } else {
+          toast('❌ ' + data.error);
+        }
+      } catch (error) {
+        console.error('Refetch error:', error);
+        toast('Failed to refetch file');
+      }
+    }
+    
+    async function refetchSelectedIncoming() {
+      if (sftpSelectedIncoming.size === 0) return;
+      await bulkSftpRefetch(Array.from(sftpSelectedIncoming), 'incoming');
+    }
+    
+    async function refetchSelectedArchive() {
+      if (sftpSelectedArchive.size === 0) return;
+      await bulkSftpRefetch(Array.from(sftpSelectedArchive), 'archive');
+    }
+    
+    async function bulkSftpRefetch(filenames, source) {
+      try {
+        toast('Fetching ' + filenames.length + ' files...');
+        const response = await fetch('/sftp/bulk-refetch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filenames, source })
+        });
+        const data = await response.json();
+        if (data.success) {
+          toast('✅ Fetched ' + data.summary.successful + ' of ' + data.summary.total + ' files');
+          if (source === 'incoming') { sftpSelectedIncoming.clear(); updateSftpIncomingButton(); }
+          else { sftpSelectedArchive.clear(); updateSftpArchiveButton(); }
+          refreshSftpStatus();
+          loadOrders();
+        } else {
+          toast('❌ ' + data.error);
+        }
+      } catch (error) {
+        console.error('Bulk refetch error:', error);
+        toast('Failed to refetch files');
+      }
+    }
+    
+    function getSftpFileType(filename) {
+      const upper = filename.toUpperCase();
+      if (upper.includes('860')) return '860';
+      if (upper.includes('850')) return '850';
+      return 'EDI';
+    }
+    
+    function formatSftpFileSize(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+    
+    function formatSftpDate(timestamp) {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+      if (diffDays === 0) return 'Today ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      if (diffDays === 1) return 'Yesterday';
+      if (diffDays < 7) return diffDays + ' days ago';
+      return date.toLocaleDateString();
     }
     
     function toast(msg) {
