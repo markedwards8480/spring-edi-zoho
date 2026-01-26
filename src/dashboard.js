@@ -1159,14 +1159,125 @@ const dashboardHTML = `
     }
     
     async function sendToZoho(orderId) {
-      if (!confirm('Send this order to Zoho?')) return;
-      toast('Sending to Zoho...');
+      // Find the order to show details
+      const order = orders.find(o => o.id === orderId);
+      if (!order) {
+        toast('Order not found');
+        return;
+      }
+      
+      const parsed = order.parsed_data || {};
+      const items = parsed.items || [];
+      const totalUnits = items.reduce((s, i) => s + (i.quantityOrdered || 0), 0);
+      const totalAmount = items.reduce((s, i) => s + ((i.quantityOrdered || 0) * (i.unitPrice || 0)), 0);
+      const shipDate = parsed.dates?.shipNotBefore || 'N/A';
+      const cancelDate = parsed.dates?.cancelAfter || 'N/A';
+      
+      // Get unique styles
+      const styles = [...new Set(items.map(i => (i.productIds?.sku || i.productIds?.vendorItemNumber || '').split('-')[0]).filter(Boolean))];
+      
+      const html = \`
+        <div class="modal-overlay" onclick="closeCreateConfirmModal()">
+          <div class="modal" onclick="event.stopPropagation()" style="max-width:550px;">
+            <div class="modal-header" style="background:#1e3a5f;">
+              <h2 style="color:white;">📦 Create New Zoho Order</h2>
+              <button class="modal-close" onclick="closeCreateConfirmModal()" style="color:white;">×</button>
+            </div>
+            <div class="modal-body" style="padding:1.5rem;">
+              <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px;padding:1rem;margin-bottom:1.25rem;">
+                <div style="font-size:0.75rem;color:#2e7d32;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Creating New Order</div>
+                <div style="font-size:1.125rem;font-weight:600;color:#1b5e20;">PO# \${order.edi_order_number || 'N/A'}</div>
+                <div style="font-size:0.875rem;color:#388e3c;margin-top:0.25rem;">\${order.edi_customer_name || 'Unknown Customer'}</div>
+              </div>
+              
+              <div style="margin-bottom:1rem;">
+                <div style="font-size:0.875rem;font-weight:600;color:#1d1d1f;margin-bottom:0.75rem;border-bottom:1px solid #e5e5e7;padding-bottom:0.5rem;">Order Details:</div>
+                <table style="width:100%;font-size:0.875rem;border-collapse:collapse;">
+                  <tr style="border-bottom:1px solid #f0f0f0;">
+                    <td style="padding:0.5rem 0;color:#666;width:120px;">Ship Date</td>
+                    <td style="padding:0.5rem 0;font-weight:500;">\${shipDate}</td>
+                  </tr>
+                  <tr style="border-bottom:1px solid #f0f0f0;">
+                    <td style="padding:0.5rem 0;color:#666;">Cancel Date</td>
+                    <td style="padding:0.5rem 0;font-weight:500;">\${cancelDate}</td>
+                  </tr>
+                  <tr style="border-bottom:1px solid #f0f0f0;">
+                    <td style="padding:0.5rem 0;color:#666;">Items</td>
+                    <td style="padding:0.5rem 0;font-weight:500;">\${items.length} lines, \${totalUnits.toLocaleString()} units</td>
+                  </tr>
+                  <tr style="border-bottom:1px solid #f0f0f0;">
+                    <td style="padding:0.5rem 0;color:#666;">Amount</td>
+                    <td style="padding:0.5rem 0;font-weight:600;color:#1e3a5f;">$\${totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:0.5rem 0;color:#666;">Styles</td>
+                    <td style="padding:0.5rem 0;">
+                      <div style="display:flex;flex-wrap:wrap;gap:0.375rem;">
+                        \${styles.slice(0, 5).map(s => '<span style="background:#f3f4f6;padding:0.125rem 0.5rem;border-radius:3px;font-size:0.75rem;font-family:monospace;">' + s + '</span>').join('')}
+                        \${styles.length > 5 ? '<span style="font-size:0.75rem;color:#666;">+' + (styles.length - 5) + ' more</span>' : ''}
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+              </div>
+              
+              <div style="background:#f0f9ff;border-radius:8px;padding:0.875rem;font-size:0.8125rem;color:#0277bd;">
+                <strong>💡 Note:</strong> This will create a new sales order in Zoho Books.
+              </div>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid #e5e5e7;padding:1rem 1.5rem;display:flex;gap:0.75rem;justify-content:flex-end;">
+              <button class="btn btn-secondary" onclick="closeCreateConfirmModal()">Cancel</button>
+              <button id="confirmCreateBtn" class="btn btn-success" onclick="executeCreateOrder(\${orderId})" style="min-width:180px;">
+                ✓ Create Order in Zoho
+              </button>
+            </div>
+          </div>
+        </div>
+      \`;
+      
+      let createConfirmContainer = document.getElementById('createConfirmModalContainer');
+      if (!createConfirmContainer) {
+        createConfirmContainer = document.createElement('div');
+        createConfirmContainer.id = 'createConfirmModalContainer';
+        document.body.appendChild(createConfirmContainer);
+      }
+      createConfirmContainer.innerHTML = html;
+    }
+    
+    function closeCreateConfirmModal() {
+      const container = document.getElementById('createConfirmModalContainer');
+      if (container) container.innerHTML = '';
+    }
+    
+    async function executeCreateOrder(orderId) {
+      const btn = document.getElementById('confirmCreateBtn');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:0.5rem;"><span class="spinner" style="width:16px;height:16px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;"></span> Creating...</span>';
+      }
+      
       try {
         const res = await fetch('/orders/' + orderId + '/process', { method: 'POST' });
         const data = await res.json();
-        if (data.success) { toast('Order sent! SO#: ' + (data.zohoSoNumber || 'Created')); closeModal(); loadOrders(); }
-        else { toast('Error: ' + (data.error || 'Unknown')); }
-      } catch (e) { toast('Error: ' + e.message); }
+        if (data.success) { 
+          closeCreateConfirmModal();
+          closeModal();
+          toast('✅ Order created! SO#: ' + (data.zohoSoNumber || 'Created')); 
+          loadOrders(); 
+        } else { 
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '✓ Create Order in Zoho';
+          }
+          toast('❌ Error: ' + (data.error || 'Unknown')); 
+        }
+      } catch (e) { 
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '✓ Create Order in Zoho';
+        }
+        toast('❌ Error: ' + e.message); 
+      }
     }
     
     // ============================================================
@@ -1680,12 +1791,112 @@ const dashboardHTML = `
         return;
       }
       
-      if (!confirm('Send ' + selectedMatchIds.size + ' selected orders to Zoho?')) return;
+      // Build summary of what's being sent
+      const selectedMatches = matchResults.matches.filter(m => selectedMatchIds.has(m.ediOrder.id));
       
-      const btn = document.getElementById('sendSelectedBtn');
+      let rowsHtml = '';
+      let warningCount = 0;
+      
+      selectedMatches.forEach(match => {
+        const edi = match.ediOrder;
+        const zoho = match.zohoDraft;
+        const amtDiff = edi.totalAmount - zoho.totalAmount;
+        const hasAmtDiff = Math.abs(amtDiff) > 100;
+        
+        if (hasAmtDiff) warningCount++;
+        
+        rowsHtml += \`
+          <tr style="border-bottom:1px solid #f0f0f0;\${hasAmtDiff ? 'background:#fffbf7;' : ''}">
+            <td style="padding:0.5rem 0.75rem;font-weight:500;">\${edi.poNumber}</td>
+            <td style="padding:0.5rem 0.75rem;font-size:0.8125rem;color:#666;">\${(edi.customer || '').substring(0, 20)}</td>
+            <td style="padding:0.5rem 0.75rem;font-size:0.8125rem;">#\${zoho.number}</td>
+            <td style="padding:0.5rem 0.75rem;font-size:0.8125rem;text-align:right;">$\${zoho.totalAmount.toLocaleString('en-US', {minimumFractionDigits:0})}</td>
+            <td style="padding:0.5rem 0.75rem;font-size:0.8125rem;text-align:right;">$\${edi.totalAmount.toLocaleString('en-US', {minimumFractionDigits:0})}</td>
+            <td style="padding:0.5rem 0.75rem;text-align:center;">
+              \${hasAmtDiff ? '<span style="color:#c00;font-size:0.75rem;">⚠️</span>' : '<span style="color:#666;font-size:0.75rem;">✓</span>'}
+            </td>
+          </tr>
+        \`;
+      });
+      
+      const html = \`
+        <div class="modal-overlay" onclick="closeBulkConfirmModal()">
+          <div class="modal" onclick="event.stopPropagation()" style="max-width:700px;">
+            <div class="modal-header" style="background:#1e3a5f;">
+              <h2 style="color:white;">✏️ Modify \${selectedMatches.length} Zoho Order\${selectedMatches.length > 1 ? 's' : ''}</h2>
+              <button class="modal-close" onclick="closeBulkConfirmModal()" style="color:white;">×</button>
+            </div>
+            <div class="modal-body" style="padding:1.5rem;">
+              <div style="background:#e3f2fd;border:1px solid #90caf9;border-radius:8px;padding:1rem;margin-bottom:1.25rem;">
+                <div style="font-size:0.875rem;color:#1565c0;">
+                  You are about to <strong>update \${selectedMatches.length} existing Zoho order\${selectedMatches.length > 1 ? 's' : ''}</strong> with EDI data.
+                </div>
+              </div>
+              
+              <div style="margin-bottom:1rem;">
+                <div style="font-size:0.875rem;font-weight:600;color:#1d1d1f;margin-bottom:0.75rem;">Changes Summary:</div>
+                <div style="max-height:300px;overflow-y:auto;border:1px solid #e5e5e7;border-radius:8px;">
+                  <table style="width:100%;font-size:0.8125rem;border-collapse:collapse;">
+                    <thead>
+                      <tr style="background:#f9f9f9;border-bottom:2px solid #e5e5e5;">
+                        <th style="padding:0.625rem 0.75rem;text-align:left;font-size:0.6875rem;text-transform:uppercase;color:#666;">PO#</th>
+                        <th style="padding:0.625rem 0.75rem;text-align:left;font-size:0.6875rem;text-transform:uppercase;color:#666;">Customer</th>
+                        <th style="padding:0.625rem 0.75rem;text-align:left;font-size:0.6875rem;text-transform:uppercase;color:#666;">Zoho Order</th>
+                        <th style="padding:0.625rem 0.75rem;text-align:right;font-size:0.6875rem;text-transform:uppercase;color:#666;">Current</th>
+                        <th style="padding:0.625rem 0.75rem;text-align:right;font-size:0.6875rem;text-transform:uppercase;color:#666;">New</th>
+                        <th style="padding:0.625rem 0.75rem;text-align:center;font-size:0.6875rem;text-transform:uppercase;color:#666;">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      \${rowsHtml}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              
+              \${warningCount > 0 ? \`
+              <div style="background:#fff3e0;border:1px solid #ffcc80;border-radius:8px;padding:0.875rem;margin-bottom:1rem;font-size:0.8125rem;color:#e65100;">
+                ⚠️ <strong>\${warningCount} order\${warningCount > 1 ? 's have' : ' has'} amount differences</strong> — please verify before confirming.
+              </div>
+              \` : \`
+              <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px;padding:0.875rem;margin-bottom:1rem;font-size:0.8125rem;color:#2e7d32;">
+                ✓ All orders look good — no significant differences detected.
+              </div>
+              \`}
+              
+              <div style="background:#f5f5f5;border-radius:8px;padding:0.875rem;font-size:0.8125rem;color:#666;">
+                <strong>💡 Note:</strong> Each order will be updated in Zoho with the EDI data. This action will be logged.
+              </div>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid #e5e5e7;padding:1rem 1.5rem;display:flex;gap:0.75rem;justify-content:flex-end;">
+              <button class="btn btn-secondary" onclick="closeBulkConfirmModal()">Cancel</button>
+              <button id="confirmBulkBtn" class="btn btn-success" onclick="executeBulkUpdate()" style="min-width:200px;">
+                ✓ Apply Changes to \${selectedMatches.length} Order\${selectedMatches.length > 1 ? 's' : ''}
+              </button>
+            </div>
+          </div>
+        </div>
+      \`;
+      
+      let bulkConfirmContainer = document.getElementById('bulkConfirmModalContainer');
+      if (!bulkConfirmContainer) {
+        bulkConfirmContainer = document.createElement('div');
+        bulkConfirmContainer.id = 'bulkConfirmModalContainer';
+        document.body.appendChild(bulkConfirmContainer);
+      }
+      bulkConfirmContainer.innerHTML = html;
+    }
+    
+    function closeBulkConfirmModal() {
+      const container = document.getElementById('bulkConfirmModalContainer');
+      if (container) container.innerHTML = '';
+    }
+    
+    async function executeBulkUpdate() {
+      const btn = document.getElementById('confirmBulkBtn');
       const originalText = btn.textContent;
       btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span> Sending...';
+      btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:0.5rem;"><span class="spinner" style="width:16px;height:16px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;"></span> Updating...</span>';
       
       let success = 0, failed = 0;
       
@@ -1699,7 +1910,6 @@ const dashboardHTML = `
           const data = await res.json();
           if (data.success) {
             success++;
-            // Remove from selection
             selectedMatchIds.delete(ediOrderId);
             selectedMatchDrafts.delete(ediOrderId);
           } else {
@@ -1710,19 +1920,15 @@ const dashboardHTML = `
         }
       }
       
-      btn.disabled = false;
-      btn.textContent = originalText;
+      closeBulkConfirmModal();
       updateSendSelectedButton();
       
-      toast(success + ' orders sent to Zoho' + (failed > 0 ? ', ' + failed + ' failed' : ''));
+      toast('✅ ' + success + ' order' + (success > 1 ? 's' : '') + ' updated in Zoho' + (failed > 0 ? ', ' + failed + ' failed' : ''));
       
-      // Refresh data
       loadOrders();
       loadStats();
       
-      // Re-run find matches to update the list
       if (success > 0) {
-        // Clear the sent orders from the match results
         if (matchResults && matchResults.matches) {
           matchResults.matches = matchResults.matches.filter(m => !selectedMatchIds.has(m.ediOrder.id) && !selectedMatchDrafts.has(m.ediOrder.id));
           showMatchReview(matchResults);
