@@ -744,7 +744,6 @@ const dashboardHTML = `
       if (tab === 'sftp') refreshSftpStatus();
       if (tab === 'testing') loadTestOrders();
     }
-    }
     
     async function loadOrders() {
       try {
