@@ -147,6 +147,29 @@ class ZohoClient {
     }
   }
 
+  // Get confirmed sales orders (for matching revised EDI 850s)
+  async getConfirmedSalesOrders() {
+    const token = await this.ensureValidToken();
+    
+    try {
+      const response = await axios({
+        method: 'GET',
+        url: `${this.baseUrl}/books/v3/salesorders`,
+        headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
+        params: {
+          organization_id: this.orgId,
+          status: 'confirmed',
+          per_page: 200
+        }
+      });
+
+      return response.data?.salesorders || [];
+    } catch (error) {
+      logger.error('Failed to get confirmed sales orders', { error: error.message });
+      throw error;
+    }
+  }
+
   async getSalesOrderDetails(salesorderId) {
     const token = await this.ensureValidToken();
     
@@ -519,13 +542,21 @@ class ZohoClient {
 
     // ============================================================
     // STYLE/SKU MATCH (30 points) - REQUIRED
-    // At least one style must match for this to be considered a match
-    // Uses BASE STYLE matching to handle format differences:
-    // EDI: "77887X-BB" → base: "77887X"
-    // Zoho: "77887X-BQ-GREY-1X" → base: "77887X"
+    // At least one BASE STYLE must match for this to be considered a match
+    // 
+    // MATCHING RULES:
+    // - Base style (e.g., "77887X") MUST match - this is required
+    // - Suffix (e.g., "-BB", "-BC") affects confidence but is NOT required
+    //   - Same suffix = higher confidence
+    //   - Different suffix = still a match, but lower confidence (customers often send wrong suffix)
+    //
+    // Examples:
+    // EDI: "1234J-BB" vs Zoho: "1234J-BB" = HIGH confidence (base + suffix match)
+    // EDI: "1234J-BB" vs Zoho: "1234J-BC" = MEDIUM confidence (base matches, suffix different)
+    // EDI: "1234J-BB" vs Zoho: "5678K-BB" = NO MATCH (base doesn't match)
     // ============================================================
     
-    // Helper function to extract base style (the core style number before color/size)
+    // Helper function to extract base style (the core style number before suffix)
     const extractBaseStyle = (styleStr) => {
       if (!styleStr) return '';
       const s = styleStr.toLowerCase().trim();
@@ -539,34 +570,45 @@ class ZohoClient {
       return s;
     };
     
+    // Helper function to extract suffix (the part after base style, e.g., "-BB", "-BC")
+    const extractSuffix = (styleStr) => {
+      if (!styleStr) return '';
+      const s = styleStr.toLowerCase().trim();
+      // Get everything after the base style number
+      const match = s.match(/^\d{4,6}[a-z]?[-]?([a-z]{1,3})?/i);
+      if (match && match[1]) return match[1];
+      // Try splitting by dash
+      const parts = s.split('-');
+      if (parts.length >= 2 && parts[1].length <= 3) return parts[1];
+      return '';
+    };
+    
     if (ediItems.length > 0 && zohoItems.length > 0) {
-      // Extract EDI base styles and full styles
-      const ediBaseStyles = new Set();
-      const ediFullStyles = new Set();
+      // Extract EDI styles with base and suffix
+      const ediStyles = [];
       ediItems.forEach(i => {
         const sku = (i.productIds?.sku || i.productIds?.vendorItemNumber || '').trim();
         if (sku) {
-          ediFullStyles.add(sku.toLowerCase());
           const baseStyle = extractBaseStyle(sku);
+          const suffix = extractSuffix(sku);
           if (baseStyle && baseStyle.length >= 5) {
-            ediBaseStyles.add(baseStyle);
+            ediStyles.push({ full: sku.toLowerCase(), base: baseStyle, suffix: suffix });
           }
         }
       });
       
-      // Extract Zoho base styles and full styles
-      const zohoBaseStyles = new Set();
-      const zohoFullStyles = new Set();
+      // Extract Zoho styles with base and suffix
+      const zohoStyles = [];
       zohoItems.forEach(i => {
         const name = (i.name || '').trim();
         const desc = (i.description || '').trim();
         
         // Check item name (e.g., "77887X-BQ-GREY-1X")
         if (name) {
-          zohoFullStyles.add(name.toLowerCase());
           const baseStyle = extractBaseStyle(name);
+          const suffix = extractSuffix(name);
           if (baseStyle && baseStyle.length >= 5) {
-            zohoBaseStyles.add(baseStyle);
+            zohoStyles.push({ full: name.toLowerCase(), base: baseStyle, suffix: suffix });
           }
         }
         
@@ -574,67 +616,91 @@ class ZohoClient {
         if (desc) {
           const styleMatch = desc.match(/(\d{4,6}[a-z]?)/i);
           if (styleMatch) {
-            zohoBaseStyles.add(styleMatch[1].toLowerCase());
+            const baseStyle = styleMatch[1].toLowerCase();
+            zohoStyles.push({ full: desc.toLowerCase(), base: baseStyle, suffix: '' });
           }
         }
       });
 
-      // Check for base style overlap (this is the key matching)
+      // Get unique base styles
+      const ediBaseStyles = new Set(ediStyles.map(s => s.base));
+      const zohoBaseStyles = new Set(zohoStyles.map(s => s.base));
+      
+      // Count base style matches (REQUIRED for any match)
       let baseStyleMatches = 0;
+      let suffixMatches = 0;
+      let suffixMismatches = 0;
+      
       ediBaseStyles.forEach(ediBase => {
         if (zohoBaseStyles.has(ediBase)) {
           baseStyleMatches++;
+          
+          // Check suffix match for this base style
+          const ediSuffixes = ediStyles.filter(s => s.base === ediBase).map(s => s.suffix).filter(s => s);
+          const zohoSuffixes = zohoStyles.filter(s => s.base === ediBase).map(s => s.suffix).filter(s => s);
+          
+          if (ediSuffixes.length > 0 && zohoSuffixes.length > 0) {
+            // Check if any suffixes match
+            const hasMatchingSuffix = ediSuffixes.some(es => zohoSuffixes.includes(es));
+            if (hasMatchingSuffix) {
+              suffixMatches++;
+            } else {
+              suffixMismatches++;
+            }
+          }
         }
       });
       
-      // Also check for full style matches or partial matches
-      let fullStyleMatches = 0;
-      ediFullStyles.forEach(ediFull => {
-        zohoFullStyles.forEach(zohoFull => {
-          // Check if one contains the other (handles different suffixes)
-          if (ediFull === zohoFull || 
-              (ediFull.length >= 6 && zohoFull.includes(ediFull.split('-')[0])) ||
-              (zohoFull.length >= 6 && ediFull.includes(zohoFull.split('-')[0]))) {
-            fullStyleMatches++;
-          }
-        });
-      });
-
-      const totalStyleMatches = baseStyleMatches + fullStyleMatches;
-      
-      if (totalStyleMatches > 0) {
+      if (baseStyleMatches > 0) {
         score.details.styles = true;
-        score.details.styleMatchCount = totalStyleMatches;
+        score.details.styleMatchCount = baseStyleMatches;
         score.details.ediStyleCount = ediBaseStyles.size;
         score.details.zohoStyleCount = zohoBaseStyles.size;
+        score.details.suffixMatches = suffixMatches;
+        score.details.suffixMismatches = suffixMismatches;
         
-        // Score based on how many styles matched
+        // Score based on how many base styles matched
         const matchRatio = baseStyleMatches / Math.max(ediBaseStyles.size, 1);
+        
+        // Base points for style match (15-25 based on ratio)
+        let stylePoints = 15; // At least one base style matches
         if (matchRatio >= 0.8) {
-          score.total += 30; // Almost all styles match
+          stylePoints = 25; // Almost all base styles match
         } else if (matchRatio >= 0.5) {
-          score.total += 25; // Most styles match
+          stylePoints = 22; // Most base styles match
         } else if (matchRatio >= 0.25) {
-          score.total += 20; // Some styles match
-        } else {
-          score.total += 15; // At least one style matches
+          stylePoints = 18; // Some base styles match
         }
+        
+        // Bonus points for suffix matches (0-5 extra)
+        if (suffixMatches > 0 && suffixMismatches === 0) {
+          stylePoints += 5; // All suffixes match - high confidence
+        } else if (suffixMatches > suffixMismatches) {
+          stylePoints += 3; // Most suffixes match
+        } else if (suffixMismatches > 0) {
+          // Suffix mismatch - note it for display but don't penalize heavily
+          score.details.suffixWarning = true;
+        }
+        
+        score.total += stylePoints;
         
         // Log for debugging
         logger.debug('Style match found', {
           ediBaseStyles: Array.from(ediBaseStyles),
           zohoBaseStyles: Array.from(zohoBaseStyles),
           baseStyleMatches,
-          fullStyleMatches
+          suffixMatches,
+          suffixMismatches,
+          stylePoints
         });
       } else {
         // Log why no match
-        logger.debug('No style match', {
+        logger.debug('No style match - base styles do not overlap', {
           ediBaseStyles: Array.from(ediBaseStyles),
           zohoBaseStyles: Array.from(zohoBaseStyles)
         });
       }
-      // If no styles match at all, score.details.styles stays false
+      // If no base styles match, score.details.styles stays false
       // This will disqualify the match in findMatchingDrafts
     }
 
