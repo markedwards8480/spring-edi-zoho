@@ -1885,7 +1885,7 @@ const dashboardHTML = `
                 </table>
               </div>
             </div>
-            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-success" onclick="updateZohoDraft(\${matchIndex})">\${hasStyleMismatch ? '⚠️ Update Anyway' : '✓ Update Zoho Draft'}</button></div>
+            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-success" onclick="showUpdateConfirmation(\${matchIndex})">\${hasStyleMismatch ? '⚠️ Update Anyway' : '✓ Update Zoho Draft'}</button></div>
           </div>
         </div>
       \`;
@@ -1954,15 +1954,204 @@ const dashboardHTML = `
       }
     }
     
-    async function updateZohoDraft(matchIndex) {
+    // Show confirmation modal before updating Zoho
+    function showUpdateConfirmation(matchIndex) {
       const match = matchResults.matches[matchIndex];
       if (!match) return;
-      toast('Updating Zoho draft...');
+      
+      const edi = match.ediOrder;
+      const zoho = match.zohoDraft;
+      
+      // Calculate differences for display
+      const amtDiff = Math.abs(edi.totalAmount - zoho.totalAmount);
+      const hasAmtDiff = amtDiff > 10;
+      
+      // Ship date difference
+      let shipDateDiff = '';
+      if (edi.shipDate && zoho.shipDate) {
+        const ediDate = new Date(edi.shipDate);
+        const zohoDate = new Date(zoho.shipDate);
+        const diffDays = Math.round(Math.abs(ediDate - zohoDate) / (1000 * 60 * 60 * 24));
+        if (diffDays > 0) {
+          shipDateDiff = diffDays + ' days';
+        }
+      }
+      
+      // Build changes list
+      let changesHtml = '';
+      
+      // PO Reference change
+      if (edi.poNumber && edi.poNumber !== zoho.reference) {
+        changesHtml += '<div class="confirm-change-item"><span class="change-label">PO Reference:</span>';
+        if (zoho.reference) {
+          changesHtml += '<span class="change-old">' + zoho.reference + '</span><span class="change-arrow">→</span>';
+        }
+        changesHtml += '<span class="change-new">' + edi.poNumber + '</span></div>';
+      }
+      
+      // Ship date change
+      if (edi.shipDate) {
+        const ediShipFormatted = edi.shipDate.split('T')[0];
+        const zohoShipFormatted = zoho.shipDate ? zoho.shipDate.split('T')[0] : 'Not set';
+        if (ediShipFormatted !== zohoShipFormatted) {
+          changesHtml += '<div class="confirm-change-item"><span class="change-label">Ship Date:</span>';
+          changesHtml += '<span class="change-old">' + zohoShipFormatted + '</span><span class="change-arrow">→</span>';
+          changesHtml += '<span class="change-new">' + ediShipFormatted + '</span></div>';
+        }
+      }
+      
+      // Items/Units change
+      if (edi.itemCount !== zoho.itemCount || edi.totalUnits !== zoho.totalUnits) {
+        changesHtml += '<div class="confirm-change-item"><span class="change-label">Items:</span>';
+        changesHtml += '<span class="change-old">' + zoho.itemCount + ' lines, ' + zoho.totalUnits.toLocaleString() + ' units</span><span class="change-arrow">→</span>';
+        changesHtml += '<span class="change-new">' + edi.itemCount + ' lines, ' + edi.totalUnits.toLocaleString() + ' units</span></div>';
+      }
+      
+      // Amount change
+      if (hasAmtDiff) {
+        changesHtml += '<div class="confirm-change-item"><span class="change-label">Total Amount:</span>';
+        changesHtml += '<span class="change-old">$' + zoho.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2}) + '</span><span class="change-arrow">→</span>';
+        changesHtml += '<span class="change-new">$' + edi.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2}) + '</span></div>';
+      }
+      
+      if (!changesHtml) {
+        changesHtml = '<div style="color:#34c759;padding:0.5rem 0;">✓ No significant changes detected - data appears to match</div>';
+      }
+      
+      // Build warnings
+      let warningsHtml = '';
+      if (hasAmtDiff && amtDiff > 1000) {
+        warningsHtml += '<div class="confirm-warning" style="background:#fff3e0;border:1px solid #ff9800;"><span>⚠️</span><span>Large amount difference: <strong>$' + amtDiff.toLocaleString('en-US', {minimumFractionDigits:2}) + '</strong></span></div>';
+      }
+      if (shipDateDiff && parseInt(shipDateDiff) > 14) {
+        warningsHtml += '<div class="confirm-warning" style="background:#fff3e0;border:1px solid #ff9800;"><span>⚠️</span><span>Ship date difference: <strong>' + shipDateDiff + '</strong></span></div>';
+      }
+      
+      const html = \`
+        <div class="modal-overlay" onclick="closeConfirmModal()">
+          <div class="modal" onclick="event.stopPropagation()" style="max-width:550px;">
+            <div class="modal-header" style="background:linear-gradient(135deg,#1e3a5f,#2d5a87);">
+              <h2 style="color:white;">⚠️ Confirm Update to Zoho</h2>
+              <button class="modal-close" onclick="closeConfirmModal()" style="color:white;">×</button>
+            </div>
+            <div class="modal-body" style="padding:1.5rem;">
+              <div style="background:#f5f5f7;border-radius:12px;padding:1rem;margin-bottom:1.25rem;">
+                <div style="font-size:0.75rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">You are about to update</div>
+                <div style="font-size:1.125rem;font-weight:600;color:#1e3a5f;">📋 Zoho Order #\${zoho.number}</div>
+                <div style="font-size:0.875rem;color:#86868b;margin-top:0.25rem;">Status: \${zoho.status || 'Draft'}</div>
+              </div>
+              
+              <div style="background:#e3f2fd;border-radius:12px;padding:1rem;margin-bottom:1.25rem;">
+                <div style="font-size:0.75rem;color:#1565c0;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">With EDI data from</div>
+                <div style="font-size:1.125rem;font-weight:600;color:#1565c0;">📦 PO# \${edi.poNumber}</div>
+                <div style="font-size:0.875rem;color:#1976d2;margin-top:0.25rem;">\${edi.customer}</div>
+              </div>
+              
+              \${warningsHtml}
+              
+              <div style="margin-top:1.25rem;">
+                <div style="font-size:0.875rem;font-weight:600;color:#1d1d1f;margin-bottom:0.75rem;border-bottom:1px solid #e5e5e7;padding-bottom:0.5rem;">Changes to be applied:</div>
+                <div class="confirm-changes-list">
+                  \${changesHtml}
+                </div>
+              </div>
+              
+              <div style="background:#f0f9ff;border-radius:8px;padding:0.875rem;margin-top:1.25rem;font-size:0.8125rem;color:#0277bd;">
+                <strong>💡 Note:</strong> This will update the Zoho order with the EDI data. The action will be logged in the Activity Log.
+              </div>
+            </div>
+            <div class="modal-footer" style="border-top:1px solid #e5e5e7;padding:1rem 1.5rem;display:flex;gap:0.75rem;justify-content:flex-end;">
+              <button class="btn btn-secondary" onclick="closeConfirmModal()">Cancel</button>
+              <button id="confirmUpdateBtn" class="btn btn-success" onclick="executeUpdateZohoDraft(\${matchIndex})" style="min-width:180px;">
+                ✓ Confirm & Update Zoho
+              </button>
+            </div>
+          </div>
+        </div>
+        <style>
+          .confirm-change-item { display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0; border-bottom:1px solid #f0f0f0; font-size:0.875rem; flex-wrap:wrap; }
+          .confirm-change-item:last-child { border-bottom:none; }
+          .change-label { font-weight:600; color:#1d1d1f; min-width:110px; }
+          .change-old { color:#c62828; text-decoration:line-through; background:#ffebee; padding:0.125rem 0.5rem; border-radius:4px; }
+          .change-arrow { color:#86868b; font-weight:bold; }
+          .change-new { color:#2e7d32; font-weight:600; background:#e8f5e9; padding:0.125rem 0.5rem; border-radius:4px; }
+          .confirm-warning { display:flex; align-items:center; gap:0.5rem; padding:0.75rem; border-radius:8px; margin-bottom:0.75rem; font-size:0.875rem; }
+          .confirm-changes-list { background:#fafafa; border-radius:8px; padding:0.5rem 1rem; }
+        </style>
+      \`;
+      
+      // Add to a separate container so we can have both modals
+      let confirmContainer = document.getElementById('confirmModalContainer');
+      if (!confirmContainer) {
+        confirmContainer = document.createElement('div');
+        confirmContainer.id = 'confirmModalContainer';
+        document.body.appendChild(confirmContainer);
+      }
+      confirmContainer.innerHTML = html;
+    }
+    
+    function closeConfirmModal() {
+      const container = document.getElementById('confirmModalContainer');
+      if (container) container.innerHTML = '';
+    }
+    
+    // Actually execute the update after confirmation
+    async function executeUpdateZohoDraft(matchIndex) {
+      const match = matchResults.matches[matchIndex];
+      if (!match) return;
+      
+      // Disable button and show loading state
+      const btn = document.getElementById('confirmUpdateBtn');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:0.5rem;"><span class="spinner" style="width:16px;height:16px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;"></span> Updating...</span>';
+      }
+      
+      // Add spinner animation if not exists
+      if (!document.getElementById('spinnerStyle')) {
+        const style = document.createElement('style');
+        style.id = 'spinnerStyle';
+        style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
+        document.head.appendChild(style);
+      }
+      
       try {
-        const res = await fetch('/update-draft', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ediOrderId: match.ediOrder.id, zohoDraftId: match.zohoDraft.id }) });
+        const res = await fetch('/update-draft', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ 
+            ediOrderId: match.ediOrder.id, 
+            zohoDraftId: match.zohoDraft.id 
+          }) 
+        });
         const data = await res.json();
-        if (data.success) { toast('Draft updated!'); closeModal(); loadOrders(); } else { toast('Error: ' + (data.error || 'Unknown')); }
-      } catch (e) { toast('Error: ' + e.message); }
+        
+        if (data.success) { 
+          closeConfirmModal();
+          closeModal();
+          toast('✅ Zoho order updated successfully!'); 
+          loadOrders(); 
+        } else { 
+          // Re-enable button on error
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '✓ Confirm & Update Zoho';
+          }
+          toast('❌ Error: ' + (data.error || 'Unknown error')); 
+        }
+      } catch (e) { 
+        // Re-enable button on error
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '✓ Confirm & Update Zoho';
+        }
+        toast('❌ Error: ' + e.message); 
+      }
+    }
+
+    // Legacy function - now redirects to confirmation
+    async function updateZohoDraft(matchIndex) {
+      showUpdateConfirmation(matchIndex);
     }
     
     // ============================================================
