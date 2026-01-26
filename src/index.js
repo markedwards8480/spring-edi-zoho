@@ -42,7 +42,7 @@ app.get('/status', async (req, res) => {
         COUNT(*) FILTER (WHERE status = 'pending' AND zoho_so_number IS NULL) as pending,
         COUNT(*) FILTER (WHERE status = 'matched') as matched,
         COUNT(*) FILTER (WHERE status = 'review') as review
-      FROM edi_orders 
+      FROM edi_orders
       WHERE created_at > NOW() - INTERVAL '7 days'
     `);
     res.json({ last24Hours: result.rows[0], timestamp: new Date().toISOString() });
@@ -59,8 +59,8 @@ app.get('/orders', async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT id, filename, edi_order_number, edi_customer_name, status, 
-             zoho_so_id, zoho_so_number, error_message, created_at, 
-             processed_at, parsed_data, matched_draft_id, raw_edi
+             zoho_so_id, zoho_so_number, error_message, created_at, processed_at,
+             parsed_data, matched_draft_id, raw_edi
       FROM edi_orders 
       ORDER BY created_at DESC 
       LIMIT 200
@@ -88,7 +88,6 @@ app.get('/orders/:id', async (req, res) => {
 app.post('/fetch-sftp', async (req, res) => {
   try {
     logger.info('Manual SFTP fetch triggered');
-    
     await auditLogger.log(ACTIONS.SFTP_FETCH_STARTED, {
       severity: SEVERITY.INFO,
       details: { trigger: 'manual' }
@@ -98,7 +97,7 @@ app.post('/fetch-sftp', async (req, res) => {
     
     await auditLogger.log(ACTIONS.SFTP_FETCH_COMPLETED, {
       severity: SEVERITY.SUCCESS,
-      details: {
+      details: { 
         filesProcessed: result.filesProcessed || 0,
         ordersCreated: result.ordersCreated || 0,
         errors: result.errors?.length || 0
@@ -108,12 +107,10 @@ app.post('/fetch-sftp', async (req, res) => {
     res.json({ success: true, result });
   } catch (error) {
     logger.error('SFTP fetch failed', { error: error.message });
-    
     await auditLogger.log(ACTIONS.SFTP_ERROR, {
       severity: SEVERITY.ERROR,
       errorMessage: error.message
     });
-    
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -123,6 +120,458 @@ app.post('/process', async (req, res) => {
     const result = await processEDIOrders();
     res.json({ success: true, result });
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================
+// SFTP BROWSER ENDPOINTS (NEW)
+// ============================================================
+
+// Get SFTP status - shows files in both incoming and archive folders
+app.get('/sftp/status', async (req, res) => {
+  try {
+    const SFTPClient = require('./sftp');
+    const sftp = new SFTPClient();
+    
+    await sftp.connect();
+    const status = await sftp.getStatus();
+    await sftp.disconnect();
+    
+    res.json({ success: true, ...status });
+  } catch (error) {
+    logger.error('SFTP status check failed', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// List files in incoming (orders) folder
+app.get('/sftp/incoming', async (req, res) => {
+  try {
+    const SFTPClient = require('./sftp');
+    const sftp = new SFTPClient();
+    
+    await sftp.connect();
+    const files = await sftp.listIncomingFiles();
+    await sftp.disconnect();
+    
+    res.json({ 
+      success: true, 
+      files,
+      count: files.length,
+      path: process.env.SFTP_ORDERS_PATH || '/orders'
+    });
+  } catch (error) {
+    logger.error('SFTP incoming list failed', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// List files in archive folder
+app.get('/sftp/archive', async (req, res) => {
+  try {
+    const SFTPClient = require('./sftp');
+    const sftp = new SFTPClient();
+    
+    await sftp.connect();
+    const files = await sftp.listArchivedFiles();
+    await sftp.disconnect();
+    
+    // Optional: limit results
+    const limit = parseInt(req.query.limit) || 100;
+    const limitedFiles = files.slice(0, limit);
+    
+    res.json({ 
+      success: true, 
+      files: limitedFiles,
+      count: files.length,
+      showing: limitedFiles.length,
+      path: process.env.SFTP_ARCHIVE_PATH || '/archive'
+    });
+  } catch (error) {
+    logger.error('SFTP archive list failed', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Re-fetch a specific file from archive (download and process it again)
+app.post('/sftp/refetch-from-archive', async (req, res) => {
+  try {
+    const { filename } = req.body;
+    
+    if (!filename) {
+      return res.status(400).json({ success: false, error: 'Filename required' });
+    }
+    
+    logger.info('Re-fetching file from archive', { filename });
+    
+    await auditLogger.log('sftp_refetch_started', {
+      severity: SEVERITY.INFO,
+      details: { filename, source: 'archive' }
+    });
+    
+    const SFTPClient = require('./sftp');
+    const sftp = new SFTPClient();
+    
+    await sftp.connect();
+    
+    // Download the file content from archive
+    const content = await sftp.downloadFromArchive(filename);
+    
+    await sftp.disconnect();
+    
+    // Now process it like a new file
+    const { parseEDI } = require('./edi-parser');
+    const parsed = parseEDI(content);
+    
+    if (!parsed || !parsed.header) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Could not parse EDI file',
+        filename 
+      });
+    }
+    
+    // Check if this order already exists
+    const existingResult = await pool.query(
+      'SELECT id, status, zoho_so_number FROM edi_orders WHERE edi_order_number = $1',
+      [parsed.header.purchaseOrderNumber]
+    );
+    
+    let orderInfo;
+    let isNew = false;
+    
+    if (existingResult.rows.length > 0) {
+      // Order exists - update it with fresh data
+      const existing = existingResult.rows[0];
+      
+      await pool.query(`
+        UPDATE edi_orders 
+        SET parsed_data = $1,
+            raw_edi = $2,
+            status = CASE WHEN status = 'processed' THEN 'review' ELSE status END,
+            updated_at = NOW()
+        WHERE id = $3
+      `, [JSON.stringify(parsed), content, existing.id]);
+      
+      orderInfo = {
+        id: existing.id,
+        poNumber: parsed.header.purchaseOrderNumber,
+        previousStatus: existing.status,
+        zohoSoNumber: existing.zoho_so_number,
+        action: 'updated'
+      };
+      
+      logger.info('Re-fetched order updated', orderInfo);
+    } else {
+      // New order - insert it
+      const customerName = parsed.parties?.buyingParty?.name || 
+                          parsed.parties?.shipTo?.name || 
+                          'Unknown';
+      
+      const insertResult = await pool.query(`
+        INSERT INTO edi_orders (filename, raw_edi, edi_order_number, edi_customer_name, parsed_data, status)
+        VALUES ($1, $2, $3, $4, $5, 'pending')
+        RETURNING id
+      `, [
+        filename,
+        content,
+        parsed.header.purchaseOrderNumber,
+        customerName,
+        JSON.stringify(parsed)
+      ]);
+      
+      orderInfo = {
+        id: insertResult.rows[0].id,
+        poNumber: parsed.header.purchaseOrderNumber,
+        customer: customerName,
+        action: 'created'
+      };
+      isNew = true;
+      
+      logger.info('Re-fetched order created', orderInfo);
+    }
+    
+    await auditLogger.log('sftp_refetch_completed', {
+      severity: SEVERITY.SUCCESS,
+      ediOrderId: orderInfo.id,
+      ediOrderNumber: orderInfo.poNumber,
+      details: { 
+        filename, 
+        source: 'archive',
+        action: orderInfo.action,
+        isNew
+      }
+    });
+    
+    res.json({
+      success: true,
+      message: isNew ? 'File fetched and new order created' : 'File fetched and existing order updated',
+      order: orderInfo,
+      parsed: {
+        poNumber: parsed.header.purchaseOrderNumber,
+        customer: parsed.parties?.buyingParty?.name,
+        itemCount: parsed.items?.length || 0,
+        documentType: parsed.header.transactionSetCode || '850'
+      }
+    });
+    
+  } catch (error) {
+    logger.error('SFTP refetch from archive failed', { error: error.message, filename: req.body.filename });
+    
+    await auditLogger.log('sftp_refetch_error', {
+      severity: SEVERITY.ERROR,
+      errorMessage: error.message,
+      details: { filename: req.body.filename, source: 'archive' }
+    });
+    
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Re-fetch a specific file from incoming folder
+app.post('/sftp/refetch-from-incoming', async (req, res) => {
+  try {
+    const { filename } = req.body;
+    
+    if (!filename) {
+      return res.status(400).json({ success: false, error: 'Filename required' });
+    }
+    
+    logger.info('Re-fetching file from incoming', { filename });
+    
+    await auditLogger.log('sftp_refetch_started', {
+      severity: SEVERITY.INFO,
+      details: { filename, source: 'incoming' }
+    });
+    
+    const SFTPClient = require('./sftp');
+    const sftp = new SFTPClient();
+    
+    await sftp.connect();
+    
+    // Download the file content from incoming
+    const content = await sftp.downloadFile(filename);
+    
+    await sftp.disconnect();
+    
+    // Now process it like a new file
+    const { parseEDI } = require('./edi-parser');
+    const parsed = parseEDI(content);
+    
+    if (!parsed || !parsed.header) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Could not parse EDI file',
+        filename 
+      });
+    }
+    
+    // Check if this order already exists
+    const existingResult = await pool.query(
+      'SELECT id, status, zoho_so_number FROM edi_orders WHERE edi_order_number = $1',
+      [parsed.header.purchaseOrderNumber]
+    );
+    
+    let orderInfo;
+    let isNew = false;
+    
+    if (existingResult.rows.length > 0) {
+      // Order exists - update it with fresh data
+      const existing = existingResult.rows[0];
+      
+      await pool.query(`
+        UPDATE edi_orders 
+        SET parsed_data = $1,
+            raw_edi = $2,
+            status = CASE WHEN status = 'processed' THEN 'review' ELSE status END,
+            updated_at = NOW()
+        WHERE id = $3
+      `, [JSON.stringify(parsed), content, existing.id]);
+      
+      orderInfo = {
+        id: existing.id,
+        poNumber: parsed.header.purchaseOrderNumber,
+        previousStatus: existing.status,
+        zohoSoNumber: existing.zoho_so_number,
+        action: 'updated'
+      };
+      
+      logger.info('Re-fetched order updated', orderInfo);
+    } else {
+      // New order - insert it
+      const customerName = parsed.parties?.buyingParty?.name || 
+                          parsed.parties?.shipTo?.name || 
+                          'Unknown';
+      
+      const insertResult = await pool.query(`
+        INSERT INTO edi_orders (filename, raw_edi, edi_order_number, edi_customer_name, parsed_data, status)
+        VALUES ($1, $2, $3, $4, $5, 'pending')
+        RETURNING id
+      `, [
+        filename,
+        content,
+        parsed.header.purchaseOrderNumber,
+        customerName,
+        JSON.stringify(parsed)
+      ]);
+      
+      orderInfo = {
+        id: insertResult.rows[0].id,
+        poNumber: parsed.header.purchaseOrderNumber,
+        customer: customerName,
+        action: 'created'
+      };
+      isNew = true;
+      
+      logger.info('Re-fetched order created', orderInfo);
+    }
+    
+    await auditLogger.log('sftp_refetch_completed', {
+      severity: SEVERITY.SUCCESS,
+      ediOrderId: orderInfo.id,
+      ediOrderNumber: orderInfo.poNumber,
+      details: { 
+        filename, 
+        source: 'incoming',
+        action: orderInfo.action,
+        isNew
+      }
+    });
+    
+    res.json({
+      success: true,
+      message: isNew ? 'File fetched and new order created' : 'File fetched and existing order updated',
+      order: orderInfo,
+      parsed: {
+        poNumber: parsed.header.purchaseOrderNumber,
+        customer: parsed.parties?.buyingParty?.name,
+        itemCount: parsed.items?.length || 0,
+        documentType: parsed.header.transactionSetCode || '850'
+      }
+    });
+    
+  } catch (error) {
+    logger.error('SFTP refetch from incoming failed', { error: error.message, filename: req.body.filename });
+    
+    await auditLogger.log('sftp_refetch_error', {
+      severity: SEVERITY.ERROR,
+      errorMessage: error.message,
+      details: { filename: req.body.filename, source: 'incoming' }
+    });
+    
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Bulk re-fetch multiple files from archive
+app.post('/sftp/bulk-refetch', async (req, res) => {
+  try {
+    const { filenames, source = 'archive' } = req.body;
+    
+    if (!filenames || !Array.isArray(filenames) || filenames.length === 0) {
+      return res.status(400).json({ success: false, error: 'Filenames array required' });
+    }
+    
+    logger.info('Bulk re-fetching files', { count: filenames.length, source });
+    
+    const SFTPClient = require('./sftp');
+    const sftp = new SFTPClient();
+    const { parseEDI } = require('./edi-parser');
+    
+    await sftp.connect();
+    
+    const results = [];
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const filename of filenames) {
+      try {
+        // Download file
+        const content = source === 'archive' 
+          ? await sftp.downloadFromArchive(filename)
+          : await sftp.downloadFile(filename);
+        
+        // Parse it
+        const parsed = parseEDI(content);
+        
+        if (!parsed || !parsed.header) {
+          results.push({ filename, success: false, error: 'Parse failed' });
+          errorCount++;
+          continue;
+        }
+        
+        // Check if exists
+        const existingResult = await pool.query(
+          'SELECT id, status FROM edi_orders WHERE edi_order_number = $1',
+          [parsed.header.purchaseOrderNumber]
+        );
+        
+        if (existingResult.rows.length > 0) {
+          // Update existing
+          await pool.query(`
+            UPDATE edi_orders 
+            SET parsed_data = $1, raw_edi = $2, updated_at = NOW()
+            WHERE id = $3
+          `, [JSON.stringify(parsed), content, existingResult.rows[0].id]);
+          
+          results.push({ 
+            filename, 
+            success: true, 
+            action: 'updated',
+            orderId: existingResult.rows[0].id,
+            poNumber: parsed.header.purchaseOrderNumber
+          });
+        } else {
+          // Create new
+          const customerName = parsed.parties?.buyingParty?.name || 'Unknown';
+          const insertResult = await pool.query(`
+            INSERT INTO edi_orders (filename, raw_edi, edi_order_number, edi_customer_name, parsed_data, status)
+            VALUES ($1, $2, $3, $4, $5, 'pending')
+            RETURNING id
+          `, [filename, content, parsed.header.purchaseOrderNumber, customerName, JSON.stringify(parsed)]);
+          
+          results.push({ 
+            filename, 
+            success: true, 
+            action: 'created',
+            orderId: insertResult.rows[0].id,
+            poNumber: parsed.header.purchaseOrderNumber
+          });
+        }
+        
+        successCount++;
+        
+      } catch (fileError) {
+        results.push({ filename, success: false, error: fileError.message });
+        errorCount++;
+      }
+    }
+    
+    await sftp.disconnect();
+    
+    await auditLogger.log('sftp_bulk_refetch_completed', {
+      severity: errorCount === 0 ? SEVERITY.SUCCESS : SEVERITY.WARNING,
+      details: { 
+        source,
+        totalFiles: filenames.length,
+        successCount,
+        errorCount
+      }
+    });
+    
+    res.json({
+      success: true,
+      summary: {
+        total: filenames.length,
+        successful: successCount,
+        failed: errorCount
+      },
+      results
+    });
+    
+  } catch (error) {
+    logger.error('Bulk SFTP refetch failed', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -162,17 +611,11 @@ app.post('/find-matches', async (req, res) => {
     
     if (!forceRefresh && !cacheStatus.isStale && cacheStatus.draftsCount > 0) {
       // Use cache
-      logger.info('Using cached Zoho drafts', { 
-        draftsCount: cacheStatus.draftsCount,
-        minutesOld: cacheStatus.minutesSinceRefresh 
-      });
+      logger.info('Using cached Zoho drafts', { draftsCount: cacheStatus.draftsCount, minutesOld: cacheStatus.minutesSinceRefresh });
       drafts = await zohoDraftsCache.getCachedDrafts();
     } else {
       // Fetch fresh and update cache
-      logger.info('Fetching fresh Zoho drafts', { 
-        reason: cacheStatus.isStale ? 'cache stale' : 'no cache',
-        forceRefresh 
-      });
+      logger.info('Fetching fresh Zoho drafts', { reason: cacheStatus.isStale ? 'cache stale' : 'no cache', forceRefresh });
       await zohoDraftsCache.refreshCache(zoho);
       drafts = await zohoDraftsCache.getCachedDrafts();
     }
@@ -212,12 +655,13 @@ app.post('/find-matches', async (req, res) => {
       });
     }
     
-    res.json({ 
-      success: true, 
-      matches: matchResults.matches, 
+    res.json({
+      success: true,
+      matches: matchResults.matches,
       noMatches: matchResults.noMatches,
       sessionId: session.sessionId
     });
+    
   } catch (error) {
     logger.error('Find matches failed', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
@@ -227,7 +671,6 @@ app.post('/find-matches', async (req, res) => {
 app.post('/confirm-matches', async (req, res) => {
   try {
     const { matches, newOrders } = req.body;
-    
     const ZohoClient = require('./zoho');
     const zoho = new ZohoClient();
     
@@ -283,14 +726,12 @@ app.post('/confirm-matches', async (req, res) => {
       } catch (error) {
         failed++;
         results.push({ ediOrderId: match.ediOrderId, success: false, error: error.message });
-        
         await auditLogger.log(ACTIONS.ZOHO_ERROR, {
           severity: SEVERITY.ERROR,
           ediOrderId: match.ediOrderId,
           errorMessage: error.message,
           details: { operation: 'update_draft', draftId: match.zohoDraftId }
         });
-        
         logger.error('Failed to process match', { ediOrderId: match.ediOrderId, error: error.message });
       }
     }
@@ -315,7 +756,6 @@ app.post('/confirm-matches', async (req, res) => {
         if (mappingResult.rows.length === 0) {
           failed++;
           results.push({ ediOrderId: newOrder.ediOrderId, success: false, error: 'No customer mapping' });
-          
           await auditLogger.log(ACTIONS.ZOHO_ERROR, {
             severity: SEVERITY.ERROR,
             ediOrderId: newOrder.ediOrderId,
@@ -324,7 +764,6 @@ app.post('/confirm-matches', async (req, res) => {
             errorMessage: 'No customer mapping found',
             details: { operation: 'create_new' }
           });
-          
           continue;
         }
         
@@ -372,7 +811,6 @@ app.post('/confirm-matches', async (req, res) => {
       } catch (error) {
         failed++;
         results.push({ ediOrderId: newOrder.ediOrderId, success: false, error: error.message });
-        
         await auditLogger.log(ACTIONS.ZOHO_ERROR, {
           severity: SEVERITY.ERROR,
           ediOrderId: newOrder.ediOrderId,
@@ -383,6 +821,7 @@ app.post('/confirm-matches', async (req, res) => {
     }
     
     res.json({ success: true, processed, failed, results });
+    
   } catch (error) {
     logger.error('Confirm matches failed', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
@@ -404,6 +843,7 @@ app.post('/update-draft', async (req, res) => {
     
     const ZohoClient = require('./zoho');
     const zoho = new ZohoClient();
+    
     const updated = await zoho.updateDraftWithEdiData(zohoDraftId, ediOrder);
     
     await pool.query(`
@@ -435,6 +875,7 @@ app.post('/update-draft', async (req, res) => {
     });
     
     res.json({ success: true, zohoOrder: updated });
+    
   } catch (error) {
     await auditLogger.log(ACTIONS.ZOHO_ERROR, {
       severity: SEVERITY.ERROR,
@@ -442,7 +883,6 @@ app.post('/update-draft', async (req, res) => {
       errorMessage: error.message,
       details: { operation: 'update_draft', draftId: req.body.zohoDraftId }
     });
-    
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -571,7 +1011,7 @@ app.post('/create-new-order', async (req, res) => {
         ediOrderNumber: ediOrder.edi_order_number,
         customerName: ediOrder.edi_customer_name,
         errorMessage: 'Customer not found in mappings - order not created',
-        details: { 
+        details: {
           operation: 'create_new_order',
           reason: 'no_customer_mapping',
           ediCustomerName: ediOrder.edi_customer_name
@@ -588,8 +1028,7 @@ app.post('/create-new-order', async (req, res) => {
     const customerMapping = mappingResult.rows[0];
     
     // Calculate totals for audit
-    const totalAmount = items.reduce((sum, item) => 
-      sum + ((item.quantityOrdered || 0) * (item.unitPrice || 0)), 0);
+    const totalAmount = items.reduce((sum, item) => sum + ((item.quantityOrdered || 0) * (item.unitPrice || 0)), 0);
     const totalUnits = items.reduce((sum, item) => sum + (item.quantityOrdered || 0), 0);
     
     // Create the order in Zoho
@@ -613,10 +1052,7 @@ app.post('/create-new-order', async (req, res) => {
     // Update EDI order status
     await pool.query(`
       UPDATE edi_orders 
-      SET status = 'processed', 
-          zoho_so_id = $1, 
-          zoho_so_number = $2, 
-          processed_at = NOW()
+      SET status = 'processed', zoho_so_id = $1, zoho_so_number = $2, processed_at = NOW()
       WHERE id = $3
     `, [created.salesorder_id, created.salesorder_number, ediOrderId]);
     
@@ -670,8 +1106,8 @@ app.post('/create-new-order', async (req, res) => {
       zohoSoNumber: created.salesorder_number
     });
     
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Order created successfully in Zoho',
       zohoSalesOrder: {
         id: created.salesorder_id,
@@ -693,7 +1129,7 @@ app.post('/create-new-order', async (req, res) => {
       severity: SEVERITY.ERROR,
       ediOrderId: req.body.ediOrderId,
       errorMessage: error.message,
-      details: { 
+      details: {
         operation: 'create_new_order',
         zohoError: error.response?.data || error.message
       }
@@ -755,11 +1191,7 @@ app.get('/audit/activity', async (req, res) => {
 app.get('/audit/check/:poNumber', async (req, res) => {
   try {
     const result = await auditLogger.wasOrderSentToZoho(req.params.poNumber);
-    res.json({ 
-      success: true, 
-      alreadySent: !!result,
-      details: result 
-    });
+    res.json({ success: true, alreadySent: !!result, details: result });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -797,8 +1229,8 @@ app.post('/cache/refresh', async (req, res) => {
       }
     });
     
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Cache refreshed',
       draftsCount: result.draftsCount,
       durationMs: result.durationMs
@@ -830,8 +1262,9 @@ app.get('/match-session', async (req, res) => {
     if (!session) {
       return res.json({ success: true, hasSession: false, matches: [], noMatches: [] });
     }
-    res.json({ 
-      success: true, 
+    
+    res.json({
+      success: true,
       hasSession: true,
       sessionId: session.id,
       matches: session.matches,
@@ -955,11 +1388,18 @@ app.get('/zoho/customers', async (req, res) => {
     const zoho = new ZohoClient();
     const accessToken = await zoho.ensureValidToken();
     const orgId = process.env.ZOHO_ORG_ID;
+    
     const axios = require('axios');
     const response = await axios.get('https://www.zohoapis.com/books/v3/contacts', {
       headers: { 'Authorization': 'Zoho-oauthtoken ' + accessToken },
-      params: { organization_id: orgId, contact_type: 'customer', status: 'active', per_page: 200 }
+      params: {
+        organization_id: orgId,
+        contact_type: 'customer',
+        status: 'active',
+        per_page: 200
+      }
     });
+    
     res.json({ success: true, customers: response.data.contacts || [] });
   } catch (error) {
     logger.error('Failed to get Zoho customers', { error: error.message });
@@ -1034,7 +1474,6 @@ async function startServer() {
     const schedule = process.env.CRON_SCHEDULE || '*/15 * * * *';
     cron.schedule(schedule, async () => {
       logger.info('Scheduled SFTP job triggered');
-      
       await auditLogger.log(ACTIONS.SFTP_FETCH_STARTED, {
         severity: SEVERITY.INFO,
         details: { trigger: 'scheduled' }
@@ -1042,17 +1481,12 @@ async function startServer() {
       
       try {
         const result = await processEDIOrders();
-        
         await auditLogger.log(ACTIONS.SFTP_FETCH_COMPLETED, {
           severity: SEVERITY.SUCCESS,
-          details: {
-            filesProcessed: result.filesProcessed || 0,
-            ordersCreated: result.ordersCreated || 0
-          }
+          details: { filesProcessed: result.filesProcessed || 0, ordersCreated: result.ordersCreated || 0 }
         });
       } catch (error) {
         logger.error('Scheduled processing failed', { error: error.message });
-        
         await auditLogger.log(ACTIONS.SFTP_ERROR, {
           severity: SEVERITY.ERROR,
           errorMessage: error.message,
@@ -1069,16 +1503,10 @@ async function startServer() {
         const ZohoClient = require('./zoho');
         const zoho = new ZohoClient();
         const result = await zohoDraftsCache.refreshCache(zoho);
-        
         await auditLogger.log('cache_refreshed', {
           severity: SEVERITY.INFO,
-          details: {
-            draftsCount: result.draftsCount,
-            durationMs: result.durationMs,
-            trigger: 'scheduled'
-          }
+          details: { draftsCount: result.draftsCount, durationMs: result.durationMs, trigger: 'scheduled' }
         });
-        
         logger.info('Zoho cache refreshed', { draftsCount: result.draftsCount });
       } catch (error) {
         logger.error('Scheduled cache refresh failed', { error: error.message });
@@ -1090,6 +1518,7 @@ async function startServer() {
     app.listen(port, () => {
       logger.info('Server running on port ' + port);
     });
+    
   } catch (error) {
     logger.error('Failed to start server', { error: error.message });
     process.exit(1);
