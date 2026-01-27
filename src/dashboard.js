@@ -1846,6 +1846,10 @@ const dashboardHTML = `
       const ediSuffixes = [...new Set(ediFullStyles.map(s => { const parts = s.split('-'); return parts.length > 1 ? parts[1] : ''; }).filter(Boolean))];
       const zohoSuffixes = [...new Set(zohoFullStyles.map(s => { const parts = s.split('-'); return parts.length > 1 ? parts[1] : ''; }).filter(Boolean))];
       
+      // Create short display versions (base-suffix only, e.g. "79643J-EA")
+      const ediShortStyles = [...new Set(ediFullStyles.map(s => { const parts = s.split('-'); return parts.length >= 2 ? parts[0] + '-' + parts[1] : parts[0]; }).filter(Boolean))];
+      const zohoShortStyles = [...new Set(zohoFullStyles.map(s => { const parts = s.split('-'); return parts.length >= 2 ? parts[0] + '-' + parts[1] : parts[0]; }).filter(Boolean))];
+      
       // Check if suffixes match
       const suffixMatch = ediSuffixes.length > 0 && zohoSuffixes.length > 0 && ediSuffixes.some(es => zohoSuffixes.includes(es));
       const hasSuffixMismatch = ediSuffixes.length > 0 && zohoSuffixes.length > 0 && !suffixMatch;
@@ -1918,8 +1922,10 @@ const dashboardHTML = `
       
       // Build suffix status display
       let suffixStatusHtml = '✓ base match';
+      let suffixRowClass = '';
       if (hasSuffixMismatch) {
-        suffixStatusHtml = '✓ base<br><span style="color:#92400e;font-size:0.75rem;">⚠️ ' + ediSuffixes[0] + '≠' + zohoSuffixes[0] + '</span>';
+        suffixStatusHtml = '✓ base<br><span style="color:#92400e;font-size:0.6875rem;">⚠️ suffix: ' + ediSuffixes[0] + ' ≠ ' + zohoSuffixes[0] + '</span>';
+        suffixRowClass = 'has-warn';
       } else if (suffixMatch) {
         suffixStatusHtml = '✓ full match';
       }
@@ -2020,8 +2026,8 @@ const dashboardHTML = `
                 </tr>
                 <tr class="\${hasSuffixMismatch ? 'has-warn' : ''}">
                   <td class="label">Styles</td>
-                  <td class="value"><div class="focus-style-list">\${ediFullStyles.slice(0,2).map(s => '<span class="focus-style-pill">' + s + '</span>').join('')}\${ediFullStyles.length > 2 ? '<span class="focus-style-more">+' + (ediFullStyles.length-2) + '</span>' : ''}</div></td>
-                  <td class="value"><div class="focus-style-list">\${zohoFullStyles.slice(0,2).map(s => '<span class="focus-style-pill">' + s + '</span>').join('')}\${zohoFullStyles.length > 2 ? '<span class="focus-style-more">+' + (zohoFullStyles.length-2) + '</span>' : ''}</div></td>
+                  <td class="value"><div class="focus-style-list">\${ediShortStyles.slice(0,2).map(s => '<span class="focus-style-pill">' + s + '</span>').join('')}\${ediShortStyles.length > 2 ? '<span class="focus-style-more">+' + (ediShortStyles.length-2) + '</span>' : ''}</div></td>
+                  <td class="value"><div class="focus-style-list">\${zohoShortStyles.slice(0,2).map(s => '<span class="focus-style-pill">' + s + '</span>').join('')}\${zohoShortStyles.length > 2 ? '<span class="focus-style-more">+' + (zohoShortStyles.length-2) + '</span>' : ''}</div></td>
                   <td class="status \${details.styles ? (hasSuffixMismatch ? 'warn' : 'match') : 'diff'}">\${suffixStatusHtml}</td>
                 </tr>
               </tbody>
