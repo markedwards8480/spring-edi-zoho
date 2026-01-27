@@ -345,10 +345,11 @@ const dashboardHTML = `
             <option value="nomatch">No Match</option>
           </select>
           <div style="flex:1"></div>
-          <div class="view-toggle" style="display:flex;gap:0.25rem;margin-right:1rem;">
+          <div class="view-toggle" style="display:flex;gap:0.25rem;margin-right:0.5rem;">
             <button class="btn btn-secondary view-btn active" id="viewComfortable" onclick="setReviewView('comfortable')" title="Comfortable View">☰</button>
             <button class="btn btn-secondary view-btn" id="viewCompact" onclick="setReviewView('compact')" title="Compact View">⊞</button>
           </div>
+          <button class="btn btn-secondary" id="focusModeBtn" onclick="toggleFocusMode()" style="margin-right:0.5rem;" title="Focus Mode - Process one at a time">🎯 Focus Mode</button>
           <button class="btn btn-secondary" onclick="clearMatchResults()">Clear Results</button>
         </div>
         <div id="matchReviewContent">
@@ -704,6 +705,8 @@ const dashboardHTML = `
     let selectedMatchIds = new Set(); // Track selected matches for bulk send
     let selectedMatchDrafts = new Map(); // Map ediOrderId -> zohoDraftId
     let reviewViewMode = 'comfortable'; // 'comfortable' or 'compact'
+    let focusModeActive = false; // Track if Focus Mode is active
+    let focusModeIndex = 0; // Current index in Focus Mode
     
     document.addEventListener('DOMContentLoaded', () => { 
       loadOrders(); 
@@ -1731,6 +1734,450 @@ const dashboardHTML = `
       const matchesGrid = document.querySelector('.matches-grid');
       if (matchesGrid) {
         matchesGrid.classList.toggle('compact', mode === 'compact');
+      }
+    }
+    
+    // ============================================================
+    // FOCUS MODE
+    // ============================================================
+    
+    function toggleFocusMode() {
+      if (!matchResults || !matchResults.matches || matchResults.matches.length === 0) {
+        toast('No matches to review in Focus Mode');
+        return;
+      }
+      
+      focusModeActive = !focusModeActive;
+      
+      if (focusModeActive) {
+        focusModeIndex = 0;
+        showFocusMode();
+        // Add keyboard listener
+        document.addEventListener('keydown', focusModeKeyHandler);
+      } else {
+        exitFocusMode();
+      }
+    }
+    
+    function exitFocusMode() {
+      focusModeActive = false;
+      document.removeEventListener('keydown', focusModeKeyHandler);
+      showMatchReview(matchResults);
+    }
+    
+    function focusModeKeyHandler(e) {
+      if (!focusModeActive) return;
+      // Don't trigger if typing in an input
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      
+      if (e.key === 'a' || e.key === 'A') {
+        e.preventDefault();
+        focusModeApprove();
+      } else if (e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        focusModeSkip();
+      } else if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        focusModeFlag();
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        focusModeNext();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        focusModePrev();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        exitFocusMode();
+      }
+    }
+    
+    function showFocusMode() {
+      const allMatches = matchResults.matches || [];
+      if (allMatches.length === 0) {
+        exitFocusMode();
+        return;
+      }
+      
+      // Clamp index
+      if (focusModeIndex >= allMatches.length) focusModeIndex = allMatches.length - 1;
+      if (focusModeIndex < 0) focusModeIndex = 0;
+      
+      const match = allMatches[focusModeIndex];
+      const edi = match.ediOrder;
+      const zoho = match.zohoDraft;
+      const score = match.score || {};
+      const details = score.details || {};
+      
+      // Calculate stats
+      const approvedCount = allMatches.filter((m, i) => selectedMatchIds.has(m.ediOrder.id)).length;
+      const progressPercent = Math.round(((focusModeIndex + 1) / allMatches.length) * 100);
+      
+      // Calculate differences
+      const amtDiff = edi.totalAmount - zoho.totalAmount;
+      const hasAmtDiff = Math.abs(amtDiff) > 100;
+      const unitsDiff = edi.totalUnits - zoho.totalUnits;
+      
+      // Parse dates
+      const ediShipDate = edi.shipDate ? edi.shipDate.split('T')[0] : 'N/A';
+      const zohoShipDate = zoho.shipDate ? zoho.shipDate.split('T')[0] : 'N/A';
+      const ediCancelDate = edi.cancelDate || 'N/A';
+      
+      // Get styles
+      const ediStyles = [...new Set((edi.items || []).map(i => (i.productIds?.sku || i.productIds?.vendorItemNumber || '').split('-')[0]).filter(Boolean))];
+      const zohoStyles = [...new Set((zoho.items || []).map(i => (i.name || '').split('-')[0]).filter(Boolean))];
+      
+      // Determine status
+      let statusClass = 'good';
+      let statusIcon = '✓';
+      let statusTitle = 'Ready to Approve';
+      let statusDesc = 'All key fields match';
+      
+      if (hasAmtDiff && Math.abs(amtDiff) > 1000) {
+        statusClass = 'review';
+        statusIcon = '⚠️';
+        statusTitle = 'Review Recommended';
+        statusDesc = 'Amount difference exceeds $1,000';
+      } else if (!details.styles) {
+        statusClass = 'problem';
+        statusIcon = '🚨';
+        statusTitle = 'Style Mismatch';
+        statusDesc = 'Styles do not match - verify this is correct';
+      }
+      
+      const conf = match.confidence || 0;
+      const confClass = conf >= 80 ? 'high' : conf >= 60 ? 'medium' : 'low';
+      
+      const html = \`
+        <div class="focus-mode-container">
+          <!-- Focus Mode Header -->
+          <div class="focus-header">
+            <div class="focus-header-left">
+              <h2>Focus Mode</h2>
+              <span class="focus-progress-text">Match <strong>\${focusModeIndex + 1}</strong> of <strong>\${allMatches.length}</strong></span>
+              <div class="focus-stats">
+                <span class="focus-stat"><strong>\${approvedCount}</strong> selected</span>
+              </div>
+            </div>
+            <button class="btn btn-secondary" onclick="exitFocusMode()">← Exit Focus Mode</button>
+          </div>
+          
+          <!-- Progress Bar -->
+          <div class="focus-progress-bar">
+            <div class="focus-progress-fill" style="width:\${progressPercent}%"></div>
+          </div>
+          
+          <!-- Match Card -->
+          <div class="focus-card">
+            <!-- Status Banner -->
+            <div class="focus-status focus-status-\${statusClass}">
+              <span class="focus-status-icon">\${statusIcon}</span>
+              <div class="focus-status-text">
+                <strong>\${statusTitle}</strong>
+                <span>\${statusDesc}</span>
+              </div>
+            </div>
+            
+            <!-- Card Header -->
+            <div class="focus-card-header">
+              <div class="focus-match-info">
+                <span class="focus-match-title">\${edi.customer}</span>
+                <span class="focus-match-subtitle">PO# \${edi.poNumber} → Zoho #\${zoho.number}</span>
+              </div>
+              <span class="focus-confidence focus-confidence-\${confClass}">\${conf}% confidence</span>
+            </div>
+            
+            <!-- Data Grid -->
+            <table class="focus-grid">
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th class="col-edi">EDI Order</th>
+                  <th class="col-zoho">Zoho Order <span class="focus-zoho-status">\${zoho.status || 'Draft'}</span></th>
+                  <th class="col-status">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="label">PO / Ref</td>
+                  <td class="value">\${edi.poNumber}</td>
+                  <td class="value muted">\${zoho.reference || 'N/A'}</td>
+                  <td class="status \${details.poNumber ? 'match' : 'diff'}">\${details.poNumber ? '✓ match' : 'different'}</td>
+                </tr>
+                <tr>
+                  <td class="label">Customer</td>
+                  <td class="value">\${edi.customer}</td>
+                  <td class="value">\${zoho.customer}</td>
+                  <td class="status \${details.customer ? 'match' : 'diff'}">\${details.customer ? '✓ match' : 'different'}</td>
+                </tr>
+                <tr>
+                  <td class="label">Ship Date</td>
+                  <td class="value">\${ediShipDate}</td>
+                  <td class="value">\${zohoShipDate}</td>
+                  <td class="status \${details.shipDate ? 'match' : 'warn'}">\${details.shipDate ? '✓ match' : (details.shipDateDiffDays ? details.shipDateDiffDays + ' days' : 'different')}</td>
+                </tr>
+                <tr class="\${ediCancelDate !== 'N/A' && !zoho.cancelDate ? 'has-warn' : ''}">
+                  <td class="label">Cancel Date</td>
+                  <td class="value">\${ediCancelDate}</td>
+                  <td class="value muted">—</td>
+                  <td class="status warn">\${ediCancelDate !== 'N/A' ? '⚠️ missing' : '—'}</td>
+                </tr>
+                <tr class="\${Math.abs(unitsDiff) > 100 ? 'has-diff' : ''}">
+                  <td class="label">Units</td>
+                  <td class="value">\${edi.totalUnits.toLocaleString()}</td>
+                  <td class="value">\${zoho.totalUnits.toLocaleString()}</td>
+                  <td class="status \${Math.abs(unitsDiff) <= 100 ? 'match' : 'diff'}">\${Math.abs(unitsDiff) <= 100 ? '✓ match' : (unitsDiff > 0 ? '+' : '') + unitsDiff.toLocaleString()}</td>
+                </tr>
+                <tr class="\${hasAmtDiff ? 'has-diff' : ''}">
+                  <td class="label">Amount</td>
+                  <td class="value">$\${edi.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</td>
+                  <td class="value">$\${zoho.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</td>
+                  <td class="status \${hasAmtDiff ? 'diff' : 'match'}">\${hasAmtDiff ? (amtDiff > 0 ? '+$' : '-$') + Math.abs(amtDiff).toLocaleString('en-US', {minimumFractionDigits:0}) : '✓ match'}</td>
+                </tr>
+                <tr>
+                  <td class="label">Styles</td>
+                  <td class="value"><div class="focus-style-list">\${ediStyles.slice(0,3).map(s => '<span class="focus-style-pill">' + s + '</span>').join('')}\${ediStyles.length > 3 ? '<span class="focus-style-more">+' + (ediStyles.length-3) + '</span>' : ''}</div></td>
+                  <td class="value"><div class="focus-style-list">\${zohoStyles.slice(0,3).map(s => '<span class="focus-style-pill">' + s + '</span>').join('')}\${zohoStyles.length > 3 ? '<span class="focus-style-more">+' + (zohoStyles.length-3) + '</span>' : ''}</div></td>
+                  <td class="status \${details.styles ? 'match' : 'diff'}">\${details.styles ? '✓ base match' : 'no match'}</td>
+                </tr>
+              </tbody>
+            </table>
+            
+            <!-- Warning if needed -->
+            \${hasAmtDiff && Math.abs(amtDiff) > 1000 ? '<div class="focus-warning">⚠️ Amount difference exceeds $1,000 — verify before approving</div>' : ''}
+            
+            <!-- Details Toggle -->
+            <button class="focus-details-toggle" onclick="toggleFocusDetails()">
+              <span>View line items (\${edi.itemCount} EDI → \${zoho.itemCount} Zoho)</span>
+              <span id="focusToggleIcon">▼</span>
+            </button>
+            
+            <div class="focus-details-content" id="focusDetailsContent">
+              <table class="focus-line-items">
+                <thead>
+                  <tr>
+                    <th colspan="4" class="edi-header">EDI Order</th>
+                    <th class="divider"></th>
+                    <th colspan="3" class="zoho-header">Zoho Order</th>
+                  </tr>
+                  <tr>
+                    <th>Style</th>
+                    <th>Color</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th class="divider"></th>
+                    <th>Item</th>
+                    <th>Qty</th>
+                    <th>Rate</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  \${renderFocusLineItems(edi.items || [], zoho.items || [])}
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- Actions -->
+            <div class="focus-actions">
+              <div class="focus-actions-left">
+                <button class="btn btn-secondary" onclick="focusModeSkip()">Skip</button>
+                <button class="btn focus-btn-flag" onclick="focusModeFlag()">Flag</button>
+              </div>
+              <button class="btn focus-btn-approve" onclick="focusModeApprove()">
+                \${selectedMatchIds.has(edi.id) ? '✓ Selected' : 'Select & Next →'}
+              </button>
+            </div>
+          </div>
+          
+          <!-- Navigation Footer -->
+          <div class="focus-nav-footer">
+            <button class="focus-nav-btn" onclick="focusModePrev()" \${focusModeIndex === 0 ? 'disabled' : ''}>← Previous</button>
+            <div class="focus-shortcuts">
+              <kbd>A</kbd> select <kbd>S</kbd> skip <kbd>F</kbd> flag <kbd>←</kbd><kbd>→</kbd> navigate <kbd>Esc</kbd> exit
+            </div>
+            <button class="focus-nav-btn" onclick="focusModeNext()" \${focusModeIndex >= allMatches.length - 1 ? 'disabled' : ''}>Next →</button>
+          </div>
+        </div>
+        
+        <style>
+          .focus-mode-container { max-width:850px; margin:0 auto; padding:1rem; }
+          .focus-header { display:flex; justify-content:space-between; align-items:center; padding:0.75rem 0; margin-bottom:0.5rem; }
+          .focus-header h2 { font-size:1rem; font-weight:600; margin:0; }
+          .focus-header-left { display:flex; align-items:center; gap:1.5rem; }
+          .focus-progress-text { font-size:0.875rem; color:#666; }
+          .focus-progress-text strong { color:#333; }
+          .focus-stats { font-size:0.8125rem; color:#666; }
+          .focus-stat strong { color:#333; }
+          .focus-progress-bar { height:3px; background:#e5e5e5; margin-bottom:1.5rem; }
+          .focus-progress-fill { height:100%; background:#1e3a5f; transition:width 0.3s; }
+          
+          .focus-card { background:#fff; border:1px solid #ddd; border-radius:4px; }
+          
+          .focus-status { padding:0.875rem 1.25rem; display:flex; align-items:center; gap:0.75rem; border-bottom:2px solid; }
+          .focus-status-good { background:#f0fdf4; border-color:#22c55e; }
+          .focus-status-review { background:#fffbeb; border-color:#f59e0b; }
+          .focus-status-problem { background:#fef2f2; border-color:#ef4444; }
+          .focus-status-icon { font-size:1.25rem; }
+          .focus-status-text { display:flex; flex-direction:column; gap:0.125rem; }
+          .focus-status-text strong { font-size:0.9375rem; }
+          .focus-status-good .focus-status-text strong { color:#166534; }
+          .focus-status-review .focus-status-text strong { color:#92400e; }
+          .focus-status-problem .focus-status-text strong { color:#991b1b; }
+          .focus-status-text span { font-size:0.8125rem; opacity:0.8; }
+          
+          .focus-card-header { padding:1rem 1.25rem; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; }
+          .focus-match-info { display:flex; flex-direction:column; gap:0.25rem; }
+          .focus-match-title { font-size:1rem; font-weight:600; }
+          .focus-match-subtitle { font-size:0.8125rem; color:#888; }
+          .focus-confidence { font-size:0.8125rem; padding:0.375rem 0.75rem; border-radius:4px; font-weight:500; }
+          .focus-confidence-high { background:#f0f0f0; color:#333; }
+          .focus-confidence-medium { background:#fef9e7; color:#92400e; border:1px solid #fcd34d; }
+          .focus-confidence-low { background:#fef2f2; color:#b91c1c; border:1px solid #fca5a5; }
+          
+          .focus-grid { width:100%; border-collapse:collapse; }
+          .focus-grid th { text-align:left; padding:0.625rem 1rem; background:#f9f9f9; border-bottom:2px solid #e5e5e5; font-weight:600; font-size:0.6875rem; text-transform:uppercase; letter-spacing:0.5px; color:#666; }
+          .focus-grid th:first-child { width:110px; padding-left:1.25rem; }
+          .focus-grid th.col-edi { width:200px; }
+          .focus-grid th.col-zoho { width:240px; }
+          .focus-grid th.col-status { width:100px; text-align:right; padding-right:1.25rem; }
+          .focus-grid td { padding:0.625rem 1rem; border-bottom:1px solid #f0f0f0; font-size:0.875rem; }
+          .focus-grid td:first-child { padding-left:1.25rem; }
+          .focus-grid td:last-child { padding-right:1.25rem; }
+          .focus-grid tr:last-child td { border-bottom:none; }
+          .focus-grid .label { font-weight:500; color:#666; font-size:0.8125rem; }
+          .focus-grid .value { color:#333; }
+          .focus-grid .value.muted { color:#999; }
+          .focus-grid .status { text-align:right; font-size:0.8125rem; }
+          .focus-grid .status.match { color:#555; }
+          .focus-grid .status.diff { color:#b91c1c; font-weight:500; }
+          .focus-grid .status.warn { color:#92400e; }
+          .focus-grid tr.has-diff { background:#fffbf7; }
+          .focus-grid tr.has-diff td { border-bottom-color:#fee2e2; }
+          .focus-grid tr.has-warn { background:#fffdf7; }
+          .focus-grid tr.has-warn td { border-bottom-color:#fef3c7; }
+          .focus-zoho-status { display:inline-block; font-size:0.625rem; padding:0.125rem 0.5rem; border-radius:3px; margin-left:0.375rem; font-weight:500; text-transform:uppercase; background:#e0e7ff; color:#3730a3; }
+          
+          .focus-style-list { display:flex; flex-wrap:wrap; gap:0.25rem; }
+          .focus-style-pill { background:#f3f4f6; padding:0.125rem 0.5rem; border-radius:3px; font-size:0.75rem; font-family:monospace; color:#374151; }
+          .focus-style-more { font-size:0.75rem; color:#666; }
+          
+          .focus-warning { padding:0.75rem 1.25rem; background:#fffbeb; border-top:1px solid #fde68a; font-size:0.8125rem; color:#92400e; }
+          
+          .focus-details-toggle { width:100%; padding:0.75rem 1.25rem; background:#fafafa; border:none; border-top:1px solid #eee; cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-size:0.8125rem; color:#666; text-align:left; }
+          .focus-details-toggle:hover { background:#f5f5f5; }
+          .focus-details-content { display:none; border-top:1px solid #eee; }
+          .focus-details-content.show { display:block; }
+          
+          .focus-line-items { width:100%; border-collapse:collapse; font-size:0.8125rem; }
+          .focus-line-items th { text-align:left; padding:0.5rem 0.625rem; background:#f5f5f5; font-weight:600; font-size:0.625rem; text-transform:uppercase; letter-spacing:0.5px; color:#666; border-bottom:1px solid #ddd; }
+          .focus-line-items th.edi-header { background:#f0f4ff; color:#3730a3; }
+          .focus-line-items th.zoho-header { background:#f5f0ff; color:#6d28d9; }
+          .focus-line-items td { padding:0.5rem 0.625rem; border-bottom:1px solid #f0f0f0; color:#444; }
+          .focus-line-items .divider { width:2px; background:#e5e5e5; padding:0; }
+          .focus-line-items tr:hover { background:#f9f9f9; }
+          .focus-line-items tr:last-child td { border-bottom:none; }
+          
+          .focus-actions { padding:1rem 1.25rem; background:#f9f9f9; border-top:1px solid #eee; display:flex; justify-content:space-between; align-items:center; }
+          .focus-actions-left { display:flex; gap:0.5rem; }
+          .focus-btn-flag { background:#fff; color:#b91c1c; border:1px solid #fecaca; }
+          .focus-btn-flag:hover { background:#fef2f2; }
+          .focus-btn-approve { background:#1e3a5f; color:#fff; border:1px solid #1e3a5f; padding:0.625rem 1.5rem; font-weight:500; }
+          .focus-btn-approve:hover { background:#2d4a6f; }
+          
+          .focus-nav-footer { display:flex; justify-content:space-between; align-items:center; margin-top:1rem; padding:0 0.25rem; }
+          .focus-nav-btn { display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.75rem; background:#fff; border:1px solid #ddd; border-radius:4px; cursor:pointer; font-size:0.8125rem; color:#666; }
+          .focus-nav-btn:hover:not(:disabled) { background:#f5f5f5; border-color:#ccc; }
+          .focus-nav-btn:disabled { opacity:0.4; cursor:not-allowed; }
+          .focus-shortcuts { font-size:0.75rem; color:#999; }
+          .focus-shortcuts kbd { background:#f0f0f0; padding:0.125rem 0.375rem; border-radius:3px; border:1px solid #ddd; font-family:inherit; font-size:0.6875rem; margin:0 0.125rem; }
+        </style>
+      \`;
+      
+      document.getElementById('matchReviewContent').innerHTML = html;
+    }
+    
+    function renderFocusLineItems(ediItems, zohoItems) {
+      const maxRows = Math.max(ediItems.length, zohoItems.length, 1);
+      let html = '';
+      for (let i = 0; i < Math.min(maxRows, 10); i++) {
+        const edi = ediItems[i];
+        const zoho = zohoItems[i];
+        html += '<tr>';
+        if (edi) {
+          const sku = edi.productIds?.sku || edi.productIds?.vendorItemNumber || 'N/A';
+          html += '<td>' + sku + '</td>';
+          html += '<td>' + (edi.color || '-') + '</td>';
+          html += '<td>' + (edi.quantityOrdered || 0).toLocaleString() + '</td>';
+          html += '<td>$' + (edi.unitPrice || 0).toFixed(2) + '</td>';
+        } else {
+          html += '<td>-</td><td>-</td><td>-</td><td>-</td>';
+        }
+        html += '<td class="divider"></td>';
+        if (zoho) {
+          html += '<td>' + (zoho.name || 'N/A') + '</td>';
+          html += '<td>' + (zoho.quantity || 0).toLocaleString() + '</td>';
+          html += '<td>$' + (zoho.rate || 0).toFixed(2) + '</td>';
+        } else {
+          html += '<td>-</td><td>-</td><td>-</td>';
+        }
+        html += '</tr>';
+      }
+      if (maxRows > 10) {
+        html += '<tr><td colspan="8" style="text-align:center;color:#666;font-style:italic;padding:0.75rem;">... and ' + (maxRows - 10) + ' more items</td></tr>';
+      }
+      return html;
+    }
+    
+    function toggleFocusDetails() {
+      const content = document.getElementById('focusDetailsContent');
+      const icon = document.getElementById('focusToggleIcon');
+      content.classList.toggle('show');
+      icon.textContent = content.classList.contains('show') ? '▲' : '▼';
+    }
+    
+    function focusModeApprove() {
+      const allMatches = matchResults.matches || [];
+      if (focusModeIndex >= allMatches.length) return;
+      
+      const match = allMatches[focusModeIndex];
+      const ediId = match.ediOrder.id;
+      const draftId = match.zohoDraft.id;
+      
+      // Add to selection
+      selectedMatchIds.add(ediId);
+      selectedMatchDrafts.set(ediId, draftId);
+      updateSendSelectedButton();
+      
+      // Move to next
+      focusModeNext();
+    }
+    
+    function focusModeSkip() {
+      focusModeNext();
+    }
+    
+    function focusModeFlag() {
+      toast('Flagged for review');
+      // Could add flagging logic here in future
+    }
+    
+    function focusModeNext() {
+      const allMatches = matchResults.matches || [];
+      if (focusModeIndex < allMatches.length - 1) {
+        focusModeIndex++;
+        showFocusMode();
+      } else {
+        // End of list
+        toast('End of matches - ' + selectedMatchIds.size + ' selected');
+        if (selectedMatchIds.size > 0) {
+          exitFocusMode();
+        }
+      }
+    }
+    
+    function focusModePrev() {
+      if (focusModeIndex > 0) {
+        focusModeIndex--;
+        showFocusMode();
       }
     }
     
