@@ -449,12 +449,22 @@ const dashboardHTML = `
           <div class="toolbar">
             <select class="filter-select" id="activityActionFilter" onchange="filterActivityLog()">
               <option value="">All Actions</option>
-              <option value="sent_to_zoho">Sent to Zoho</option>
-              <option value="match_found">Match Found</option>
-              <option value="no_match_found">No Match</option>
-              <option value="order_imported">Order Imported</option>
-              <option value="sftp_fetch_completed">SFTP Fetch</option>
-              <option value="zoho_error">Errors</option>
+              <optgroup label="Zoho Operations">
+                <option value="sent_to_zoho">Sent to Zoho</option>
+                <option value="draft_updated">Draft Updated</option>
+                <option value="new_order_created">New Order Created</option>
+              </optgroup>
+              <optgroup label="Matching">
+                <option value="match_found">Match Found</option>
+                <option value="no_match_found">No Match</option>
+                <option value="user_confirmed_match">User Confirmed Match</option>
+                <option value="user_flagged_match">User Flagged Match</option>
+              </optgroup>
+              <optgroup label="System">
+                <option value="order_imported">Order Imported</option>
+                <option value="sftp_fetch_completed">SFTP Fetch</option>
+                <option value="zoho_error">Errors</option>
+              </optgroup>
             </select>
             <select class="filter-select" id="activitySeverityFilter" onchange="filterActivityLog()">
               <option value="">All Severity</option>
@@ -707,6 +717,7 @@ const dashboardHTML = `
     let reviewViewMode = 'comfortable'; // 'comfortable' or 'compact'
     let focusModeActive = false; // Track if Focus Mode is active
     let focusModeIndex = 0; // Current index in Focus Mode
+    let flaggedMatchIds = new Set(); // Track flagged matches for review
     
     document.addEventListener('DOMContentLoaded', () => { 
       loadOrders(); 
@@ -1809,7 +1820,8 @@ const dashboardHTML = `
       const details = score.details || {};
       
       // Calculate stats
-      const approvedCount = allMatches.filter((m, i) => selectedMatchIds.has(m.ediOrder.id)).length;
+      const selectedCount = selectedMatchIds.size;
+      const flaggedCount = flaggedMatchIds.size;
       const progressPercent = Math.round(((focusModeIndex + 1) / allMatches.length) * 100);
       
       // Calculate differences
@@ -1822,9 +1834,21 @@ const dashboardHTML = `
       const zohoShipDate = zoho.shipDate ? zoho.shipDate.split('T')[0] : 'N/A';
       const ediCancelDate = edi.cancelDate || 'N/A';
       
-      // Get styles
-      const ediStyles = [...new Set((edi.items || []).map(i => (i.productIds?.sku || i.productIds?.vendorItemNumber || '').split('-')[0]).filter(Boolean))];
-      const zohoStyles = [...new Set((zoho.items || []).map(i => (i.name || '').split('-')[0]).filter(Boolean))];
+      // Get full styles with suffixes for comparison
+      const ediFullStyles = [...new Set((edi.items || []).map(i => (i.productIds?.sku || i.productIds?.vendorItemNumber || '')).filter(Boolean))];
+      const zohoFullStyles = [...new Set((zoho.items || []).map(i => (i.name || '').split(' ')[0]).filter(Boolean))];
+      
+      // Get base styles (without suffix)
+      const ediBaseStyles = [...new Set(ediFullStyles.map(s => s.split('-')[0]).filter(Boolean))];
+      const zohoBaseStyles = [...new Set(zohoFullStyles.map(s => s.split('-')[0]).filter(Boolean))];
+      
+      // Get suffixes for comparison
+      const ediSuffixes = [...new Set(ediFullStyles.map(s => { const parts = s.split('-'); return parts.length > 1 ? parts[1] : ''; }).filter(Boolean))];
+      const zohoSuffixes = [...new Set(zohoFullStyles.map(s => { const parts = s.split('-'); return parts.length > 1 ? parts[1] : ''; }).filter(Boolean))];
+      
+      // Check if suffixes match
+      const suffixMatch = ediSuffixes.length > 0 && zohoSuffixes.length > 0 && ediSuffixes.some(es => zohoSuffixes.includes(es));
+      const hasSuffixMismatch = ediSuffixes.length > 0 && zohoSuffixes.length > 0 && !suffixMatch;
       
       // Determine status
       let statusClass = 'good';
@@ -1842,10 +1866,63 @@ const dashboardHTML = `
         statusIcon = '🚨';
         statusTitle = 'Style Mismatch';
         statusDesc = 'Styles do not match - verify this is correct';
+      } else if (hasSuffixMismatch) {
+        statusClass = 'review';
+        statusIcon = '⚠️';
+        statusTitle = 'Suffix Mismatch';
+        statusDesc = 'Base style matches but suffix differs (' + ediSuffixes[0] + ' vs ' + zohoSuffixes[0] + ')';
       }
       
       const conf = match.confidence || 0;
       const confClass = conf >= 80 ? 'high' : conf >= 60 ? 'medium' : 'low';
+      
+      // Build selected list HTML
+      let selectedListHtml = '';
+      if (selectedCount > 0) {
+        const selectedMatches = allMatches.filter(m => selectedMatchIds.has(m.ediOrder.id));
+        selectedListHtml = \`
+          <div class="focus-list-section">
+            <button class="focus-list-toggle" onclick="toggleFocusList('selected')">
+              <span>✓ Selected (\${selectedCount})</span>
+              <span id="selectedListIcon">▼</span>
+            </button>
+            <div class="focus-list-content" id="selectedListContent">
+              \${selectedMatches.map((m, i) => {
+                const idx = allMatches.indexOf(m);
+                return '<div class="focus-list-item"><span class="focus-list-po" onclick="focusModeJumpTo(' + idx + ')">' + m.ediOrder.poNumber + '</span><span class="focus-list-customer">' + (m.ediOrder.customer || '').substring(0, 20) + '</span><span class="focus-list-amount">$' + m.ediOrder.totalAmount.toLocaleString('en-US', {minimumFractionDigits:0}) + '</span><button class="focus-list-remove" onclick="focusModeRemoveFromSelected(' + m.ediOrder.id + ')">×</button></div>';
+              }).join('')}
+            </div>
+          </div>
+        \`;
+      }
+      
+      // Build flagged list HTML
+      let flaggedListHtml = '';
+      if (flaggedCount > 0) {
+        const flaggedMatches = allMatches.filter(m => flaggedMatchIds.has(m.ediOrder.id));
+        flaggedListHtml = \`
+          <div class="focus-list-section flagged">
+            <button class="focus-list-toggle flagged" onclick="toggleFocusList('flagged')">
+              <span>🚩 Flagged (\${flaggedCount})</span>
+              <span id="flaggedListIcon">▼</span>
+            </button>
+            <div class="focus-list-content" id="flaggedListContent">
+              \${flaggedMatches.map((m, i) => {
+                const idx = allMatches.indexOf(m);
+                return '<div class="focus-list-item flagged"><span class="focus-list-po" onclick="focusModeJumpTo(' + idx + ')">' + m.ediOrder.poNumber + '</span><span class="focus-list-customer">' + (m.ediOrder.customer || '').substring(0, 20) + '</span><span class="focus-list-amount">$' + m.ediOrder.totalAmount.toLocaleString('en-US', {minimumFractionDigits:0}) + '</span><button class="focus-list-remove" onclick="focusModeRemoveFromFlagged(' + m.ediOrder.id + ')">×</button></div>';
+              }).join('')}
+            </div>
+          </div>
+        \`;
+      }
+      
+      // Build suffix status display
+      let suffixStatusHtml = '✓ base match';
+      if (hasSuffixMismatch) {
+        suffixStatusHtml = '✓ base<br><span style="color:#92400e;font-size:0.75rem;">⚠️ ' + ediSuffixes[0] + '≠' + zohoSuffixes[0] + '</span>';
+      } else if (suffixMatch) {
+        suffixStatusHtml = '✓ full match';
+      }
       
       const html = \`
         <div class="focus-mode-container">
@@ -1855,16 +1932,24 @@ const dashboardHTML = `
               <h2>Focus Mode</h2>
               <span class="focus-progress-text">Match <strong>\${focusModeIndex + 1}</strong> of <strong>\${allMatches.length}</strong></span>
               <div class="focus-stats">
-                <span class="focus-stat"><strong>\${approvedCount}</strong> selected</span>
+                <span class="focus-stat"><strong>\${selectedCount}</strong> selected</span>
+                \${flaggedCount > 0 ? '<span class="focus-stat" style="color:#b91c1c;"><strong>' + flaggedCount + '</strong> flagged</span>' : ''}
               </div>
             </div>
-            <button class="btn btn-secondary" onclick="exitFocusMode()">← Exit Focus Mode</button>
+            <div style="display:flex;gap:0.5rem;">
+              \${selectedCount > 0 ? '<button class="btn btn-success" onclick="showFocusModeFinish()" style="font-size:0.8125rem;">Finish & Review →</button>' : ''}
+              <button class="btn btn-secondary" onclick="exitFocusMode()">← Exit</button>
+            </div>
           </div>
           
           <!-- Progress Bar -->
           <div class="focus-progress-bar">
             <div class="focus-progress-fill" style="width:\${progressPercent}%"></div>
           </div>
+          
+          <!-- Selected/Flagged Lists -->
+          \${selectedListHtml}
+          \${flaggedListHtml}
           
           <!-- Match Card -->
           <div class="focus-card">
@@ -1933,17 +2018,18 @@ const dashboardHTML = `
                   <td class="value">$\${zoho.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</td>
                   <td class="status \${hasAmtDiff ? 'diff' : 'match'}">\${hasAmtDiff ? (amtDiff > 0 ? '+$' : '-$') + Math.abs(amtDiff).toLocaleString('en-US', {minimumFractionDigits:0}) : '✓ match'}</td>
                 </tr>
-                <tr>
+                <tr class="\${hasSuffixMismatch ? 'has-warn' : ''}">
                   <td class="label">Styles</td>
-                  <td class="value"><div class="focus-style-list">\${ediStyles.slice(0,3).map(s => '<span class="focus-style-pill">' + s + '</span>').join('')}\${ediStyles.length > 3 ? '<span class="focus-style-more">+' + (ediStyles.length-3) + '</span>' : ''}</div></td>
-                  <td class="value"><div class="focus-style-list">\${zohoStyles.slice(0,3).map(s => '<span class="focus-style-pill">' + s + '</span>').join('')}\${zohoStyles.length > 3 ? '<span class="focus-style-more">+' + (zohoStyles.length-3) + '</span>' : ''}</div></td>
-                  <td class="status \${details.styles ? 'match' : 'diff'}">\${details.styles ? '✓ base match' : 'no match'}</td>
+                  <td class="value"><div class="focus-style-list">\${ediFullStyles.slice(0,2).map(s => '<span class="focus-style-pill">' + s + '</span>').join('')}\${ediFullStyles.length > 2 ? '<span class="focus-style-more">+' + (ediFullStyles.length-2) + '</span>' : ''}</div></td>
+                  <td class="value"><div class="focus-style-list">\${zohoFullStyles.slice(0,2).map(s => '<span class="focus-style-pill">' + s + '</span>').join('')}\${zohoFullStyles.length > 2 ? '<span class="focus-style-more">+' + (zohoFullStyles.length-2) + '</span>' : ''}</div></td>
+                  <td class="status \${details.styles ? (hasSuffixMismatch ? 'warn' : 'match') : 'diff'}">\${suffixStatusHtml}</td>
                 </tr>
               </tbody>
             </table>
             
             <!-- Warning if needed -->
             \${hasAmtDiff && Math.abs(amtDiff) > 1000 ? '<div class="focus-warning">⚠️ Amount difference exceeds $1,000 — verify before approving</div>' : ''}
+            \${hasSuffixMismatch ? '<div class="focus-warning" style="background:#fef3c7;border-color:#fcd34d;">⚠️ Suffix mismatch: EDI has <strong>' + ediSuffixes.join(', ') + '</strong>, Zoho has <strong>' + zohoSuffixes.join(', ') + '</strong> — colors may differ</div>' : ''}
             
             <!-- Details Toggle -->
             <button class="focus-details-toggle" onclick="toggleFocusDetails()">
@@ -1980,9 +2066,9 @@ const dashboardHTML = `
             <div class="focus-actions">
               <div class="focus-actions-left">
                 <button class="btn btn-secondary" onclick="focusModeSkip()">Skip</button>
-                <button class="btn focus-btn-flag" onclick="focusModeFlag()">Flag</button>
+                <button class="btn focus-btn-flag \${flaggedMatchIds.has(edi.id) ? 'active' : ''}" onclick="focusModeFlag()">\${flaggedMatchIds.has(edi.id) ? '🚩 Flagged' : 'Flag'}</button>
               </div>
-              <button class="btn focus-btn-approve" onclick="focusModeApprove()">
+              <button class="btn focus-btn-approve \${selectedMatchIds.has(edi.id) ? 'selected' : ''}" onclick="focusModeApprove()">
                 \${selectedMatchIds.has(edi.id) ? '✓ Selected' : 'Select & Next →'}
               </button>
             </div>
@@ -2005,10 +2091,26 @@ const dashboardHTML = `
           .focus-header-left { display:flex; align-items:center; gap:1.5rem; }
           .focus-progress-text { font-size:0.875rem; color:#666; }
           .focus-progress-text strong { color:#333; }
-          .focus-stats { font-size:0.8125rem; color:#666; }
+          .focus-stats { display:flex; gap:1rem; font-size:0.8125rem; color:#666; }
           .focus-stat strong { color:#333; }
-          .focus-progress-bar { height:3px; background:#e5e5e5; margin-bottom:1.5rem; }
+          .focus-progress-bar { height:3px; background:#e5e5e5; margin-bottom:1rem; }
           .focus-progress-fill { height:100%; background:#1e3a5f; transition:width 0.3s; }
+          
+          .focus-list-section { margin-bottom:0.75rem; }
+          .focus-list-toggle { width:100%; padding:0.5rem 0.75rem; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:4px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-size:0.8125rem; color:#166534; font-weight:500; }
+          .focus-list-toggle.flagged { background:#fef2f2; border-color:#fecaca; color:#b91c1c; }
+          .focus-list-content { display:none; border:1px solid #bbf7d0; border-top:none; border-radius:0 0 4px 4px; background:#fff; max-height:150px; overflow-y:auto; }
+          .focus-list-content.show { display:block; }
+          .focus-list-section.flagged .focus-list-content { border-color:#fecaca; }
+          .focus-list-item { display:flex; align-items:center; padding:0.375rem 0.75rem; border-bottom:1px solid #f0f0f0; font-size:0.8125rem; gap:0.5rem; }
+          .focus-list-item:last-child { border-bottom:none; }
+          .focus-list-item.flagged { background:#fef2f2; }
+          .focus-list-po { font-weight:500; cursor:pointer; color:#1e3a5f; }
+          .focus-list-po:hover { text-decoration:underline; }
+          .focus-list-customer { flex:1; color:#666; font-size:0.75rem; }
+          .focus-list-amount { font-size:0.75rem; color:#333; }
+          .focus-list-remove { background:none; border:none; color:#999; cursor:pointer; font-size:1rem; padding:0 0.25rem; }
+          .focus-list-remove:hover { color:#c00; }
           
           .focus-card { background:#fff; border:1px solid #ddd; border-radius:4px; }
           
@@ -2080,8 +2182,10 @@ const dashboardHTML = `
           .focus-actions-left { display:flex; gap:0.5rem; }
           .focus-btn-flag { background:#fff; color:#b91c1c; border:1px solid #fecaca; }
           .focus-btn-flag:hover { background:#fef2f2; }
+          .focus-btn-flag.active { background:#fef2f2; border-color:#f87171; }
           .focus-btn-approve { background:#1e3a5f; color:#fff; border:1px solid #1e3a5f; padding:0.625rem 1.5rem; font-weight:500; }
           .focus-btn-approve:hover { background:#2d4a6f; }
+          .focus-btn-approve.selected { background:#166534; border-color:#166534; }
           
           .focus-nav-footer { display:flex; justify-content:space-between; align-items:center; margin-top:1rem; padding:0 0.25rem; }
           .focus-nav-btn { display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.75rem; background:#fff; border:1px solid #ddd; border-radius:4px; cursor:pointer; font-size:0.8125rem; color:#666; }
@@ -2093,6 +2197,15 @@ const dashboardHTML = `
       \`;
       
       document.getElementById('matchReviewContent').innerHTML = html;
+    }
+    
+    function toggleFocusList(listType) {
+      const content = document.getElementById(listType + 'ListContent');
+      const icon = document.getElementById(listType + 'ListIcon');
+      if (content && icon) {
+        content.classList.toggle('show');
+        icon.textContent = content.classList.contains('show') ? '▲' : '▼';
+      }
     }
     
     function renderFocusLineItems(ediItems, zohoItems) {
@@ -2142,9 +2255,10 @@ const dashboardHTML = `
       const ediId = match.ediOrder.id;
       const draftId = match.zohoDraft.id;
       
-      // Add to selection
+      // Add to selection (remove from flagged if it was there)
       selectedMatchIds.add(ediId);
       selectedMatchDrafts.set(ediId, draftId);
+      flaggedMatchIds.delete(ediId);
       updateSendSelectedButton();
       
       // Move to next
@@ -2156,8 +2270,37 @@ const dashboardHTML = `
     }
     
     function focusModeFlag() {
+      const allMatches = matchResults.matches || [];
+      if (focusModeIndex >= allMatches.length) return;
+      
+      const match = allMatches[focusModeIndex];
+      const ediId = match.ediOrder.id;
+      
+      // Add to flagged (remove from selected if it was there)
+      flaggedMatchIds.add(ediId);
+      selectedMatchIds.delete(ediId);
+      selectedMatchDrafts.delete(ediId);
+      updateSendSelectedButton();
+      
       toast('Flagged for review');
-      // Could add flagging logic here in future
+      focusModeNext();
+    }
+    
+    function focusModeRemoveFromSelected(ediId) {
+      selectedMatchIds.delete(ediId);
+      selectedMatchDrafts.delete(ediId);
+      updateSendSelectedButton();
+      showFocusMode();
+    }
+    
+    function focusModeRemoveFromFlagged(ediId) {
+      flaggedMatchIds.delete(ediId);
+      showFocusMode();
+    }
+    
+    function focusModeJumpTo(index) {
+      focusModeIndex = index;
+      showFocusMode();
     }
     
     function focusModeNext() {
@@ -2166,11 +2309,8 @@ const dashboardHTML = `
         focusModeIndex++;
         showFocusMode();
       } else {
-        // End of list
-        toast('End of matches - ' + selectedMatchIds.size + ' selected');
-        if (selectedMatchIds.size > 0) {
-          exitFocusMode();
-        }
+        // End of list - show finish summary
+        showFocusModeFinish();
       }
     }
     
@@ -2179,6 +2319,103 @@ const dashboardHTML = `
         focusModeIndex--;
         showFocusMode();
       }
+    }
+    
+    function showFocusModeFinish() {
+      const allMatches = matchResults.matches || [];
+      const selectedCount = selectedMatchIds.size;
+      const flaggedCount = flaggedMatchIds.size;
+      const skippedCount = allMatches.length - selectedCount - flaggedCount;
+      
+      // Build selected orders summary
+      let selectedHtml = '';
+      if (selectedCount > 0) {
+        selectedHtml = '<div style="margin-bottom:1rem;"><h4 style="margin:0 0 0.5rem;color:#166534;">✓ Selected for Update (' + selectedCount + ')</h4>';
+        selectedHtml += '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;max-height:200px;overflow-y:auto;">';
+        selectedHtml += '<table style="width:100%;font-size:0.8125rem;border-collapse:collapse;">';
+        allMatches.filter(m => selectedMatchIds.has(m.ediOrder.id)).forEach(m => {
+          selectedHtml += '<tr style="border-bottom:1px solid #dcfce7;"><td style="padding:0.5rem 0.75rem;font-weight:500;">' + m.ediOrder.poNumber + '</td><td style="padding:0.5rem 0.75rem;">' + (m.ediOrder.customer || '').substring(0, 25) + '</td><td style="padding:0.5rem 0.75rem;text-align:right;">$' + m.ediOrder.totalAmount.toLocaleString('en-US', {minimumFractionDigits:0}) + '</td></tr>';
+        });
+        selectedHtml += '</table></div></div>';
+      }
+      
+      // Build flagged orders summary
+      let flaggedHtml = '';
+      if (flaggedCount > 0) {
+        flaggedHtml = '<div style="margin-bottom:1rem;"><h4 style="margin:0 0 0.5rem;color:#b91c1c;">🚩 Flagged for Review (' + flaggedCount + ')</h4>';
+        flaggedHtml += '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;max-height:150px;overflow-y:auto;">';
+        flaggedHtml += '<table style="width:100%;font-size:0.8125rem;border-collapse:collapse;">';
+        allMatches.filter(m => flaggedMatchIds.has(m.ediOrder.id)).forEach(m => {
+          flaggedHtml += '<tr style="border-bottom:1px solid #fecaca;"><td style="padding:0.5rem 0.75rem;font-weight:500;">' + m.ediOrder.poNumber + '</td><td style="padding:0.5rem 0.75rem;">' + (m.ediOrder.customer || '').substring(0, 25) + '</td><td style="padding:0.5rem 0.75rem;text-align:right;">$' + m.ediOrder.totalAmount.toLocaleString('en-US', {minimumFractionDigits:0}) + '</td></tr>';
+        });
+        flaggedHtml += '</table></div></div>';
+      }
+      
+      const html = \`
+        <div class="focus-mode-container">
+          <div class="focus-header">
+            <div class="focus-header-left">
+              <h2>Focus Mode - Summary</h2>
+              <span class="focus-progress-text">Review Complete</span>
+            </div>
+            <button class="btn btn-secondary" onclick="exitFocusMode()">← Exit Focus Mode</button>
+          </div>
+          
+          <div class="focus-progress-bar">
+            <div class="focus-progress-fill" style="width:100%"></div>
+          </div>
+          
+          <div class="focus-card" style="padding:1.5rem;">
+            <div style="text-align:center;margin-bottom:1.5rem;">
+              <div style="font-size:2.5rem;margin-bottom:0.5rem;">🎯</div>
+              <h3 style="margin:0 0 0.5rem;">Review Complete!</h3>
+              <p style="color:#666;margin:0;">You've reviewed all \${allMatches.length} matches</p>
+            </div>
+            
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;text-align:center;">
+              <div style="background:#f0fdf4;border-radius:8px;padding:1rem;">
+                <div style="font-size:1.5rem;font-weight:700;color:#166534;">\${selectedCount}</div>
+                <div style="font-size:0.75rem;color:#166534;">Selected</div>
+              </div>
+              <div style="background:#fef2f2;border-radius:8px;padding:1rem;">
+                <div style="font-size:1.5rem;font-weight:700;color:#b91c1c;">\${flaggedCount}</div>
+                <div style="font-size:0.75rem;color:#b91c1c;">Flagged</div>
+              </div>
+              <div style="background:#f5f5f5;border-radius:8px;padding:1rem;">
+                <div style="font-size:1.5rem;font-weight:700;color:#666;">\${skippedCount}</div>
+                <div style="font-size:0.75rem;color:#666;">Skipped</div>
+              </div>
+            </div>
+            
+            \${selectedHtml}
+            \${flaggedHtml}
+            
+            <div style="display:flex;gap:0.75rem;justify-content:center;margin-top:1.5rem;">
+              <button class="btn btn-secondary" onclick="focusModeIndex = 0; showFocusMode();">← Review Again</button>
+              \${selectedCount > 0 ? '<button class="btn btn-success" onclick="focusModeFinishAndSend()" style="padding:0.75rem 2rem;">✓ Send ' + selectedCount + ' Selected to Zoho</button>' : ''}
+              <button class="btn btn-secondary" onclick="exitFocusMode()">Exit to List View</button>
+            </div>
+          </div>
+        </div>
+        
+        <style>
+          .focus-mode-container { max-width:850px; margin:0 auto; padding:1rem; }
+          .focus-header { display:flex; justify-content:space-between; align-items:center; padding:0.75rem 0; margin-bottom:0.5rem; }
+          .focus-header h2 { font-size:1rem; font-weight:600; margin:0; }
+          .focus-header-left { display:flex; align-items:center; gap:1.5rem; }
+          .focus-progress-text { font-size:0.875rem; color:#666; }
+          .focus-progress-bar { height:3px; background:#e5e5e5; margin-bottom:1.5rem; }
+          .focus-progress-fill { height:100%; background:#1e3a5f; }
+          .focus-card { background:#fff; border:1px solid #ddd; border-radius:4px; }
+        </style>
+      \`;
+      
+      document.getElementById('matchReviewContent').innerHTML = html;
+    }
+    
+    function focusModeFinishAndSend() {
+      // This will trigger the bulk confirmation modal we already have
+      sendSelectedToZoho();
     }
     
     // Selection functions
