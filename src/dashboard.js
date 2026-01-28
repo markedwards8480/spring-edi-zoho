@@ -1656,27 +1656,44 @@ const dashboardHTML = `
       const edi = match.ediOrder;
       const zoho = match.zohoDraft;
 
+      // Helper to format dates nicely
+      const fmtDate = (d) => {
+        if (!d) return '—';
+        // Handle ISO dates or date strings
+        const date = new Date(d);
+        if (isNaN(date.getTime())) return d;
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      };
+
       let changes = [];
-      if (edi.shipDate !== zoho.shipDate) {
-        changes.push({ field: 'Ship Date', from: zoho.shipDate || '—', to: edi.shipDate || '—' });
+      if (edi.shipDate && edi.shipDate !== zoho.shipDate) {
+        changes.push({ field: 'Ship Date', from: fmtDate(zoho.shipDate), to: fmtDate(edi.shipDate) });
       }
       if (Math.abs((edi.totalAmount || 0) - (zoho.totalAmount || 0)) > 1) {
-        changes.push({ field: 'Amount', from: '$' + (zoho.totalAmount || 0).toFixed(2), to: '$' + (edi.totalAmount || 0).toFixed(2) });
+        changes.push({ field: 'Amount', from: '$' + (zoho.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2}), to: '$' + (edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2}) });
       }
       if (edi.totalUnits !== zoho.totalUnits) {
-        changes.push({ field: 'Units', from: zoho.totalUnits, to: edi.totalUnits });
+        changes.push({ field: 'Units', from: (zoho.totalUnits || 0).toLocaleString(), to: (edi.totalUnits || 0).toLocaleString() });
       }
 
       ordersHtml += \`
         <div class="bg-white border border-slate-200 rounded-lg p-4 mb-3">
-          <div class="flex justify-between items-center mb-2">
-            <div class="font-semibold">PO# \${edi.poNumber}</div>
+          <div class="flex justify-between items-center mb-3">
+            <div class="font-semibold text-slate-800">PO# \${edi.poNumber}</div>
             <div class="text-sm text-slate-500">→ Zoho Ref# \${zoho.reference || zoho.number}</div>
           </div>
           \${changes.length > 0 ? \`
-            <div class="text-sm">
-              \${changes.map(c => '<div class="flex gap-4"><span class="text-slate-500 w-20">' + c.field + '</span><span class="line-through text-slate-400">' + c.from + '</span><span class="text-green-600">→ ' + c.to + '</span></div>').join('')}
-            </div>
+            <table class="w-full text-sm">
+              <tbody>
+                \${changes.map(c => \`
+                  <tr class="border-t border-slate-100">
+                    <td class="py-2 text-slate-500 w-24">\${c.field}</td>
+                    <td class="py-2 text-slate-400 line-through">\${c.from}</td>
+                    <td class="py-2 text-green-600 font-medium">→ \${c.to}</td>
+                  </tr>
+                \`).join('')}
+              </tbody>
+            </table>
           \` : '<div class="text-sm text-green-600">✓ No changes needed</div>'}
         </div>
       \`;
