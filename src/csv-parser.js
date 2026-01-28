@@ -151,14 +151,7 @@ function parseSpringCSV(content, filename) {
     const uom = getField(row, 'po_item_po_item_uom', 'po_item.po_item_uom') || 'EA';
     const isPrepack = uom === 'AS' || uom === 'ST';
 
-    // Get pack quantity (items per pack)
-    const packQtyRaw = getField(row,
-      'product_pack_product_pack_product_qty',
-      'product_pack.product_pack_product_qty'
-    );
-    const packQty = parseInt(packQtyRaw) || 1;
-
-    // Get BOTH prices:
+    // Get BOTH prices first (needed to calculate pack qty if not provided):
     // 1. Pack price (po_item_po_item_unit_price) - price for the whole pack/assortment
     // 2. Each price (product_pack_product_pack_unit_price) - price per individual item
     const packPriceRaw = getField(row,
@@ -172,6 +165,32 @@ function parseSpringCSV(content, filename) {
       'product_pack.product_pack_unit_price'
     );
     const eachPrice = parseFloat(eachPriceRaw) || 0;
+
+    // Get pack quantity (items per pack)
+    // First try to get from CSV field
+    const packQtyRaw = getField(row,
+      'product_pack_product_pack_product_qty',
+      'product_pack.product_pack_product_qty'
+    );
+    let packQty = parseInt(packQtyRaw) || 0;
+
+    // If pack qty not provided but we have both prices, CALCULATE it
+    // Pack Qty = Pack Price ÷ Each Price (e.g., $37.50 ÷ $7.50 = 5)
+    if (packQty <= 1 && packPrice > 0 && eachPrice > 0 && packPrice !== eachPrice) {
+      const calculatedPackQty = Math.round(packPrice / eachPrice);
+      // Sanity check: calculated qty should be reasonable (2-100) and prices should divide evenly
+      if (calculatedPackQty >= 2 && calculatedPackQty <= 100) {
+        const checkPrice = eachPrice * calculatedPackQty;
+        // Allow small rounding difference
+        if (Math.abs(checkPrice - packPrice) < 0.02) {
+          packQty = calculatedPackQty;
+          logger.debug('Calculated pack qty from prices', { packPrice, eachPrice, packQty });
+        }
+      }
+    }
+
+    // Default to 1 if still not set
+    if (packQty <= 0) packQty = 1;
 
     // Determine the unit price to use:
     // - If eachPrice is available, use it (most accurate)
