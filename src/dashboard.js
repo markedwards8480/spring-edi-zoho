@@ -255,8 +255,8 @@ const dashboardHTML = `
     <div id="content-history" class="stage-content hidden">
       <div class="flex items-center justify-between mb-6">
         <div>
-          <h2 class="text-xl font-semibold text-slate-800">Activity & Logs</h2>
-          <p class="text-slate-500">System activity and processing history</p>
+          <h2 class="text-xl font-semibold text-slate-800">Zoho Audit Trail</h2>
+          <p class="text-slate-500">Orders created and modified in Zoho</p>
         </div>
         <button onclick="loadActivityLog()" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition flex items-center gap-2 text-slate-600">
           🔄 Refresh
@@ -266,41 +266,31 @@ const dashboardHTML = `
       <!-- Stats -->
       <div class="grid grid-cols-4 gap-4 mb-6">
         <div class="bg-white rounded-xl border border-slate-200 p-4">
-          <div class="text-xs text-slate-500 uppercase mb-1">All-Time Orders Sent</div>
+          <div class="text-xs text-slate-500 uppercase mb-1">Total Orders Sent</div>
           <div class="text-2xl font-bold text-slate-800" id="statAllTimeSent">-</div>
         </div>
         <div class="bg-white rounded-xl border border-slate-200 p-4">
-          <div class="text-xs text-slate-500 uppercase mb-1">All-Time Value</div>
+          <div class="text-xs text-slate-500 uppercase mb-1">Total Value</div>
           <div class="text-2xl font-bold text-green-600" id="statAllTimeValue">-</div>
         </div>
         <div class="bg-white rounded-xl border border-slate-200 p-4">
-          <div class="text-xs text-slate-500 uppercase mb-1">Last 30 Days Sent</div>
-          <div class="text-2xl font-bold text-slate-800" id="stat30DaySent">-</div>
+          <div class="text-xs text-slate-500 uppercase mb-1">New Orders Created</div>
+          <div class="text-2xl font-bold text-blue-600" id="statNewOrders">-</div>
         </div>
         <div class="bg-white rounded-xl border border-slate-200 p-4">
-          <div class="text-xs text-slate-500 uppercase mb-1">Errors (30 days)</div>
-          <div class="text-2xl font-bold text-amber-600" id="stat30DayErrors">-</div>
+          <div class="text-xs text-slate-500 uppercase mb-1">Drafts Updated</div>
+          <div class="text-2xl font-bold text-amber-600" id="statDraftsUpdated">-</div>
         </div>
       </div>
 
       <!-- Filters -->
       <div class="flex items-center gap-4 mb-4">
-        <select id="activityActionFilter" onchange="filterActivityLog()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="">All Actions</option>
-          <option value="sent_to_zoho">Sent to Zoho</option>
-          <option value="draft_updated">Draft Updated</option>
-          <option value="new_order_created">New Order Created</option>
-          <option value="match_found">Match Found</option>
-          <option value="order_imported">Order Imported</option>
-          <option value="zoho_error">Errors</option>
+        <select id="activityTypeFilter" onchange="filterActivityLog()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">All Types</option>
+          <option value="new">New Orders Created</option>
+          <option value="updated">Drafts Updated</option>
         </select>
-        <select id="activitySeverityFilter" onchange="filterActivityLog()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="">All Severity</option>
-          <option value="success">✓ Success</option>
-          <option value="info">ℹ️ Info</option>
-          <option value="warning">⚠️ Warning</option>
-          <option value="error">❌ Error</option>
-        </select>
+        <input type="text" id="activitySearchFilter" placeholder="Search PO# or Customer..." onkeyup="filterActivityLog()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-64">
         <span id="activityLogCount" class="text-sm text-slate-500 ml-auto"></span>
       </div>
 
@@ -308,16 +298,17 @@ const dashboardHTML = `
         <table class="w-full">
           <thead class="bg-slate-50 border-b border-slate-200">
             <tr>
-              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Time</th>
-              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Action</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Date/Time</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Type</th>
               <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">PO #</th>
               <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Customer</th>
-              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Details</th>
-              <th class="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Status</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Zoho SO#</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Changes</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Amount</th>
             </tr>
           </thead>
           <tbody id="activityLogBody">
-            <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">Loading...</td></tr>
+            <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Loading...</td></tr>
           </tbody>
         </table>
       </div>
@@ -1803,8 +1794,6 @@ const dashboardHTML = `
               <div class="flex gap-6">
                 <button onclick="showEdiTab('summary')" class="tab-btn active py-3 text-sm font-medium" data-tab="summary">Summary</button>
                 <button onclick="showEdiTab('lineitems')" class="tab-btn py-3 text-sm font-medium text-slate-500" data-tab="lineitems">📦 Line Items</button>
-                <button onclick="showEdiTab('pricing')" class="tab-btn py-3 text-sm font-medium text-slate-500" data-tab="pricing">💰 Pricing</button>
-                <button onclick="showEdiTab('shipping')" class="tab-btn py-3 text-sm font-medium text-slate-500" data-tab="shipping">🚚 Shipping</button>
                 <button onclick="showEdiTab('raw')" class="tab-btn py-3 text-sm font-medium text-slate-500" data-tab="raw">All Raw Data</button>
               </div>
             </div>
@@ -1924,65 +1913,6 @@ const dashboardHTML = `
                 </div>
               </div>
 
-              <!-- Pricing Tab -->
-              <div id="edi-tab-pricing" class="edi-tab-content hidden">
-                <div class="grid grid-cols-2 gap-6">
-                  <div class="space-y-4">
-                    <div class="bg-slate-50 rounded-lg p-4">
-                      <div class="text-xs text-slate-500 uppercase mb-1">Payment Terms</div>
-                      <div class="font-semibold">\${dates.paymentTerms || pricing.paymentTerms || 'N/A'}</div>
-                    </div>
-                    <div class="bg-slate-50 rounded-lg p-4">
-                      <div class="text-xs text-slate-500 uppercase mb-1">Currency</div>
-                      <div class="font-semibold">\${pricing.currency || 'USD'}</div>
-                    </div>
-                  </div>
-                  <div class="space-y-4">
-                    <div class="bg-green-50 rounded-lg p-4 border border-green-100">
-                      <div class="text-xs text-green-600 uppercase mb-1">Subtotal</div>
-                      <div class="text-2xl font-bold text-green-700">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
-                    </div>
-                    <div class="bg-slate-50 rounded-lg p-4">
-                      <div class="text-xs text-slate-500 uppercase mb-1">Discount</div>
-                      <div class="font-semibold">\${pricing.discount || '0%'}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Shipping Tab -->
-              <div id="edi-tab-shipping" class="edi-tab-content hidden">
-                <div class="grid grid-cols-2 gap-6">
-                  <div class="space-y-4">
-                    <h4 class="font-semibold text-slate-700">Key Dates</h4>
-                    <div class="bg-slate-50 rounded-lg p-4">
-                      <div class="text-xs text-slate-500 uppercase mb-1">Ship Date</div>
-                      <div class="font-semibold">\${formatDate(dates.shipDate || dates.deliveryDate)}</div>
-                    </div>
-                    <div class="bg-slate-50 rounded-lg p-4">
-                      <div class="text-xs text-slate-500 uppercase mb-1">Cancel Date</div>
-                      <div class="font-semibold">\${formatDate(dates.cancelDate)}</div>
-                    </div>
-                    <div class="bg-slate-50 rounded-lg p-4">
-                      <div class="text-xs text-slate-500 uppercase mb-1">Start Ship Date</div>
-                      <div class="font-semibold">\${formatDate(dates.startShipDate)}</div>
-                    </div>
-                  </div>
-                  <div class="space-y-4">
-                    <h4 class="font-semibold text-slate-700">Ship To Address</h4>
-                    <div class="bg-slate-50 rounded-lg p-4">
-                      <div class="text-sm">
-                        \${shipping.shipToName ? '<div class="font-semibold">' + shipping.shipToName + '</div>' : ''}
-                        \${shipping.shipToAddress1 ? '<div>' + shipping.shipToAddress1 + '</div>' : ''}
-                        \${shipping.shipToAddress2 ? '<div>' + shipping.shipToAddress2 + '</div>' : ''}
-                        \${shipping.shipToCity ? '<div>' + shipping.shipToCity + ', ' + (shipping.shipToState || '') + ' ' + (shipping.shipToZip || '') + '</div>' : ''}
-                        \${!shipping.shipToName && !shipping.shipToAddress1 ? '<div class="text-slate-400">No shipping address provided</div>' : ''}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               <!-- Raw Data Tab -->
               <div id="edi-tab-raw" class="edi-tab-content hidden">
                 <div class="bg-slate-50 rounded-lg border max-h-96 overflow-auto">
@@ -2086,139 +2016,182 @@ const dashboardHTML = `
   // ACTIVITY LOG
   // ============================================================
   async function loadActivityLog() {
-    const action = document.getElementById('activityActionFilter')?.value || '';
-    const severity = document.getElementById('activitySeverityFilter')?.value || '';
-
     try {
-      let url = '/audit/activity?limit=100';
-      if (action) url += '&action=' + action;
-      if (severity) url += '&severity=' + severity;
-
-      const res = await fetch(url);
+      const res = await fetch('/audit/zoho-orders?limit=200');
       const data = await res.json();
-      activityLogData = data.activity || [];
-      document.getElementById('activityLogCount').textContent = activityLogData.length + ' entries';
-      renderActivityLog();
+      activityLogData = data.orders || [];
+      document.getElementById('activityLogCount').textContent = activityLogData.length + ' orders';
+
+      // Update stats
+      const newOrders = activityLogData.filter(o => o.was_new_order).length;
+      const updatedDrafts = activityLogData.filter(o => !o.was_new_order).length;
+      document.getElementById('statNewOrders').textContent = newOrders;
+      document.getElementById('statDraftsUpdated').textContent = updatedDrafts;
+
+      filterActivityLog();
     } catch (e) {
       console.error('Failed to load activity log:', e);
     }
   }
 
   function filterActivityLog() {
-    loadActivityLog();
+    const typeFilter = document.getElementById('activityTypeFilter')?.value || '';
+    const searchFilter = (document.getElementById('activitySearchFilter')?.value || '').toLowerCase();
+
+    let filtered = activityLogData;
+
+    if (typeFilter === 'new') {
+      filtered = filtered.filter(o => o.was_new_order);
+    } else if (typeFilter === 'updated') {
+      filtered = filtered.filter(o => !o.was_new_order);
+    }
+
+    if (searchFilter) {
+      filtered = filtered.filter(o =>
+        (o.edi_po_number || '').toLowerCase().includes(searchFilter) ||
+        (o.edi_order_number || '').toLowerCase().includes(searchFilter) ||
+        (o.customer_name || '').toLowerCase().includes(searchFilter) ||
+        (o.zoho_so_number || '').toLowerCase().includes(searchFilter)
+      );
+    }
+
+    document.getElementById('activityLogCount').textContent = filtered.length + ' orders';
+    renderActivityLog(filtered);
   }
 
-  function renderActivityLog() {
+  function renderActivityLog(orders) {
     const tbody = document.getElementById('activityLogBody');
+    orders = orders || activityLogData;
 
-    if (!activityLogData.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No activity found</td></tr>';
+    if (!orders.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No orders found</td></tr>';
       return;
     }
 
-    tbody.innerHTML = activityLogData.map(log => {
-      const time = log.created_at ? formatDateWithTime(new Date(log.created_at)) : '-';
-      const severityClass = log.severity === 'success' ? 'text-green-600' : log.severity === 'error' ? 'text-red-600' : log.severity === 'warning' ? 'text-amber-600' : 'text-slate-500';
-      const severityIcon = log.severity === 'success' ? '✓' : log.severity === 'error' ? '✕' : log.severity === 'warning' ? '⚠' : 'ℹ';
+    tbody.innerHTML = orders.map(order => {
+      const time = order.sent_at ? formatDateWithTime(new Date(order.sent_at)) : '-';
+      const typeLabel = order.was_new_order ?
+        '<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-medium">➕ New</span>' :
+        '<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-xs font-medium">✏️ Updated</span>';
 
-      // Format details - show changes if available
-      let detailsHtml = '-';
-      if (log.details) {
-        const details = typeof log.details === 'string' ? JSON.parse(log.details) : log.details;
-        if (details.changesApplied && details.changesApplied.length > 0) {
-          detailsHtml = details.changesApplied.map(c =>
-            '<span class="inline-block bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded text-xs mr-1">' + c.field + '</span>'
+      // Format changes
+      let changesHtml = '-';
+      if (order.changes_applied) {
+        const changes = typeof order.changes_applied === 'string' ? JSON.parse(order.changes_applied) : order.changes_applied;
+        if (changes && changes.length > 0) {
+          changesHtml = changes.map(c =>
+            '<span class="inline-block bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-xs mr-1">' + c.field + '</span>'
           ).join('');
-        } else if (details.zohoSoNumber) {
-          detailsHtml = 'Zoho #' + details.zohoSoNumber;
         } else {
-          detailsHtml = JSON.stringify(details).substring(0, 40) + (JSON.stringify(details).length > 40 ? '...' : '');
+          changesHtml = '<span class="text-slate-400 text-xs">No changes</span>';
         }
+      } else if (order.was_new_order) {
+        changesHtml = '<span class="text-blue-500 text-xs">Created new</span>';
       }
 
-      // Action formatting
-      const actionLabels = {
-        'sent_to_zoho': '📤 Sent to Zoho',
-        'draft_updated': '✏️ Draft Updated',
-        'new_order_created': '➕ New Order',
-        'match_found': '🔗 Match Found',
-        'order_imported': '📥 Imported',
-        'zoho_error': '❌ Error',
-        'sftp_fetch_started': '📡 SFTP Fetch',
-        'sftp_fetch_completed': '✅ SFTP Done',
-        'match_search_completed': '🔍 Matching Done'
-      };
-      const actionLabel = actionLabels[log.action] || log.action || '-';
+      const amount = order.order_amount ? '$' + parseFloat(order.order_amount).toLocaleString('en-US', {minimumFractionDigits: 2}) : '-';
 
       return \`
-        <tr class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onclick="showActivityDetail(\${log.id})">
+        <tr class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onclick="showOrderDetail(\${order.id})">
           <td class="px-4 py-3 text-slate-500 text-sm">\${time}</td>
-          <td class="px-4 py-3 text-slate-800">\${actionLabel}</td>
-          <td class="px-4 py-3 font-medium text-slate-800">\${log.edi_po_number || log.edi_order_number || '-'}</td>
-          <td class="px-4 py-3 text-slate-600">\${log.customer_name || '-'}</td>
-          <td class="px-4 py-3 text-slate-500 text-sm">\${detailsHtml}</td>
-          <td class="px-4 py-3 text-center \${severityClass}">\${severityIcon}</td>
+          <td class="px-4 py-3">\${typeLabel}</td>
+          <td class="px-4 py-3 font-medium text-slate-800">\${order.edi_po_number || order.edi_order_number || '-'}</td>
+          <td class="px-4 py-3 text-slate-600">\${order.customer_name || '-'}</td>
+          <td class="px-4 py-3 text-slate-600">\${order.zoho_so_number || '-'}</td>
+          <td class="px-4 py-3 text-sm">\${changesHtml}</td>
+          <td class="px-4 py-3 text-right font-medium text-green-600">\${amount}</td>
         </tr>
       \`;
     }).join('');
   }
 
-  async function showActivityDetail(logId) {
-    const log = activityLogData.find(l => l.id === logId);
-    if (!log) return;
+  async function showOrderDetail(orderId) {
+    const order = activityLogData.find(o => o.id === orderId);
+    if (!order) return;
 
-    const time = log.created_at ? formatDateWithTime(new Date(log.created_at)) : '-';
-    const details = log.details ? (typeof log.details === 'string' ? JSON.parse(log.details) : log.details) : {};
+    const time = order.sent_at ? formatDateWithTime(new Date(order.sent_at)) : '-';
+    const changes = order.changes_applied ? (typeof order.changes_applied === 'string' ? JSON.parse(order.changes_applied) : order.changes_applied) : [];
 
     let changesHtml = '';
-    if (details.changesApplied && details.changesApplied.length > 0) {
+    if (changes && changes.length > 0) {
       changesHtml = \`
         <div class="mt-4">
-          <div class="text-sm font-semibold text-slate-600 mb-2">Changes Applied:</div>
+          <div class="text-sm font-semibold text-slate-600 mb-2">Changes Made:</div>
           <table class="w-full text-sm border border-slate-200 rounded">
             <thead class="bg-slate-50">
               <tr>
                 <th class="text-left px-3 py-2 text-slate-500">Field</th>
-                <th class="text-left px-3 py-2 text-slate-500">Before</th>
-                <th class="text-left px-3 py-2 text-slate-500">After</th>
+                <th class="text-left px-3 py-2 text-slate-500">Before (Zoho)</th>
+                <th class="text-left px-3 py-2 text-slate-500">After (EDI)</th>
               </tr>
             </thead>
             <tbody>
-              \${details.changesApplied.map(c => \`
+              \${changes.map(c => \`
                 <tr class="border-t border-slate-100">
                   <td class="px-3 py-2 font-medium">\${c.field}</td>
-                  <td class="px-3 py-2 text-slate-400 line-through">\${c.from || '—'}</td>
-                  <td class="px-3 py-2 text-green-600">\${c.to || '—'}</td>
+                  <td class="px-3 py-2 text-red-400 line-through">\${c.from || '—'}</td>
+                  <td class="px-3 py-2 text-green-600 font-medium">\${c.to || '—'}</td>
                 </tr>
               \`).join('')}
             </tbody>
           </table>
         </div>
       \`;
+    } else if (order.was_new_order) {
+      changesHtml = '<div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded text-blue-700 text-sm">This was a new order created in Zoho (no existing draft was updated).</div>';
+    } else {
+      changesHtml = '<div class="mt-4 p-3 bg-slate-50 border border-slate-200 rounded text-slate-600 text-sm">No field changes were recorded for this update.</div>';
     }
 
     const modalHtml = \`
       <div class="modal-overlay" onclick="closeModal()">
         <div class="bg-white rounded-xl max-w-2xl w-full mx-4 overflow-hidden max-h-[80vh] overflow-y-auto" onclick="event.stopPropagation()">
           <div class="bg-slate-800 text-white px-6 py-4 flex justify-between items-center sticky top-0">
-            <h3 class="text-lg font-semibold">📋 Activity Detail</h3>
+            <h3 class="text-lg font-semibold">📋 Order Audit Detail</h3>
             <button onclick="closeModal()" class="text-white hover:text-slate-300">✕</button>
           </div>
           <div class="p-6">
-            <div class="grid grid-cols-2 gap-4 text-sm">
-              <div><span class="text-slate-500">Time:</span> <span class="font-medium">\${time}</span></div>
-              <div><span class="text-slate-500">Action:</span> <span class="font-medium">\${log.action}</span></div>
-              <div><span class="text-slate-500">PO #:</span> <span class="font-medium">\${log.edi_po_number || log.edi_order_number || '-'}</span></div>
-              <div><span class="text-slate-500">Customer:</span> <span class="font-medium">\${log.customer_name || '-'}</span></div>
-              \${log.zoho_so_number ? \`<div><span class="text-slate-500">Zoho SO#:</span> <span class="font-medium">\${log.zoho_so_number}</span></div>\` : ''}
-              \${log.order_amount ? \`<div><span class="text-slate-500">Amount:</span> <span class="font-medium">$\${parseFloat(log.order_amount).toLocaleString()}</span></div>\` : ''}
-              \${log.match_confidence ? \`<div><span class="text-slate-500">Match Confidence:</span> <span class="font-medium">\${log.match_confidence}%</span></div>\` : ''}
+            <div class="grid grid-cols-2 gap-4 text-sm mb-4">
+              <div class="bg-slate-50 rounded p-3">
+                <div class="text-xs text-slate-500 uppercase mb-1">Sent to Zoho</div>
+                <div class="font-medium">\${time}</div>
+              </div>
+              <div class="bg-slate-50 rounded p-3">
+                <div class="text-xs text-slate-500 uppercase mb-1">Type</div>
+                <div class="font-medium">\${order.was_new_order ? '➕ New Order Created' : '✏️ Draft Updated'}</div>
+              </div>
+              <div class="bg-slate-50 rounded p-3">
+                <div class="text-xs text-slate-500 uppercase mb-1">EDI PO #</div>
+                <div class="font-medium">\${order.edi_po_number || order.edi_order_number || '-'}</div>
+              </div>
+              <div class="bg-slate-50 rounded p-3">
+                <div class="text-xs text-slate-500 uppercase mb-1">Zoho SO #</div>
+                <div class="font-medium">\${order.zoho_so_number || '-'}</div>
+              </div>
+              <div class="bg-slate-50 rounded p-3">
+                <div class="text-xs text-slate-500 uppercase mb-1">Customer</div>
+                <div class="font-medium">\${order.customer_name || '-'}</div>
+              </div>
+              <div class="bg-green-50 rounded p-3 border border-green-100">
+                <div class="text-xs text-green-600 uppercase mb-1">Order Amount</div>
+                <div class="font-bold text-green-700">$\${order.order_amount ? parseFloat(order.order_amount).toLocaleString('en-US', {minimumFractionDigits: 2}) : '0.00'}</div>
+              </div>
+              \${order.match_confidence ? \`
+              <div class="bg-slate-50 rounded p-3">
+                <div class="text-xs text-slate-500 uppercase mb-1">Match Confidence</div>
+                <div class="font-medium">\${order.match_confidence}%</div>
+              </div>\` : ''}
+              \${order.matched_draft_number ? \`
+              <div class="bg-slate-50 rounded p-3">
+                <div class="text-xs text-slate-500 uppercase mb-1">Matched Draft</div>
+                <div class="font-medium">\${order.matched_draft_number}</div>
+              </div>\` : ''}
             </div>
             \${changesHtml}
-            \${log.error_message ? \`<div class="mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">\${log.error_message}</div>\` : ''}
           </div>
-          <div class="px-6 py-4 bg-slate-50 border-t">
+          <div class="px-6 py-4 bg-slate-50 border-t flex justify-between">
             <button onclick="closeModal()" class="px-4 py-2 bg-slate-200 rounded-lg hover:bg-slate-300">Close</button>
+            \${order.zoho_so_id ? \`<a href="https://books.zoho.com/app/677681121#/salesorders/\${order.zoho_so_id}" target="_blank" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">View in Zoho →</a>\` : ''}
           </div>
         </div>
       </div>
@@ -2233,8 +2206,7 @@ const dashboardHTML = `
       const data = await res.json();
       document.getElementById('statAllTimeSent').textContent = data.allTimeSent || 0;
       document.getElementById('statAllTimeValue').textContent = '$' + ((data.allTimeValue || 0) / 1000).toFixed(1) + 'K';
-      document.getElementById('stat30DaySent').textContent = data.last30DaysSent || 0;
-      document.getElementById('stat30DayErrors').textContent = data.last30DaysErrors || 0;
+      // New/Updated stats are now calculated from the orders list in loadActivityLog
     } catch (e) {}
   }
 
