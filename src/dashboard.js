@@ -19,6 +19,8 @@ const dashboardHTML = `
     .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
     .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .tab-btn.active { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
+    .tab-btn { border-bottom: 2px solid transparent; }
   </style>
 </head>
 <body class="bg-slate-50 min-h-screen">
@@ -138,26 +140,26 @@ const dashboardHTML = `
       </div>
     </div>
 
-    <!-- ==================== REVIEW STAGE (Focus Mode) ==================== -->
+    <!-- ==================== REVIEW STAGE ==================== -->
     <div id="content-review" class="stage-content hidden">
 
-      <!-- Filter Bar -->
+      <!-- Header with Title and Filters -->
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
           <h2 class="text-xl font-semibold text-slate-800">Review Matches</h2>
 
           <!-- Confidence Filter Buttons -->
           <div id="confidenceFilters" class="flex items-center gap-1 ml-4 bg-slate-100 p-1 rounded-lg">
-            <button onclick="setConfidenceFilter('')" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium bg-white shadow-sm text-slate-700">All</button>
-            <button onclick="setConfidenceFilter('perfect')" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">100%</button>
-            <button onclick="setConfidenceFilter('high')" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">80-99%</button>
-            <button onclick="setConfidenceFilter('medium')" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">60-79%</button>
-            <button onclick="setConfidenceFilter('nomatch')" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">No Match</button>
+            <button onclick="setConfidenceFilter('')" data-filter="" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium bg-white shadow-sm text-slate-700">All (<span id="filter-count-all">0</span>)</button>
+            <button onclick="setConfidenceFilter('perfect')" data-filter="perfect" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">100% (<span id="filter-count-perfect">0</span>)</button>
+            <button onclick="setConfidenceFilter('high')" data-filter="high" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">80-99% (<span id="filter-count-high">0</span>)</button>
+            <button onclick="setConfidenceFilter('medium')" data-filter="medium" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">60-79% (<span id="filter-count-medium">0</span>)</button>
+            <button onclick="setConfidenceFilter('nomatch')" data-filter="nomatch" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">No Match (<span id="filter-count-nomatch">0</span>)</button>
           </div>
         </div>
 
         <div class="flex items-center gap-3">
-          <span id="flaggedCount" class="text-sm text-red-600 font-medium hidden">🚩 0 flagged</span>
+          <span class="text-sm text-green-600 font-medium"><span id="selectedCountDisplay">0</span> selected</span>
           <button onclick="clearMatchResults()" class="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700">Clear Results</button>
         </div>
       </div>
@@ -169,14 +171,37 @@ const dashboardHTML = `
         <p class="text-slate-500">Go to <strong>New Orders</strong> and click <strong>Find Matches</strong> to search for matching Zoho drafts.</p>
       </div>
 
+      <!-- List View Container -->
+      <div id="listViewContainer" class="hidden">
+        <!-- Progress indicator -->
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm text-slate-500">Match <strong class="text-slate-700" id="list-current-match">1</strong> of <strong class="text-slate-700" id="list-total-matches">0</strong></span>
+        </div>
+        <div class="h-1.5 bg-slate-200 rounded-full mb-4">
+          <div id="list-progress-bar" class="h-full bg-blue-500 rounded-full transition-all" style="width: 0%"></div>
+        </div>
+
+        <!-- Match Cards List -->
+        <div id="matchCardsContainer" class="space-y-3 mb-4">
+          <!-- Match cards will be rendered here -->
+        </div>
+      </div>
+
       <!-- Focus Mode Container -->
       <div id="focusModeContainer" class="max-w-4xl mx-auto hidden">
         <!-- Will be populated by showFocusMode() -->
       </div>
 
-      <!-- List View Container (alternative to Focus Mode) -->
-      <div id="listViewContainer" class="hidden">
-        <!-- Will be populated by showListView() -->
+      <!-- Bottom Action Bar (when items selected) -->
+      <div id="reviewActionBar" class="hidden fixed bottom-0 left-0 right-0 bg-green-50 border-t border-green-200 px-6 py-4">
+        <div class="max-w-7xl mx-auto flex items-center justify-between">
+          <div class="text-green-800">
+            <strong id="actionBarCount">0</strong> order(s) selected for Zoho
+          </div>
+          <button onclick="sendSelectedToZoho()" class="px-6 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-medium">
+            Finish & Send to Zoho →
+          </button>
+        </div>
       </div>
     </div>
 
@@ -340,6 +365,7 @@ const dashboardHTML = `
   let focusModeIndex = 0;
   let currentConfidenceFilter = '';
   let activityLogData = [];
+  let viewMode = 'list'; // 'list' or 'focus'
 
   // ============================================================
   // INITIALIZATION
@@ -387,8 +413,10 @@ const dashboardHTML = `
     if (stage === 'done') loadSentOrders();
     if (stage === 'history') { loadActivityLog(); loadAuditStats(); }
     if (stage === 'settings') loadMappings();
-    if (stage === 'review' && matchResults && matchResults.matches && matchResults.matches.length > 0 && !focusModeActive) {
-      startFocusMode();
+    if (stage === 'review') {
+      if (matchResults && ((matchResults.matches && matchResults.matches.length > 0) || (matchResults.noMatches && matchResults.noMatches.length > 0))) {
+        showListView();
+      }
     }
   }
 
@@ -423,6 +451,12 @@ const dashboardHTML = `
     }
   }
 
+  function formatDate(dateStr) {
+    if (!dateStr) return 'N/A';
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
   // ============================================================
   // SESSION PERSISTENCE
   // ============================================================
@@ -437,6 +471,7 @@ const dashboardHTML = `
         selectedMatchDrafts = new Map(Object.entries(data.selectedMatchDrafts || {}).map(([k, v]) => [parseInt(k), v]));
         focusModeIndex = data.focusModeIndex || 0;
         updateWorkflowCounts();
+        updateFilterCounts();
         const matchCount = matchResults.matches?.length || 0;
         if (matchCount > 0) {
           toast('Restored ' + matchCount + ' matches from previous session');
@@ -550,7 +585,7 @@ const dashboardHTML = `
                 <div class="text-xs text-slate-400 uppercase">EDI Date</div>
                 <div class="text-sm text-slate-600">\${ediDateStr}</div>
               </div>
-              <button onclick="viewOrder(\${o.id})" class="p-2 hover:bg-slate-100 rounded-lg transition" title="View Details">
+              <button onclick="viewEdiDetails(\${o.id})" class="p-2 hover:bg-slate-100 rounded-lg transition" title="View Details">
                 👁️
               </button>
             </div>
@@ -599,6 +634,20 @@ const dashboardHTML = `
     document.getElementById('done-count').textContent = sentCount;
 
     updatePendingCount();
+    updateSelectedDisplay();
+  }
+
+  function updateSelectedDisplay() {
+    const count = selectedMatchIds.size;
+    document.getElementById('selectedCountDisplay').textContent = count;
+    document.getElementById('actionBarCount').textContent = count;
+
+    const actionBar = document.getElementById('reviewActionBar');
+    if (count > 0) {
+      actionBar.classList.remove('hidden');
+    } else {
+      actionBar.classList.add('hidden');
+    }
   }
 
   // ============================================================
@@ -695,8 +744,9 @@ const dashboardHTML = `
         focusModeIndex = 0;
         saveSession();
         updateWorkflowCounts();
+        updateFilterCounts();
         showStage('review');
-        startFocusMode();
+        showListView();
         toast('Found ' + (data.matches?.length || 0) + ' matches');
       } else {
         toast('Error: ' + (data.error || 'Unknown'));
@@ -710,26 +760,200 @@ const dashboardHTML = `
   }
 
   // ============================================================
-  // FOCUS MODE
+  // CONFIDENCE FILTER
   // ============================================================
-  function startFocusMode() {
-    if (!matchResults || !matchResults.matches || matchResults.matches.length === 0) {
+  function getConfidenceLevel(conf) {
+    if (conf >= 100) return 'perfect';
+    if (conf >= 80) return 'high';
+    if (conf >= 60) return 'medium';
+    return 'nomatch';
+  }
+
+  function updateFilterCounts() {
+    if (!matchResults) return;
+
+    const matches = matchResults.matches || [];
+    const noMatches = matchResults.noMatches || [];
+
+    let counts = { all: matches.length + noMatches.length, perfect: 0, high: 0, medium: 0, nomatch: noMatches.length };
+
+    matches.forEach(m => {
+      const level = getConfidenceLevel(m.confidence || 0);
+      counts[level] = (counts[level] || 0) + 1;
+    });
+
+    document.getElementById('filter-count-all').textContent = counts.all;
+    document.getElementById('filter-count-perfect').textContent = counts.perfect;
+    document.getElementById('filter-count-high').textContent = counts.high;
+    document.getElementById('filter-count-medium').textContent = counts.medium;
+    document.getElementById('filter-count-nomatch').textContent = counts.nomatch;
+  }
+
+  function setConfidenceFilter(level) {
+    currentConfidenceFilter = level;
+
+    // Update button styles
+    document.querySelectorAll('.conf-filter').forEach(btn => {
+      const btnFilter = btn.dataset.filter;
+      if (btnFilter === level) {
+        btn.classList.add('bg-white', 'shadow-sm', 'text-slate-700');
+        btn.classList.remove('text-slate-500');
+      } else {
+        btn.classList.remove('bg-white', 'shadow-sm', 'text-slate-700');
+        btn.classList.add('text-slate-500');
+      }
+    });
+
+    showListView();
+  }
+
+  function getFilteredMatches() {
+    if (!matchResults) return [];
+
+    let matches = matchResults.matches || [];
+    const noMatches = matchResults.noMatches || [];
+
+    if (currentConfidenceFilter === 'nomatch') {
+      return noMatches.map(m => ({ ...m, confidence: 0, isNoMatch: true }));
+    }
+
+    if (currentConfidenceFilter === '') {
+      // Return all matches + no matches
+      return [...matches, ...noMatches.map(m => ({ ...m, confidence: 0, isNoMatch: true }))];
+    }
+
+    return matches.filter(m => getConfidenceLevel(m.confidence || 0) === currentConfidenceFilter);
+  }
+
+  // ============================================================
+  // LIST VIEW (Match Cards)
+  // ============================================================
+  function showListView() {
+    if (!matchResults || (!matchResults.matches?.length && !matchResults.noMatches?.length)) {
       document.getElementById('reviewEmptyState').classList.remove('hidden');
+      document.getElementById('listViewContainer').classList.add('hidden');
       document.getElementById('focusModeContainer').classList.add('hidden');
       return;
     }
 
-    focusModeActive = true;
+    viewMode = 'list';
     document.getElementById('reviewEmptyState').classList.add('hidden');
-    document.getElementById('focusModeContainer').classList.remove('hidden');
+    document.getElementById('listViewContainer').classList.remove('hidden');
+    document.getElementById('focusModeContainer').classList.add('hidden');
+
+    const filteredMatches = getFilteredMatches();
+
+    // Update progress
+    document.getElementById('list-total-matches').textContent = filteredMatches.length;
+
+    renderMatchCards(filteredMatches);
+  }
+
+  function renderMatchCards(matches) {
+    const container = document.getElementById('matchCardsContainer');
+
+    if (!matches.length) {
+      container.innerHTML = '<div class="text-center py-12 text-slate-500">No matches in this category.</div>';
+      return;
+    }
+
+    container.innerHTML = matches.map((match, index) => {
+      const edi = match.ediOrder;
+      const zoho = match.zohoDraft;
+      const conf = match.confidence || 0;
+      const isNoMatch = match.isNoMatch;
+      const isSelected = selectedMatchIds.has(edi.id);
+      const isFlagged = flaggedMatchIds.has(edi.id);
+
+      // Confidence badge styling
+      let confBg, confBorder;
+      if (conf >= 100) {
+        confBg = 'bg-green-100 text-green-700'; confBorder = 'border-green-500';
+      } else if (conf >= 80) {
+        confBg = 'bg-blue-100 text-blue-700'; confBorder = 'border-blue-500';
+      } else if (conf >= 60) {
+        confBg = 'bg-amber-100 text-amber-700'; confBorder = 'border-amber-500';
+      } else {
+        confBg = 'bg-red-100 text-red-700'; confBorder = 'border-red-500';
+      }
+
+      // Card border based on selection state
+      let cardBorder = 'border-slate-200';
+      if (isSelected) cardBorder = 'border-green-500 bg-green-50/30';
+      if (isFlagged) cardBorder = 'border-red-500 bg-red-50/30';
+
+      const items = edi.items || [];
+      const styles = [...new Set(items.map(i => i.style || i.productIds?.style).filter(Boolean))];
+
+      return \`
+        <div class="bg-white rounded-xl border-2 \${cardBorder} p-4 hover:shadow-md transition cursor-pointer" onclick="openFocusMode(\${index})">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-4">
+              <input type="checkbox" \${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleMatchSelect(\${edi.id}, '\${zoho?.id || ''}')"
+                class="w-5 h-5 rounded border-slate-300 text-green-500 cursor-pointer">
+              <div>
+                <div class="font-semibold text-slate-800">\${edi.customer}</div>
+                <div class="text-sm text-slate-500">PO# \${edi.poNumber}\${zoho ? ' → Zoho Ref# ' + (zoho.poReference || zoho.number) : ''}</div>
+              </div>
+              \${isFlagged ? '<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">🚩 Flagged</span>' : ''}
+              \${isSelected ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Selected</span>' : ''}
+            </div>
+            <div class="flex items-center gap-6">
+              <div class="text-right">
+                <div class="text-xs text-slate-400 uppercase">Units</div>
+                <div class="text-sm font-medium">\${(edi.totalUnits || 0).toLocaleString()}</div>
+              </div>
+              <div class="text-right">
+                <div class="text-xs text-slate-400 uppercase">Amount</div>
+                <div class="text-sm font-medium">$\${(edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+              </div>
+              <div class="text-right">
+                <div class="text-xs text-slate-400 uppercase">Styles</div>
+                <div class="text-sm">\${styles.length > 0 ? styles.slice(0, 2).join(', ') + (styles.length > 2 ? '...' : '') : '-'}</div>
+              </div>
+              <div class="px-3 py-1.5 rounded-lg \${confBg} font-bold text-lg border \${confBorder}">
+                \${isNoMatch ? 'No Match' : conf + '%'}
+              </div>
+            </div>
+          </div>
+        </div>
+      \`;
+    }).join('');
+  }
+
+  function toggleMatchSelect(ediId, draftId) {
+    if (selectedMatchIds.has(ediId)) {
+      selectedMatchIds.delete(ediId);
+      selectedMatchDrafts.delete(ediId);
+    } else {
+      selectedMatchIds.add(ediId);
+      if (draftId) selectedMatchDrafts.set(ediId, draftId);
+      flaggedMatchIds.delete(ediId);
+    }
+    saveSession();
+    updateSelectedDisplay();
+    showListView();
+  }
+
+  // ============================================================
+  // FOCUS MODE
+  // ============================================================
+  function openFocusMode(index) {
+    focusModeIndex = index;
+    viewMode = 'focus';
+    focusModeActive = true;
     document.addEventListener('keydown', focusModeKeyHandler);
+
+    document.getElementById('listViewContainer').classList.add('hidden');
+    document.getElementById('focusModeContainer').classList.remove('hidden');
+
     showFocusMode();
   }
 
   function exitFocusMode() {
     focusModeActive = false;
     document.removeEventListener('keydown', focusModeKeyHandler);
-    showStage('inbox');
+    showListView();
   }
 
   function focusModeKeyHandler(e) {
@@ -745,7 +969,7 @@ const dashboardHTML = `
   }
 
   function showFocusMode() {
-    const allMatches = matchResults.matches || [];
+    const allMatches = getFilteredMatches();
     if (allMatches.length === 0) {
       exitFocusMode();
       return;
@@ -760,10 +984,14 @@ const dashboardHTML = `
     const conf = match.confidence || 0;
     const score = match.score || {};
     const details = score.details || {};
+    const isNoMatch = match.isNoMatch;
 
     // Status determination
     let statusBg, statusIcon, statusTitle, statusDesc;
-    if (conf >= 100) {
+    if (isNoMatch) {
+      statusBg = 'bg-red-50 border-red-500'; statusIcon = '🚨';
+      statusTitle = 'No Match Found'; statusDesc = 'No matching Zoho draft found for this order';
+    } else if (conf >= 100) {
       statusBg = 'bg-green-50 border-green-500'; statusIcon = '✅';
       statusTitle = 'Perfect Match'; statusDesc = 'All fields match - safe to approve';
     } else if (conf >= 80) {
@@ -788,9 +1016,20 @@ const dashboardHTML = `
     const progressPercent = Math.round(((focusModeIndex + 1) / allMatches.length) * 100);
 
     // Format data
-    const ediShipDate = edi.shipDate ? edi.shipDate.split('T')[0] : 'N/A';
-    const zohoShipDate = zoho.shipDate ? zoho.shipDate.split('T')[0] : 'N/A';
-    const ediCancelDate = edi.cancelDate || 'N/A';
+    const ediShipDate = edi.shipDate ? formatDate(edi.shipDate) : 'N/A';
+    const zohoShipDate = zoho?.shipDate ? formatDate(zoho.shipDate) : 'N/A';
+    const ediCancelDate = edi.cancelDate ? formatDate(edi.cancelDate) : 'N/A';
+    const zohoCancelDate = zoho?.cancelDate ? formatDate(zoho.cancelDate) : '—';
+
+    // Extract styles from items
+    const ediItems = edi.items || [];
+    const zohoItems = zoho?.items || [];
+    const ediStyles = [...new Set(ediItems.map(i => i.style || i.productIds?.style).filter(Boolean))];
+    const zohoStyles = [...new Set(zohoItems.map(i => i.style || i.name?.split('-')[0]).filter(Boolean))];
+
+    // Check if styles match
+    const stylesMatch = ediStyles.length > 0 && zohoStyles.length > 0 &&
+      ediStyles.every(s => zohoStyles.some(zs => zs.includes(s) || s.includes(zs)));
 
     // Build HTML
     const html = \`
@@ -803,7 +1042,7 @@ const dashboardHTML = `
         </div>
       </div>
       <div class="h-1.5 bg-slate-200 rounded-full mb-6">
-        <div class="h-full bg-slate-700 rounded-full transition-all" style="width: \${progressPercent}%"></div>
+        <div class="h-full bg-blue-500 rounded-full transition-all" style="width: \${progressPercent}%"></div>
       </div>
 
       <!-- Focus Card -->
@@ -823,17 +1062,18 @@ const dashboardHTML = `
           <div>
             <div class="text-lg font-semibold text-slate-800">\${edi.customer}</div>
             <div class="text-sm text-slate-500 flex items-center gap-3">
-              <span>PO# \${edi.poNumber} → Zoho #\${zoho.number}</span>
-              <button onclick="viewOrder(\${edi.id})" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded transition">
+              <span>PO# \${edi.poNumber}\${zoho ? ' → Zoho Ref# ' + (zoho.poReference || zoho.number) : ''}</span>
+              <button onclick="viewEdiDetails(\${edi.id})" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded transition">
                 📄 View EDI Details
               </button>
             </div>
           </div>
           <div class="px-4 py-2 rounded-lg \${confBg} border font-bold text-xl">
-            \${conf}%
+            \${isNoMatch ? 'N/A' : conf + '%'}
           </div>
         </div>
 
+        \${!isNoMatch ? \`
         <!-- Comparison Table -->
         <div class="px-5 py-4">
           <table class="w-full text-sm">
@@ -849,36 +1089,120 @@ const dashboardHTML = `
               <tr class="border-b border-slate-100">
                 <td class="py-2.5 text-slate-500">PO / Ref</td>
                 <td class="py-2.5 bg-blue-50/30 px-3">\${edi.poNumber}</td>
-                <td class="py-2.5 bg-green-50/30 px-3">\${zoho.poReference || zoho.number}</td>
+                <td class="py-2.5 bg-green-50/30 px-3">\${zoho?.poReference || zoho?.number || '-'}</td>
                 <td class="py-2.5 text-center">\${details.po ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
               </tr>
               <tr class="border-b border-slate-100">
                 <td class="py-2.5 text-slate-500">Customer</td>
                 <td class="py-2.5 bg-blue-50/30 px-3">\${edi.customer}</td>
-                <td class="py-2.5 bg-green-50/30 px-3">\${zoho.customer || '-'}</td>
+                <td class="py-2.5 bg-green-50/30 px-3">\${zoho?.customer || '-'}</td>
                 <td class="py-2.5 text-center">\${details.customer ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
               </tr>
               <tr class="border-b border-slate-100">
                 <td class="py-2.5 text-slate-500">Ship Date</td>
                 <td class="py-2.5 bg-blue-50/30 px-3">\${ediShipDate}</td>
                 <td class="py-2.5 bg-green-50/30 px-3">\${zohoShipDate}</td>
-                <td class="py-2.5 text-center">\${ediShipDate === zohoShipDate ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+                <td class="py-2.5 text-center">\${edi.shipDate === zoho?.shipDate ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+              </tr>
+              <tr class="border-b border-slate-100">
+                <td class="py-2.5 text-slate-500">Cancel Date</td>
+                <td class="py-2.5 bg-blue-50/30 px-3">\${ediCancelDate}</td>
+                <td class="py-2.5 bg-green-50/30 px-3">\${zohoCancelDate}</td>
+                <td class="py-2.5 text-center">\${!zoho?.cancelDate ? '<span class="text-amber-500">⚠️ missing</span>' : edi.cancelDate === zoho.cancelDate ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
               </tr>
               <tr class="border-b border-slate-100">
                 <td class="py-2.5 text-slate-500">Units</td>
                 <td class="py-2.5 bg-blue-50/30 px-3 font-semibold">\${(edi.totalUnits || 0).toLocaleString()}</td>
-                <td class="py-2.5 bg-green-50/30 px-3 font-semibold">\${(zoho.totalUnits || 0).toLocaleString()}</td>
-                <td class="py-2.5 text-center">\${edi.totalUnits === zoho.totalUnits ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+                <td class="py-2.5 bg-green-50/30 px-3 font-semibold">\${(zoho?.totalUnits || 0).toLocaleString()}</td>
+                <td class="py-2.5 text-center">\${edi.totalUnits === zoho?.totalUnits ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
               </tr>
               <tr class="border-b border-slate-100">
                 <td class="py-2.5 text-slate-500">Amount</td>
                 <td class="py-2.5 bg-blue-50/30 px-3 font-semibold">$\${(edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-                <td class="py-2.5 bg-green-50/30 px-3 font-semibold">$\${(zoho.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-                <td class="py-2.5 text-center">\${Math.abs(edi.totalAmount - zoho.totalAmount) < 1 ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+                <td class="py-2.5 bg-green-50/30 px-3 font-semibold">$\${(zoho?.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                <td class="py-2.5 text-center">\${Math.abs((edi.totalAmount || 0) - (zoho?.totalAmount || 0)) < 1 ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+              </tr>
+              <tr class="border-b border-slate-100">
+                <td class="py-2.5 text-slate-500">Styles</td>
+                <td class="py-2.5 bg-blue-50/30 px-3">
+                  \${ediStyles.length > 0 ? ediStyles.map(s => '<span class="inline-block bg-slate-100 px-2 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-'}
+                </td>
+                <td class="py-2.5 bg-green-50/30 px-3">
+                  \${zohoStyles.length > 0 ? zohoStyles.map(s => '<span class="inline-block bg-slate-100 px-2 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-'}
+                </td>
+                <td class="py-2.5 text-center">\${stylesMatch ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
               </tr>
             </tbody>
           </table>
         </div>
+
+        <!-- Line Items Comparison (collapsible) -->
+        <div class="px-5 pb-4">
+          <button onclick="toggleLineItems()" class="text-sm text-slate-600 hover:text-slate-800 flex items-center gap-2">
+            <span id="lineItemsToggle">▶</span> View line items (\${ediItems.length} EDI → \${zohoItems.length} Zoho)
+          </button>
+          <div id="lineItemsContainer" class="hidden mt-4">
+            <div class="grid grid-cols-2 gap-4">
+              <!-- EDI Items -->
+              <div>
+                <div class="text-sm font-semibold text-blue-600 mb-2">EDI Order</div>
+                <table class="w-full text-xs">
+                  <thead class="bg-blue-50">
+                    <tr>
+                      <th class="text-left px-2 py-1">Style</th>
+                      <th class="text-left px-2 py-1">Color</th>
+                      <th class="text-right px-2 py-1">Qty</th>
+                      <th class="text-right px-2 py-1">Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    \${ediItems.slice(0, 10).map(item => \`
+                      <tr class="border-t border-slate-100">
+                        <td class="px-2 py-1">\${item.style || item.productIds?.style || '-'}</td>
+                        <td class="px-2 py-1">\${item.color || item.productIds?.color || '-'}</td>
+                        <td class="px-2 py-1 text-right">\${item.quantityOrdered || 0}</td>
+                        <td class="px-2 py-1 text-right">$\${(item.unitPrice || 0).toFixed(2)}</td>
+                      </tr>
+                    \`).join('')}
+                    \${ediItems.length > 10 ? '<tr><td colspan="4" class="px-2 py-1 text-center text-slate-400">... and ' + (ediItems.length - 10) + ' more</td></tr>' : ''}
+                  </tbody>
+                </table>
+              </div>
+              <!-- Zoho Items -->
+              <div>
+                <div class="text-sm font-semibold text-green-600 mb-2">Zoho Draft</div>
+                <table class="w-full text-xs">
+                  <thead class="bg-green-50">
+                    <tr>
+                      <th class="text-left px-2 py-1">Item</th>
+                      <th class="text-right px-2 py-1">Qty</th>
+                      <th class="text-right px-2 py-1">Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    \${zohoItems.slice(0, 10).map(item => \`
+                      <tr class="border-t border-slate-100">
+                        <td class="px-2 py-1">\${item.name || item.sku || '-'}</td>
+                        <td class="px-2 py-1 text-right">\${item.quantity || 0}</td>
+                        <td class="px-2 py-1 text-right">$\${(item.rate || 0).toFixed(2)}</td>
+                      </tr>
+                    \`).join('')}
+                    \${zohoItems.length > 10 ? '<tr><td colspan="3" class="px-2 py-1 text-center text-slate-400">... and ' + (zohoItems.length - 10) + ' more</td></tr>' : ''}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        \` : \`
+        <!-- No Match Info -->
+        <div class="px-5 py-8 text-center">
+          <p class="text-slate-500 mb-4">No matching Zoho draft was found for this EDI order.</p>
+          <button onclick="viewEdiDetails(\${edi.id})" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
+            View Full EDI Details
+          </button>
+        </div>
+        \`}
 
         <!-- Actions -->
         <div class="px-5 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
@@ -889,13 +1213,15 @@ const dashboardHTML = `
             <button onclick="focusModeFlag()" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-red-50 hover:border-red-200 transition text-slate-600 font-medium \${flaggedMatchIds.has(edi.id) ? 'bg-red-100 border-red-300 text-red-700' : ''}">
               \${flaggedMatchIds.has(edi.id) ? '🚩 Flagged' : '🚩 Flag'}
             </button>
-            <button onclick="window.open('https://books.zoho.com/app/677681121#/salesorders/\${zoho.id}','_blank')" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition text-slate-600 font-medium">
+            \${zoho ? \`<button onclick="window.open('https://books.zoho.com/app/677681121#/salesorders/\${zoho.id}','_blank')" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition text-slate-600 font-medium">
               🔗 Zoho
-            </button>
+            </button>\` : ''}
           </div>
+          \${!isNoMatch ? \`
           <button onclick="focusModeApprove()" class="px-6 py-2.5 \${selectedMatchIds.has(edi.id) ? 'bg-green-600' : 'bg-green-500'} text-white rounded-lg hover:bg-green-600 transition font-medium flex items-center gap-2">
             \${selectedMatchIds.has(edi.id) ? '✓ Selected' : '✓ Select & Next →'}
           </button>
+          \` : ''}
         </div>
       </div>
 
@@ -911,28 +1237,30 @@ const dashboardHTML = `
           Next →
         </button>
       </div>
-
-      <!-- Finish Bar -->
-      \${selectedCount > 0 ? \`
-      <div class="mt-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center justify-between">
-        <div class="text-green-800">
-          <strong>\${selectedCount}</strong> order\${selectedCount > 1 ? 's' : ''} selected for Zoho
-        </div>
-        <button onclick="sendSelectedToZoho()" class="px-6 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-medium">
-          Finish & Send to Zoho →
-        </button>
-      </div>
-      \` : ''}
     \`;
 
     document.getElementById('focusModeContainer').innerHTML = html;
   }
 
+  function toggleLineItems() {
+    const container = document.getElementById('lineItemsContainer');
+    const toggle = document.getElementById('lineItemsToggle');
+    if (container.classList.contains('hidden')) {
+      container.classList.remove('hidden');
+      toggle.textContent = '▼';
+    } else {
+      container.classList.add('hidden');
+      toggle.textContent = '▶';
+    }
+  }
+
   function focusModeApprove() {
-    const allMatches = matchResults.matches || [];
+    const allMatches = getFilteredMatches();
     if (focusModeIndex >= allMatches.length) return;
 
     const match = allMatches[focusModeIndex];
+    if (match.isNoMatch) return;
+
     const ediId = match.ediOrder.id;
     const draftId = match.zohoDraft.id;
 
@@ -940,6 +1268,7 @@ const dashboardHTML = `
     selectedMatchDrafts.set(ediId, draftId);
     flaggedMatchIds.delete(ediId);
     saveSession();
+    updateSelectedDisplay();
     focusModeNext();
   }
 
@@ -948,7 +1277,7 @@ const dashboardHTML = `
   }
 
   function focusModeFlag() {
-    const allMatches = matchResults.matches || [];
+    const allMatches = getFilteredMatches();
     if (focusModeIndex >= allMatches.length) return;
 
     const match = allMatches[focusModeIndex];
@@ -962,18 +1291,19 @@ const dashboardHTML = `
       selectedMatchDrafts.delete(ediId);
     }
     saveSession();
+    updateSelectedDisplay();
     showFocusMode();
   }
 
   function focusModeNext() {
-    const allMatches = matchResults.matches || [];
+    const allMatches = getFilteredMatches();
     if (focusModeIndex < allMatches.length - 1) {
       focusModeIndex++;
       saveSession();
       showFocusMode();
     } else {
-      // End of list
-      showFocusMode();
+      // End of list - go back to list view
+      exitFocusMode();
     }
   }
 
@@ -989,24 +1319,11 @@ const dashboardHTML = `
     if (!confirm('Clear all match results?')) return;
     clearSession();
     document.getElementById('reviewEmptyState').classList.remove('hidden');
+    document.getElementById('listViewContainer').classList.add('hidden');
     document.getElementById('focusModeContainer').classList.add('hidden');
+    document.getElementById('reviewActionBar').classList.add('hidden');
     updateWorkflowCounts();
-  }
-
-  function setConfidenceFilter(level) {
-    currentConfidenceFilter = level;
-    // Update filter button styles
-    document.querySelectorAll('.conf-filter').forEach(btn => {
-      btn.classList.remove('bg-white', 'shadow-sm', 'text-slate-700');
-      btn.classList.add('text-slate-500');
-    });
-    const buttons = document.querySelectorAll('.conf-filter');
-    const index = level === '' ? 0 : level === 'perfect' ? 1 : level === 'high' ? 2 : level === 'medium' ? 3 : 4;
-    if (buttons[index]) {
-      buttons[index].classList.add('bg-white', 'shadow-sm', 'text-slate-700');
-      buttons[index].classList.remove('text-slate-500');
-    }
-    // Filter logic would go here
+    updateFilterCounts();
   }
 
   // ============================================================
@@ -1018,7 +1335,8 @@ const dashboardHTML = `
       return;
     }
 
-    const selectedMatches = matchResults.matches.filter(m => selectedMatchIds.has(m.ediOrder.id));
+    const allMatches = matchResults?.matches || [];
+    const selectedMatches = allMatches.filter(m => selectedMatchIds.has(m.ediOrder.id));
 
     // Build diff table
     let ordersHtml = '';
@@ -1030,8 +1348,8 @@ const dashboardHTML = `
       if (edi.shipDate !== zoho.shipDate) {
         changes.push({ field: 'Ship Date', from: zoho.shipDate || '—', to: edi.shipDate || '—' });
       }
-      if (Math.abs(edi.totalAmount - zoho.totalAmount) > 1) {
-        changes.push({ field: 'Amount', from: '$' + zoho.totalAmount.toFixed(2), to: '$' + edi.totalAmount.toFixed(2) });
+      if (Math.abs((edi.totalAmount || 0) - (zoho.totalAmount || 0)) > 1) {
+        changes.push({ field: 'Amount', from: '$' + (zoho.totalAmount || 0).toFixed(2), to: '$' + (edi.totalAmount || 0).toFixed(2) });
       }
       if (edi.totalUnits !== zoho.totalUnits) {
         changes.push({ field: 'Units', from: zoho.totalUnits, to: edi.totalUnits });
@@ -1041,7 +1359,7 @@ const dashboardHTML = `
         <div class="bg-white border border-slate-200 rounded-lg p-4 mb-3">
           <div class="flex justify-between items-center mb-2">
             <div class="font-semibold">PO# \${edi.poNumber}</div>
-            <div class="text-sm text-slate-500">→ Zoho #\${zoho.number}</div>
+            <div class="text-sm text-slate-500">→ Zoho Ref# \${zoho.poReference || zoho.number}</div>
           </div>
           \${changes.length > 0 ? \`
             <div class="text-sm">
@@ -1112,16 +1430,243 @@ const dashboardHTML = `
     saveSession();
     loadOrders();
     updateWorkflowCounts();
+    updateSelectedDisplay();
 
     if (success > 0 && matchResults) {
       matchResults.matches = matchResults.matches.filter(m => !selectedMatchIds.has(m.ediOrder.id));
-      if (matchResults.matches.length > 0) {
-        focusModeIndex = 0;
-        showFocusMode();
+      updateFilterCounts();
+      if (matchResults.matches.length > 0 || matchResults.noMatches?.length > 0) {
+        showListView();
       } else {
         showStage('done');
       }
     }
+  }
+
+  // ============================================================
+  // EDI DETAILS MODAL (Full tabbed interface)
+  // ============================================================
+  async function viewEdiDetails(orderId) {
+    try {
+      const res = await fetch('/orders/' + orderId);
+      const order = await res.json();
+
+      const items = order.parsed_data?.items || [];
+      const amt = items.reduce((s, i) => s + (i.quantityOrdered || 0) * (i.unitPrice || 0), 0);
+      const totalUnits = items.reduce((s, i) => s + (i.quantityOrdered || 0), 0);
+      const dates = order.parsed_data?.dates || {};
+      const shipping = order.parsed_data?.shipping || {};
+      const pricing = order.parsed_data?.pricing || {};
+
+      const modalHtml = \`
+        <div class="modal-overlay" onclick="closeModal()">
+          <div class="bg-white rounded-xl max-w-4xl w-full mx-4 overflow-hidden max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+            <div class="bg-slate-800 text-white px-6 py-4 flex justify-between items-center">
+              <div>
+                <h3 class="text-lg font-semibold">EDI Order Details</h3>
+                <div class="text-sm text-slate-300">PO# \${order.edi_order_number} • \${order.edi_customer_name}</div>
+              </div>
+              <button onclick="closeModal()" class="text-white hover:text-slate-300 text-xl">✕</button>
+            </div>
+
+            <!-- Tabs -->
+            <div class="border-b border-slate-200 px-6">
+              <div class="flex gap-6">
+                <button onclick="showEdiTab('summary')" class="tab-btn active py-3 text-sm font-medium" data-tab="summary">Summary</button>
+                <button onclick="showEdiTab('lineitems')" class="tab-btn py-3 text-sm font-medium text-slate-500" data-tab="lineitems">📦 Line Items</button>
+                <button onclick="showEdiTab('pricing')" class="tab-btn py-3 text-sm font-medium text-slate-500" data-tab="pricing">💰 Pricing</button>
+                <button onclick="showEdiTab('shipping')" class="tab-btn py-3 text-sm font-medium text-slate-500" data-tab="shipping">🚚 Shipping</button>
+                <button onclick="showEdiTab('raw')" class="tab-btn py-3 text-sm font-medium text-slate-500" data-tab="raw">All Raw Data</button>
+              </div>
+            </div>
+
+            <div class="p-6 overflow-y-auto flex-1">
+              <!-- Summary Tab -->
+              <div id="edi-tab-summary" class="edi-tab-content">
+                <div class="grid grid-cols-4 gap-4 mb-6">
+                  <div class="bg-slate-50 rounded-lg p-4 text-center">
+                    <div class="text-xs text-slate-500 uppercase mb-1">PO Number</div>
+                    <div class="text-lg font-semibold">\${order.edi_order_number || 'N/A'}</div>
+                  </div>
+                  <div class="bg-slate-50 rounded-lg p-4 text-center">
+                    <div class="text-xs text-slate-500 uppercase mb-1">Customer</div>
+                    <div class="text-lg font-semibold">\${order.edi_customer_name || 'Unknown'}</div>
+                  </div>
+                  <div class="bg-slate-50 rounded-lg p-4 text-center">
+                    <div class="text-xs text-slate-500 uppercase mb-1">Order Date</div>
+                    <div class="text-lg font-semibold">\${formatDate(dates.orderDate || dates.poDate)}</div>
+                  </div>
+                  <div class="bg-slate-50 rounded-lg p-4 text-center">
+                    <div class="text-xs text-slate-500 uppercase mb-1">Unit of Measure</div>
+                    <div class="text-lg font-semibold"><span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-sm">EA</span> Each</div>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-4 mb-6">
+                  <div class="bg-blue-50 rounded-lg p-4 text-center border border-blue-100">
+                    <div class="text-3xl font-bold text-blue-700">\${items.length}</div>
+                    <div class="text-sm text-blue-600">Line Items</div>
+                  </div>
+                  <div class="bg-blue-50 rounded-lg p-4 text-center border border-blue-100">
+                    <div class="text-3xl font-bold text-blue-700">\${totalUnits.toLocaleString()}</div>
+                    <div class="text-sm text-blue-600">Units Ordered</div>
+                  </div>
+                  <div class="bg-green-50 rounded-lg p-4 text-center border border-green-100">
+                    <div class="text-3xl font-bold text-green-700">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+                    <div class="text-sm text-green-600">Total Value</div>
+                  </div>
+                </div>
+
+                <div class="bg-amber-50 rounded-lg p-4 border border-amber-100">
+                  <div class="font-semibold text-amber-800 mb-2">📦 Pack & Pricing Details</div>
+                  <div class="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <div class="text-xs text-slate-500 uppercase">Unit Price (Per EA)</div>
+                      <div class="font-semibold">$\${(items[0]?.unitPrice || pricing.unitPrice || 0).toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div class="text-xs text-slate-500 uppercase">Item Price (Per Each)</div>
+                      <div class="font-semibold text-green-600">$\${(items[0]?.unitPrice || pricing.unitPrice || 0).toFixed(2)}</div>
+                    </div>
+                    <div>
+                      <div class="text-xs text-slate-500 uppercase">Line Amount</div>
+                      <div class="font-semibold">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Line Items Tab -->
+              <div id="edi-tab-lineitems" class="edi-tab-content hidden">
+                <div class="border border-slate-200 rounded-lg overflow-hidden">
+                  <table class="w-full text-sm">
+                    <thead class="bg-slate-50">
+                      <tr>
+                        <th class="text-left px-3 py-2 text-slate-500">Style</th>
+                        <th class="text-left px-3 py-2 text-slate-500">Color</th>
+                        <th class="text-left px-3 py-2 text-slate-500">Size</th>
+                        <th class="text-left px-3 py-2 text-slate-500">Description</th>
+                        <th class="text-right px-3 py-2 text-slate-500">Qty</th>
+                        <th class="text-right px-3 py-2 text-slate-500">Price</th>
+                        <th class="text-right px-3 py-2 text-slate-500">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      \${items.map(item => \`
+                        <tr class="border-t border-slate-100">
+                          <td class="px-3 py-2 font-medium">\${item.style || item.productIds?.style || '-'}</td>
+                          <td class="px-3 py-2">\${item.color || item.productIds?.color || '-'}</td>
+                          <td class="px-3 py-2">\${item.size || item.productIds?.size || '-'}</td>
+                          <td class="px-3 py-2 text-slate-600">\${item.description || '-'}</td>
+                          <td class="px-3 py-2 text-right">\${item.quantityOrdered || 0}</td>
+                          <td class="px-3 py-2 text-right">$\${(item.unitPrice || 0).toFixed(2)}</td>
+                          <td class="px-3 py-2 text-right font-medium">$\${((item.quantityOrdered || 0) * (item.unitPrice || 0)).toFixed(2)}</td>
+                        </tr>
+                      \`).join('')}
+                    </tbody>
+                    <tfoot class="bg-slate-50 font-semibold">
+                      <tr class="border-t border-slate-200">
+                        <td colspan="4" class="px-3 py-2 text-right">Totals:</td>
+                        <td class="px-3 py-2 text-right">\${totalUnits.toLocaleString()}</td>
+                        <td class="px-3 py-2"></td>
+                        <td class="px-3 py-2 text-right">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Pricing Tab -->
+              <div id="edi-tab-pricing" class="edi-tab-content hidden">
+                <div class="grid grid-cols-2 gap-6">
+                  <div class="space-y-4">
+                    <div class="bg-slate-50 rounded-lg p-4">
+                      <div class="text-xs text-slate-500 uppercase mb-1">Payment Terms</div>
+                      <div class="font-semibold">\${dates.paymentTerms || pricing.paymentTerms || 'N/A'}</div>
+                    </div>
+                    <div class="bg-slate-50 rounded-lg p-4">
+                      <div class="text-xs text-slate-500 uppercase mb-1">Currency</div>
+                      <div class="font-semibold">\${pricing.currency || 'USD'}</div>
+                    </div>
+                  </div>
+                  <div class="space-y-4">
+                    <div class="bg-green-50 rounded-lg p-4 border border-green-100">
+                      <div class="text-xs text-green-600 uppercase mb-1">Subtotal</div>
+                      <div class="text-2xl font-bold text-green-700">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+                    </div>
+                    <div class="bg-slate-50 rounded-lg p-4">
+                      <div class="text-xs text-slate-500 uppercase mb-1">Discount</div>
+                      <div class="font-semibold">\${pricing.discount || '0%'}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Shipping Tab -->
+              <div id="edi-tab-shipping" class="edi-tab-content hidden">
+                <div class="grid grid-cols-2 gap-6">
+                  <div class="space-y-4">
+                    <h4 class="font-semibold text-slate-700">Key Dates</h4>
+                    <div class="bg-slate-50 rounded-lg p-4">
+                      <div class="text-xs text-slate-500 uppercase mb-1">Ship Date</div>
+                      <div class="font-semibold">\${formatDate(dates.shipDate || dates.deliveryDate)}</div>
+                    </div>
+                    <div class="bg-slate-50 rounded-lg p-4">
+                      <div class="text-xs text-slate-500 uppercase mb-1">Cancel Date</div>
+                      <div class="font-semibold">\${formatDate(dates.cancelDate)}</div>
+                    </div>
+                    <div class="bg-slate-50 rounded-lg p-4">
+                      <div class="text-xs text-slate-500 uppercase mb-1">Start Ship Date</div>
+                      <div class="font-semibold">\${formatDate(dates.startShipDate)}</div>
+                    </div>
+                  </div>
+                  <div class="space-y-4">
+                    <h4 class="font-semibold text-slate-700">Ship To Address</h4>
+                    <div class="bg-slate-50 rounded-lg p-4">
+                      <div class="text-sm">
+                        \${shipping.shipToName ? '<div class="font-semibold">' + shipping.shipToName + '</div>' : ''}
+                        \${shipping.shipToAddress1 ? '<div>' + shipping.shipToAddress1 + '</div>' : ''}
+                        \${shipping.shipToAddress2 ? '<div>' + shipping.shipToAddress2 + '</div>' : ''}
+                        \${shipping.shipToCity ? '<div>' + shipping.shipToCity + ', ' + (shipping.shipToState || '') + ' ' + (shipping.shipToZip || '') + '</div>' : ''}
+                        \${!shipping.shipToName && !shipping.shipToAddress1 ? '<div class="text-slate-400">No shipping address provided</div>' : ''}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Raw Data Tab -->
+              <div id="edi-tab-raw" class="edi-tab-content hidden">
+                <pre class="bg-slate-800 text-green-400 p-4 rounded-lg text-xs overflow-auto max-h-96">\${JSON.stringify(order.parsed_data, null, 2)}</pre>
+              </div>
+            </div>
+
+            <div class="px-6 py-4 bg-slate-50 border-t">
+              <button onclick="closeModal()" class="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700">Close</button>
+            </div>
+          </div>
+        </div>
+      \`;
+
+      document.getElementById('modalContainer').innerHTML = modalHtml;
+    } catch (e) {
+      toast('Error loading order');
+    }
+  }
+
+  function showEdiTab(tabName) {
+    // Hide all tabs
+    document.querySelectorAll('.edi-tab-content').forEach(el => el.classList.add('hidden'));
+    // Remove active from all buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.classList.remove('active');
+      btn.classList.add('text-slate-500');
+    });
+    // Show selected tab
+    document.getElementById('edi-tab-' + tabName)?.classList.remove('hidden');
+    // Activate button
+    document.querySelector('.tab-btn[data-tab="' + tabName + '"]')?.classList.add('active');
+    document.querySelector('.tab-btn[data-tab="' + tabName + '"]')?.classList.remove('text-slate-500');
   }
 
   // ============================================================
@@ -1173,7 +1718,7 @@ const dashboardHTML = `
           <td class="px-4 py-3 text-right text-slate-800">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
           <td class="px-4 py-3 text-right text-slate-500">\${sentAtHtml}</td>
           <td class="px-4 py-3 text-center">
-            <button onclick="viewOrder(\${o.id})" class="px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 rounded transition">View</button>
+            <button onclick="viewEdiDetails(\${o.id})" class="px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 rounded transition">View</button>
           </td>
         </tr>
       \`;
@@ -1247,83 +1792,6 @@ const dashboardHTML = `
       document.getElementById('stat30DaySent').textContent = data.last30DaysSent || 0;
       document.getElementById('stat30DayErrors').textContent = data.last30DaysErrors || 0;
     } catch (e) {}
-  }
-
-  // ============================================================
-  // VIEW ORDER MODAL
-  // ============================================================
-  async function viewOrder(orderId) {
-    try {
-      const res = await fetch('/orders/' + orderId);
-      const order = await res.json();
-
-      const items = order.parsed_data?.items || [];
-      const amt = items.reduce((s, i) => s + (i.quantityOrdered || 0) * (i.unitPrice || 0), 0);
-
-      const modalHtml = \`
-        <div class="modal-overlay" onclick="closeModal()">
-          <div class="bg-white rounded-xl max-w-4xl w-full mx-4 overflow-hidden max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
-            <div class="bg-slate-800 text-white px-6 py-4 flex justify-between items-center">
-              <h3 class="text-lg font-semibold">📄 EDI Order Details — \${order.edi_order_number}</h3>
-              <button onclick="closeModal()" class="text-white hover:text-slate-300">✕</button>
-            </div>
-            <div class="p-6 overflow-y-auto">
-              <div class="grid grid-cols-4 gap-4 mb-6">
-                <div class="bg-slate-50 rounded-lg p-3">
-                  <div class="text-xs text-slate-500 uppercase">PO Number</div>
-                  <div class="font-semibold">\${order.edi_order_number || 'N/A'}</div>
-                </div>
-                <div class="bg-slate-50 rounded-lg p-3">
-                  <div class="text-xs text-slate-500 uppercase">Customer</div>
-                  <div class="font-semibold">\${order.edi_customer_name || 'Unknown'}</div>
-                </div>
-                <div class="bg-slate-50 rounded-lg p-3">
-                  <div class="text-xs text-slate-500 uppercase">Total Value</div>
-                  <div class="font-semibold">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
-                </div>
-                <div class="bg-slate-50 rounded-lg p-3">
-                  <div class="text-xs text-slate-500 uppercase">Status</div>
-                  <div class="font-semibold">\${order.status}</div>
-                </div>
-              </div>
-
-              <h4 class="font-semibold mb-3">Line Items (\${items.length})</h4>
-              <div class="border border-slate-200 rounded-lg overflow-hidden">
-                <table class="w-full text-sm">
-                  <thead class="bg-slate-50">
-                    <tr>
-                      <th class="text-left px-3 py-2 text-slate-500">SKU</th>
-                      <th class="text-left px-3 py-2 text-slate-500">Description</th>
-                      <th class="text-right px-3 py-2 text-slate-500">Qty</th>
-                      <th class="text-right px-3 py-2 text-slate-500">Price</th>
-                      <th class="text-right px-3 py-2 text-slate-500">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    \${items.map(item => \`
-                      <tr class="border-t border-slate-100">
-                        <td class="px-3 py-2 font-medium">\${item.productIds?.sku || item.productIds?.vendorItemNumber || '-'}</td>
-                        <td class="px-3 py-2 text-slate-600">\${item.description || '-'}</td>
-                        <td class="px-3 py-2 text-right">\${item.quantityOrdered || 0}</td>
-                        <td class="px-3 py-2 text-right">$\${(item.unitPrice || 0).toFixed(2)}</td>
-                        <td class="px-3 py-2 text-right font-medium">$\${((item.quantityOrdered || 0) * (item.unitPrice || 0)).toFixed(2)}</td>
-                      </tr>
-                    \`).join('')}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-            <div class="px-6 py-4 bg-slate-50 border-t">
-              <button onclick="closeModal()" class="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700">Close</button>
-            </div>
-          </div>
-        </div>
-      \`;
-
-      document.getElementById('modalContainer').innerHTML = modalHtml;
-    } catch (e) {
-      toast('Error loading order');
-    }
   }
 
   // ============================================================
