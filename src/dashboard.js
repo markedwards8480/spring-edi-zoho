@@ -921,7 +921,13 @@ const dashboardHTML = `
       if (isFlagged) cardBorder = 'border-red-500 bg-red-50/30';
 
       const items = edi.items || [];
-      const styles = [...new Set(items.map(i => i.style || i.productIds?.style).filter(Boolean))];
+      // Extract styles from SKU/vendorItemNumber (e.g., "79643J-BB-NAVY-S" -> "79643J")
+      const styles = [...new Set(items.map(i => {
+        const sku = i.productIds?.sku || i.productIds?.vendorItemNumber || i.style || '';
+        // Extract base style (digits + optional letter, like "79643J")
+        const match = sku.match(/^(\d{4,6}[A-Za-z]?)/);
+        return match ? match[1] : '';
+      }).filter(Boolean))];
 
       return \`
         <div class="bg-white rounded-xl border-2 \${cardBorder} p-4 hover:shadow-md transition cursor-pointer" onclick="openFocusMode(\${index})">
@@ -931,7 +937,7 @@ const dashboardHTML = `
                 class="w-5 h-5 rounded border-slate-300 text-green-500 cursor-pointer">
               <div>
                 <div class="font-semibold text-slate-800">\${edi.customer}</div>
-                <div class="text-sm text-slate-500">PO# \${edi.poNumber}\${zoho ? ' → Zoho Ref# ' + (zoho.poReference || zoho.number) : ''}</div>
+                <div class="text-sm text-slate-500">PO# \${edi.poNumber}\${zoho ? ' → Zoho Ref# ' + (zoho.reference || zoho.number) : ''}</div>
               </div>
               \${isFlagged ? '<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">🚩 Flagged</span>' : ''}
               \${isSelected ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Selected</span>' : ''}
@@ -1062,12 +1068,22 @@ const dashboardHTML = `
     // Extract styles from items
     const ediItems = edi.items || [];
     const zohoItems = zoho?.items || [];
-    const ediStyles = [...new Set(ediItems.map(i => i.style || i.productIds?.style).filter(Boolean))];
-    const zohoStyles = [...new Set(zohoItems.map(i => i.style || i.name?.split('-')[0]).filter(Boolean))];
+    // Extract base style from SKU/vendorItemNumber (e.g., "79643J-BB-NAVY-S" -> "79643J")
+    const ediStyles = [...new Set(ediItems.map(i => {
+      const sku = i.productIds?.sku || i.productIds?.vendorItemNumber || i.style || '';
+      const match = sku.match(/^(\d{4,6}[A-Za-z]?)/);
+      return match ? match[1] : '';
+    }).filter(Boolean))];
+    // Extract style from Zoho item name (e.g., "79643J-BB-NAVY-S" -> "79643J")
+    const zohoStyles = [...new Set(zohoItems.map(i => {
+      const name = i.name || '';
+      const match = name.match(/^(\d{4,6}[A-Za-z]?)/);
+      return match ? match[1] : '';
+    }).filter(Boolean))];
 
     // Check if styles match
     const stylesMatch = ediStyles.length > 0 && zohoStyles.length > 0 &&
-      ediStyles.every(s => zohoStyles.some(zs => zs.includes(s) || s.includes(zs)));
+      ediStyles.some(es => zohoStyles.some(zs => es === zs));
 
     // Build HTML
     const html = \`
@@ -1100,7 +1116,7 @@ const dashboardHTML = `
           <div>
             <div class="text-lg font-semibold text-slate-800">\${edi.customer}</div>
             <div class="text-sm text-slate-500 flex items-center gap-3">
-              <span>PO# \${edi.poNumber}\${zoho ? ' → Zoho Ref# ' + (zoho.poReference || zoho.number) : ''}</span>
+              <span>PO# \${edi.poNumber}\${zoho ? ' → Zoho Ref# ' + (zoho.reference || zoho.number) : ''}</span>
               <button onclick="viewEdiDetails(\${edi.id})" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded transition">
                 📄 View EDI Details
               </button>
@@ -1397,7 +1413,7 @@ const dashboardHTML = `
         <div class="bg-white border border-slate-200 rounded-lg p-4 mb-3">
           <div class="flex justify-between items-center mb-2">
             <div class="font-semibold">PO# \${edi.poNumber}</div>
-            <div class="text-sm text-slate-500">→ Zoho Ref# \${zoho.poReference || zoho.number}</div>
+            <div class="text-sm text-slate-500">→ Zoho Ref# \${zoho.reference || zoho.number}</div>
           </div>
           \${changes.length > 0 ? \`
             <div class="text-sm">
