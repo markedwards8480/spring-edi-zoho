@@ -1642,69 +1642,152 @@ const dashboardHTML = `
     const selectedMatches = allMatches.filter(m => selectedMatchIds.has(m.ediOrder.id));
 
     // Build diff table
+    // Store for removal functionality
+    window.pendingSendMatches = [...selectedMatches];
+
+    renderSendReviewModal();
+  }
+
+  function renderSendReviewModal() {
+    const selectedMatches = window.pendingSendMatches || [];
+
+    if (selectedMatches.length === 0) {
+      closeModal();
+      toast('No orders to send');
+      return;
+    }
+
+    // Helper to format dates nicely
+    const fmtDate = (d) => {
+      if (!d) return '—';
+      const date = new Date(d);
+      if (isNaN(date.getTime())) return d;
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    };
+
+    // Calculate totals
+    const totalEdiAmount = selectedMatches.reduce((sum, m) => sum + (m.ediOrder.totalAmount || 0), 0);
+    const totalZohoAmount = selectedMatches.reduce((sum, m) => sum + (m.zohoDraft?.totalAmount || 0), 0);
+    const totalEdiUnits = selectedMatches.reduce((sum, m) => sum + (m.ediOrder.totalUnits || 0), 0);
+    const totalZohoUnits = selectedMatches.reduce((sum, m) => sum + (m.zohoDraft?.totalUnits || 0), 0);
+    const ordersWithChanges = selectedMatches.filter(m => {
+      const edi = m.ediOrder;
+      const zoho = m.zohoDraft;
+      return (edi.shipDate && edi.shipDate !== zoho?.shipDate) ||
+             Math.abs((edi.totalAmount || 0) - (zoho?.totalAmount || 0)) > 1 ||
+             edi.totalUnits !== zoho?.totalUnits;
+    }).length;
+
     let ordersHtml = '';
-    selectedMatches.forEach(match => {
+    selectedMatches.forEach((match, index) => {
       const edi = match.ediOrder;
       const zoho = match.zohoDraft;
 
-      // Helper to format dates nicely
-      const fmtDate = (d) => {
-        if (!d) return '—';
-        // Handle ISO dates or date strings
-        const date = new Date(d);
-        if (isNaN(date.getTime())) return d;
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-      };
-
       let changes = [];
-      if (edi.shipDate && edi.shipDate !== zoho.shipDate) {
-        changes.push({ field: 'Ship Date', from: fmtDate(zoho.shipDate), to: fmtDate(edi.shipDate) });
+      if (edi.shipDate && edi.shipDate !== zoho?.shipDate) {
+        changes.push({ field: 'Ship Date', from: fmtDate(zoho?.shipDate), to: fmtDate(edi.shipDate) });
       }
-      if (Math.abs((edi.totalAmount || 0) - (zoho.totalAmount || 0)) > 1) {
-        changes.push({ field: 'Amount', from: '$' + (zoho.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2}), to: '$' + (edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2}) });
+      if (Math.abs((edi.totalAmount || 0) - (zoho?.totalAmount || 0)) > 1) {
+        changes.push({ field: 'Amount', from: '$' + (zoho?.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2}), to: '$' + (edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2}) });
       }
-      if (edi.totalUnits !== zoho.totalUnits) {
-        changes.push({ field: 'Units', from: (zoho.totalUnits || 0).toLocaleString(), to: (edi.totalUnits || 0).toLocaleString() });
+      if (edi.totalUnits !== zoho?.totalUnits) {
+        changes.push({ field: 'Units', from: (zoho?.totalUnits || 0).toLocaleString(), to: (edi.totalUnits || 0).toLocaleString() });
       }
 
       ordersHtml += \`
-        <div class="bg-white border border-slate-200 rounded-lg p-4 mb-3">
-          <div class="flex justify-between items-center mb-3">
-            <div class="font-semibold text-slate-800">PO# \${edi.poNumber}</div>
-            <div class="text-sm text-slate-500">→ Zoho Ref# \${zoho.reference || zoho.number}</div>
+        <div class="bg-white border border-slate-200 rounded-lg p-4 mb-3 relative" id="send-order-\${index}">
+          <button onclick="removeFromSendList(\${index})" class="absolute top-2 right-2 w-6 h-6 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition" title="Remove from list">
+            ✕
+          </button>
+          <div class="flex items-start gap-3 mb-3 pr-6">
+            <div class="flex-1">
+              <div class="font-semibold text-slate-800">\${edi.customer}</div>
+              <div class="text-sm text-slate-500">PO# \${edi.poNumber} → Zoho Ref# \${zoho?.reference || zoho?.number || 'N/A'}</div>
+            </div>
+            <div class="text-right">
+              <div class="font-semibold text-green-600">$\${(edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+              <div class="text-xs text-slate-400">\${edi.totalUnits?.toLocaleString() || 0} units</div>
+            </div>
           </div>
           \${changes.length > 0 ? \`
-            <table class="w-full text-sm">
-              <tbody>
-                \${changes.map(c => \`
-                  <tr class="border-t border-slate-100">
-                    <td class="py-2 text-slate-500 w-24">\${c.field}</td>
-                    <td class="py-2 text-slate-400 line-through">\${c.from}</td>
-                    <td class="py-2 text-green-600 font-medium">→ \${c.to}</td>
-                  </tr>
-                \`).join('')}
-              </tbody>
-            </table>
-          \` : '<div class="text-sm text-green-600">✓ No changes needed</div>'}
+            <div class="bg-amber-50 border border-amber-200 rounded p-2">
+              <div class="text-xs font-semibold text-amber-700 mb-1">Changes to apply:</div>
+              <table class="w-full text-sm">
+                <tbody>
+                  \${changes.map(c => \`
+                    <tr>
+                      <td class="py-1 text-slate-600 w-24">\${c.field}</td>
+                      <td class="py-1 text-red-400 line-through text-sm">\${c.from}</td>
+                      <td class="py-1 text-green-600 font-medium">→ \${c.to}</td>
+                    </tr>
+                  \`).join('')}
+                </tbody>
+              </table>
+            </div>
+          \` : '<div class="text-sm text-green-600 bg-green-50 border border-green-200 rounded p-2">✓ No field changes - will sync order</div>'}
         </div>
       \`;
     });
 
     const modalHtml = \`
       <div class="modal-overlay" onclick="closeModal()">
-        <div class="bg-white rounded-xl max-w-2xl w-full mx-4 overflow-hidden" onclick="event.stopPropagation()">
+        <div class="bg-white rounded-xl max-w-3xl w-full mx-4 overflow-hidden" onclick="event.stopPropagation()">
           <div class="bg-slate-800 text-white px-6 py-4 flex justify-between items-center">
-            <h3 class="text-lg font-semibold">📋 Review Changes — \${selectedMatches.length} Orders</h3>
-            <button onclick="closeModal()" class="text-white hover:text-slate-300">✕</button>
+            <h3 class="text-lg font-semibold">📋 Review & Confirm — \${selectedMatches.length} Order\${selectedMatches.length !== 1 ? 's' : ''}</h3>
+            <button onclick="closeModal()" class="text-white hover:text-slate-300 text-xl">✕</button>
           </div>
-          <div class="p-6 max-h-96 overflow-y-auto">
+
+          <!-- Summary Stats -->
+          <div class="bg-slate-50 px-6 py-4 border-b border-slate-200">
+            <div class="grid grid-cols-4 gap-4 text-center">
+              <div>
+                <div class="text-2xl font-bold text-slate-800">\${selectedMatches.length}</div>
+                <div class="text-xs text-slate-500 uppercase">Orders</div>
+              </div>
+              <div>
+                <div class="text-2xl font-bold text-green-600">$\${totalEdiAmount.toLocaleString('en-US', {minimumFractionDigits: 0})}</div>
+                <div class="text-xs text-slate-500 uppercase">Total Value</div>
+              </div>
+              <div>
+                <div class="text-2xl font-bold text-blue-600">\${totalEdiUnits.toLocaleString()}</div>
+                <div class="text-xs text-slate-500 uppercase">Total Units</div>
+              </div>
+              <div>
+                <div class="text-2xl font-bold text-amber-600">\${ordersWithChanges}</div>
+                <div class="text-xs text-slate-500 uppercase">With Changes</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Progress indicator (hidden initially) -->
+          <div id="sendProgressBar" class="hidden px-6 py-3 bg-blue-50 border-b border-blue-200">
+            <div class="flex items-center gap-3">
+              <span class="spinner border-blue-500"></span>
+              <span id="sendProgressText" class="text-blue-700 font-medium">Preparing...</span>
+            </div>
+            <div class="mt-2 h-2 bg-blue-200 rounded-full overflow-hidden">
+              <div id="sendProgressFill" class="h-full bg-blue-500 transition-all duration-300" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- Orders List -->
+          <div class="p-6 max-h-[50vh] overflow-y-auto" id="sendOrdersList">
             \${ordersHtml}
           </div>
-          <div class="px-6 py-4 bg-slate-50 border-t flex justify-end gap-3">
-            <button onclick="closeModal()" class="px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-100">Cancel</button>
-            <button onclick="executeBulkUpdate()" id="confirmBulkBtn" class="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium">
-              ✓ Send \${selectedMatches.length} to Zoho
-            </button>
+
+          <!-- Footer -->
+          <div class="px-6 py-4 bg-slate-50 border-t flex justify-between items-center">
+            <div class="text-sm text-slate-500">
+              Click ✕ on any order to remove it from this batch
+            </div>
+            <div class="flex gap-3">
+              <button onclick="closeModal()" class="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 font-medium">
+                Cancel
+              </button>
+              <button onclick="executeBulkUpdate()" id="confirmBulkBtn" class="px-6 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 font-semibold flex items-center gap-2">
+                ✓ Send \${selectedMatches.length} to Zoho
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1713,18 +1796,69 @@ const dashboardHTML = `
     document.getElementById('modalContainer').innerHTML = modalHtml;
   }
 
+  function removeFromSendList(index) {
+    if (!window.pendingSendMatches) return;
+
+    const match = window.pendingSendMatches[index];
+    if (match) {
+      // Remove from the pending list
+      window.pendingSendMatches.splice(index, 1);
+
+      // Also remove from selected sets
+      const ediId = match.ediOrder.id;
+      selectedMatchIds.delete(ediId);
+      selectedMatchDrafts.delete(ediId);
+      saveSession();
+      updateSelectedDisplay();
+
+      // Re-render the modal
+      renderSendReviewModal();
+
+      toast('Removed from batch');
+    }
+  }
+
   function closeModal() {
     document.getElementById('modalContainer').innerHTML = '';
+    window.pendingSendMatches = null;
   }
 
   async function executeBulkUpdate() {
+    const matches = window.pendingSendMatches || [];
+    if (matches.length === 0) {
+      closeModal();
+      return;
+    }
+
     const btn = document.getElementById('confirmBulkBtn');
+    const progressBar = document.getElementById('sendProgressBar');
+    const progressText = document.getElementById('sendProgressText');
+    const progressFill = document.getElementById('sendProgressFill');
+    const ordersList = document.getElementById('sendOrdersList');
+
+    // Disable button and show progress
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Updating...';
+    btn.innerHTML = '<span class="spinner"></span> Sending...';
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+    progressBar.classList.remove('hidden');
+
+    // Dim the orders list
+    ordersList.classList.add('opacity-50', 'pointer-events-none');
 
     let success = 0, failed = 0;
+    const total = matches.length;
+    const results = [];
 
-    for (const [ediOrderId, draftId] of selectedMatchDrafts) {
+    for (let i = 0; i < matches.length; i++) {
+      const match = matches[i];
+      const ediOrderId = match.ediOrder.id;
+      const draftId = match.zohoDraft?.id;
+
+      // Update progress
+      const percent = Math.round(((i + 1) / total) * 100);
+      progressText.textContent = \`Sending order \${i + 1} of \${total}... (PO# \${match.ediOrder.poNumber})\`;
+      progressFill.style.width = percent + '%';
+
       try {
         const res = await fetch('/update-draft', {
           method: 'POST',
@@ -1736,31 +1870,77 @@ const dashboardHTML = `
           success++;
           selectedMatchIds.delete(ediOrderId);
           selectedMatchDrafts.delete(ediOrderId);
+          results.push({ poNumber: match.ediOrder.poNumber, success: true });
+
+          // Mark as complete in UI
+          const orderEl = document.getElementById('send-order-' + i);
+          if (orderEl) {
+            orderEl.classList.remove('opacity-50');
+            orderEl.classList.add('border-green-300', 'bg-green-50');
+            orderEl.innerHTML = '<div class="flex items-center gap-2 text-green-600 font-medium"><span class="text-xl">✓</span> PO# ' + match.ediOrder.poNumber + ' — Sent successfully</div>';
+          }
         } else {
           failed++;
+          results.push({ poNumber: match.ediOrder.poNumber, success: false, error: data.error });
+
+          // Mark as failed in UI
+          const orderEl = document.getElementById('send-order-' + i);
+          if (orderEl) {
+            orderEl.classList.remove('opacity-50');
+            orderEl.classList.add('border-red-300', 'bg-red-50');
+            orderEl.innerHTML = '<div class="flex items-center gap-2 text-red-600 font-medium"><span class="text-xl">✕</span> PO# ' + match.ediOrder.poNumber + ' — Failed: ' + (data.error || 'Unknown error') + '</div>';
+          }
         }
       } catch (e) {
         failed++;
+        results.push({ poNumber: match.ediOrder.poNumber, success: false, error: e.message });
+
+        const orderEl = document.getElementById('send-order-' + i);
+        if (orderEl) {
+          orderEl.classList.remove('opacity-50');
+          orderEl.classList.add('border-red-300', 'bg-red-50');
+          orderEl.innerHTML = '<div class="flex items-center gap-2 text-red-600 font-medium"><span class="text-xl">✕</span> PO# ' + match.ediOrder.poNumber + ' — Error: ' + e.message + '</div>';
+        }
       }
     }
 
-    closeModal();
-    toast('✅ ' + success + ' order' + (success !== 1 ? 's' : '') + ' sent to Zoho' + (failed > 0 ? ', ' + failed + ' failed' : ''));
+    // Update progress to complete
+    progressFill.style.width = '100%';
+    progressText.textContent = \`Complete! \${success} sent\${failed > 0 ? ', ' + failed + ' failed' : ''}\`;
+    progressBar.classList.remove('bg-blue-50', 'border-blue-200');
+    progressBar.classList.add(failed > 0 ? 'bg-amber-50' : 'bg-green-50', failed > 0 ? 'border-amber-200' : 'border-green-200');
+    progressText.classList.remove('text-blue-700');
+    progressText.classList.add(failed > 0 ? 'text-amber-700' : 'text-green-700');
 
-    saveSession();
-    loadOrders();
-    updateWorkflowCounts();
-    updateSelectedDisplay();
+    // Update button to close
+    btn.disabled = false;
+    btn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-green-500', 'hover:bg-green-600');
+    btn.classList.add('bg-slate-700', 'hover:bg-slate-800');
+    btn.innerHTML = '✓ Done — Close';
+    btn.onclick = () => {
+      closeModal();
 
-    if (success > 0 && matchResults) {
-      matchResults.matches = matchResults.matches.filter(m => !selectedMatchIds.has(m.ediOrder.id));
-      updateFilterCounts();
-      if (matchResults.matches.length > 0 || matchResults.noMatches?.length > 0) {
-        showListView();
-      } else {
-        showStage('done');
+      // Refresh the UI
+      saveSession();
+      loadOrders();
+      updateWorkflowCounts();
+      updateSelectedDisplay();
+
+      if (success > 0 && matchResults) {
+        matchResults.matches = matchResults.matches.filter(m => selectedMatchIds.has(m.ediOrder.id));
+        updateFilterCounts();
+        if (matchResults.matches.length > 0 || matchResults.noMatches?.length > 0) {
+          showListView();
+        } else {
+          showStage('done');
+        }
       }
-    }
+
+      toast('✅ ' + success + ' order' + (success !== 1 ? 's' : '') + ' sent to Zoho' + (failed > 0 ? ', ' + failed + ' failed' : ''));
+    };
+
+    // Re-enable orders list for viewing results
+    ordersList.classList.remove('opacity-50', 'pointer-events-none');
   }
 
   // ============================================================
