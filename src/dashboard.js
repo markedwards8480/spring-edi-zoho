@@ -860,9 +860,19 @@ const dashboardHTML = `
 
     const btn = document.getElementById('findMatchesBtn');
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Finding...';
+    btn.innerHTML = '<span class="spinner"></span> Checking Zoho cache...';
 
     try {
+      // Check if cache is stale - if so, show "Refreshing Zoho..." message
+      const cacheRes = await fetch('/zoho-cache-status');
+      const cacheStatus = await cacheRes.json();
+
+      if (cacheStatus.isStale || cacheStatus.draftsCount === 0) {
+        btn.innerHTML = '<span class="spinner"></span> Refreshing Zoho data...';
+      } else {
+        btn.innerHTML = '<span class="spinner"></span> Finding matches...';
+      }
+
       const res = await fetch('/find-matches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -880,10 +890,17 @@ const dashboardHTML = `
         updateWorkflowCounts();
         updateFilterCounts();
         updateReviewCustomerFilter();
+        loadCacheStatus(); // Refresh the cache status display
         currentReviewCustomerFilter = ''; // Reset customer filter for new results
         showStage('review');
         showListView();
-        toast('Found ' + (data.matches?.length || 0) + ' matches');
+
+        // Show appropriate toast message
+        if (data.cacheRefreshed) {
+          toast('Zoho data refreshed • Found ' + (data.matches?.length || 0) + ' matches');
+        } else {
+          toast('Found ' + (data.matches?.length || 0) + ' matches');
+        }
       } else {
         toast('Error: ' + (data.error || 'Unknown'));
       }

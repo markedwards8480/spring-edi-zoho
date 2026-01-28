@@ -744,11 +744,15 @@ app.post('/find-matches', async (req, res) => {
       });
     }
     
+    const didAutoRefresh = forceRefresh || cacheStatus.isStale || cacheStatus.draftsCount === 0;
+
     res.json({
       success: true,
       matches: matchResults.matches,
       noMatches: matchResults.noMatches,
-      sessionId: session.sessionId
+      sessionId: session.sessionId,
+      cacheRefreshed: didAutoRefresh,
+      cacheAge: cacheStatus.minutesSinceRefresh
     });
     
   } catch (error) {

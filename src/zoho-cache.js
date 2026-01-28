@@ -318,7 +318,7 @@ class ZohoDraftsCache {
         refreshDurationMs: row.refresh_duration_ms,
         lastError: row.last_error,
         secondsSinceRefresh: secondsSinceRefresh,
-        isStale: !row.last_refresh || secondsSinceRefresh > 1800, // Stale if > 30 min
+        isStale: !row.last_refresh || secondsSinceRefresh > 900, // Stale if > 15 min
         minutesSinceRefresh: secondsSinceRefresh ? Math.round(secondsSinceRefresh / 60) : null
       };
 
