@@ -692,6 +692,11 @@ const dashboardHTML = `
       const ediDate = o.parsed_data?.dates?.orderDate || o.parsed_data?.dates?.poDate || '';
       const ediDateStr = ediDate ? new Date(ediDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : 'N/A';
 
+      // Check for prepacks
+      const prepackItems = items.filter(i => i.isPrepack || i.unitOfMeasure === 'AS' || i.unitOfMeasure === 'ST');
+      const hasPrepack = prepackItems.length > 0;
+      const totalUnits = items.reduce((s, i) => s + (i.totalUnits || i.quantityOrdered || 0), 0);
+
       return \`
         <div class="bg-white rounded-xl border \${isOld ? 'border-amber-200 bg-amber-50/30' : 'border-slate-200'} p-4 hover:border-slate-300 transition">
           <div class="flex items-center justify-between">
@@ -702,11 +707,12 @@ const dashboardHTML = `
                 <div class="font-semibold text-slate-800">\${o.edi_order_number || 'N/A'}</div>
                 <div class="text-sm text-slate-500">\${o.edi_customer_name || 'Unknown'}</div>
               </div>
+              \${hasPrepack ? '<span class="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">📦 Prepack</span>' : ''}
               \${isOld ? '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">' + daysSinceImport + ' days old</span>' : ''}
             </div>
             <div class="flex items-center gap-8">
               <div class="text-right">
-                <div class="text-sm text-slate-500">\${items.length} items</div>
+                <div class="text-sm text-slate-500">\${items.length} items\${hasPrepack ? ' <span class="text-purple-500">(' + totalUnits + ' units)</span>' : ''}</div>
                 <div class="font-semibold text-slate-800">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
               </div>
               <div class="text-right">
