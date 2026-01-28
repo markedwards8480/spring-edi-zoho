@@ -132,9 +132,14 @@ function parseSpringCSV(content, filename) {
     },
     dates: {
       orderDate: formatDate(getField(firstRow, 'po_po_created', 'po.po_created')),
+      // Ship Open Date = Expected Shipment Date in Zoho
+      shipDate: formatDate(getField(firstRow, 'po_po_ship_open_date', 'po.po_ship_open_date')),
       shipNotBefore: formatDate(getField(firstRow, 'po_po_ship_open_date', 'po.po_ship_open_date')),
+      // Ship Close Date = Cancel Date in Zoho
+      cancelDate: formatDate(getField(firstRow, 'po_po_ship_close_date', 'po.po_ship_close_date')),
       shipNotAfter: formatDate(getField(firstRow, 'po_po_ship_close_date', 'po.po_ship_close_date')),
-      cancelAfter: formatDate(getField(firstRow, 'po_attributes_must_arrive_by_date', 'po.attributes.must_arrive_by_date'))
+      // Must Arrive By (if different from ship close)
+      mustArriveBy: formatDate(getField(firstRow, 'po_attributes_must_arrive_by_date', 'po.attributes.must_arrive_by_date'))
     },
     items: [],
     raw: content

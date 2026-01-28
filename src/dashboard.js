@@ -861,7 +861,7 @@ const dashboardHTML = `
     if (conf >= 100) return 'perfect';
     if (conf >= 80) return 'high';
     if (conf >= 60) return 'medium';
-    return 'nomatch';
+    return 'low'; // Below 60% but still has a match
   }
 
   function updateFilterCounts() {
@@ -870,11 +870,22 @@ const dashboardHTML = `
     const matches = matchResults.matches || [];
     const noMatches = matchResults.noMatches || [];
 
-    let counts = { all: matches.length + noMatches.length, perfect: 0, high: 0, medium: 0, nomatch: noMatches.length };
+    // Apply customer filter to counts
+    let filteredMatches = matches;
+    let filteredNoMatches = noMatches;
+    if (currentReviewCustomerFilter) {
+      filteredMatches = matches.filter(m => m.ediOrder?.customer === currentReviewCustomerFilter);
+      filteredNoMatches = noMatches.filter(m => m.ediOrder?.customer === currentReviewCustomerFilter);
+    }
 
-    matches.forEach(m => {
-      const level = getConfidenceLevel(m.confidence || 0);
-      counts[level] = (counts[level] || 0) + 1;
+    let counts = { all: filteredMatches.length + filteredNoMatches.length, perfect: 0, high: 0, medium: 0, nomatch: filteredNoMatches.length };
+
+    filteredMatches.forEach(m => {
+      const conf = m.confidence || 0;
+      if (conf >= 100) counts.perfect++;
+      else if (conf >= 80) counts.high++;
+      else if (conf >= 60) counts.medium++;
+      // Below 60% matches are included in 'all' but not shown separately
     });
 
     document.getElementById('filter-count-all').textContent = counts.all;
@@ -1044,6 +1055,9 @@ const dashboardHTML = `
               <div class="px-3 py-1.5 rounded-lg \${confBg} font-bold text-lg border \${confBorder}">
                 \${isNoMatch ? 'No Match' : conf + '%'}
               </div>
+              <button onclick="event.stopPropagation(); openFocusMode(\${index})" class="ml-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-sm font-medium transition">
+                Review →
+              </button>
             </div>
           </div>
         </div>

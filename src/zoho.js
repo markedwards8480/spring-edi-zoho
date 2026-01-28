@@ -333,7 +333,7 @@ class ZohoClient {
               poNumber: ediPoNumber,
               customer: ediCustomer,
               shipDate: ediShipDate,
-              cancelDate: parsed.dates?.cancelAfter || '',
+              cancelDate: parsed.dates?.cancelDate || parsed.dates?.shipNotAfter || '',
               itemCount: ediItems.length,
               totalUnits: ediItems.reduce((s, i) => s + (i.quantityOrdered || 0), 0),
               totalAmount: ediTotal,
@@ -441,7 +441,7 @@ class ZohoClient {
               poNumber: ediPoNumber,
               customer: ediCustomer,
               shipDate: ediShipDate,
-              cancelDate: parsed.dates?.cancelAfter || '',
+              cancelDate: parsed.dates?.cancelDate || parsed.dates?.shipNotAfter || '',
               itemCount: ediItems.length,
               totalUnits: ediItems.reduce((s, i) => s + (i.quantityOrdered || 0), 0),
               totalAmount: ediTotal,
@@ -533,8 +533,10 @@ class ZohoClient {
     const ediTotalAmount = ediItems.reduce((sum, item) =>
       sum + ((item.quantityOrdered || 0) * (item.unitPrice || 0)), 0);
     const ediTotalUnits = ediItems.reduce((sum, item) => sum + (item.quantityOrdered || 0), 0);
-    const ediShipDate = parsed.dates?.shipNotBefore || parsed.dates?.shipDate || '';
-    const ediCancelDate = parsed.dates?.cancelAfter || parsed.dates?.cancelDate || '';
+    // Ship Open Date = Expected Shipment Date
+    const ediShipDate = parsed.dates?.shipDate || parsed.dates?.shipNotBefore || '';
+    // Ship Close Date = Cancel Date
+    const ediCancelDate = parsed.dates?.cancelDate || parsed.dates?.shipNotAfter || '';
 
     const zohoRef = (zohoDraft.reference_number || '').toLowerCase().trim();
     const zohoCustomer = (zohoDraft.customer_name || '').toLowerCase().trim();
@@ -840,7 +842,7 @@ class ZohoClient {
           poNumber: ediOrder.edi_order_number,
           customer: ediOrder.edi_customer_name,
           shipDate: parsed.dates?.shipNotBefore || '',
-          cancelDate: parsed.dates?.cancelAfter || '',
+          cancelDate: parsed.dates?.cancelDate || parsed.dates?.shipNotAfter || '',
           itemCount: ediItems.length,
           totalUnits: ediItems.reduce((s, i) => s + (i.quantityOrdered || 0), 0),
           totalAmount: ediItems.reduce((s, i) => s + ((i.quantityOrdered || 0) * (i.unitPrice || 0)), 0)
