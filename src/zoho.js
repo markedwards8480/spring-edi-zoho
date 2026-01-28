@@ -686,12 +686,18 @@ class ZohoClient {
         }
       });
       
+      // Collect all unique suffixes for display
+      const allEdiSuffixes = [...new Set(ediStyles.map(s => s.suffix).filter(s => s))];
+      const allZohoSuffixes = [...new Set(zohoStyles.map(s => s.suffix).filter(s => s))];
+
       if (baseStyleMatches > 0) {
         score.details.baseStyle = true;
         score.details.styleMatchCount = baseStyleMatches;
         score.details.ediStyleCount = ediBaseStyles.size;
         score.details.zohoStyleCount = zohoBaseStyles.size;
         score.details.suffixMatches = suffixMatches;
+        score.details.ediSuffixes = allEdiSuffixes.length > 0 ? allEdiSuffixes.map(s => '-' + s.toUpperCase()).join(', ') : '';
+        score.details.zohoSuffixes = allZohoSuffixes.length > 0 ? allZohoSuffixes.map(s => '-' + s.toUpperCase()).join(', ') : '';
         score.details.suffixMismatches = suffixMismatches;
 
         // Score based on how many base styles matched (up to 20 points)

@@ -385,7 +385,11 @@ const dashboardHTML = `
   // ============================================================
   // STAGE NAVIGATION
   // ============================================================
-  function showStage(stage) {
+  let currentStage = 'inbox';
+
+  function showStage(stage, skipSave = false) {
+    currentStage = stage;
+
     // Hide all content
     document.querySelectorAll('.stage-content').forEach(el => el.classList.add('hidden'));
 
@@ -424,6 +428,9 @@ const dashboardHTML = `
         showListView();
       }
     }
+
+    // Save stage to session (debounced)
+    if (!skipSave) saveSession();
   }
 
   // ============================================================
@@ -551,10 +558,16 @@ const dashboardHTML = `
         updateWorkflowCounts();
         updateFilterCounts();
         updateReviewCustomerFilter();
-        const matchCount = matchResults.matches?.length || 0;
+        const matchCount = (matchResults.matches?.length || 0) + (matchResults.noMatches?.length || 0);
         if (matchCount > 0) {
           toast('Restored ' + matchCount + ' matches from previous session');
+          // Navigate to the saved stage (or review if we have matches)
+          const savedStage = data.currentStage || 'review';
+          showStage(savedStage, true);
         }
+      } else if (data.currentStage) {
+        // No matches but we have a saved stage
+        showStage(data.currentStage, true);
       }
     } catch (e) {
       console.log('No saved session');
@@ -574,7 +587,8 @@ const dashboardHTML = `
             selectedMatchIds: Array.from(selectedMatchIds),
             flaggedMatchIds: Array.from(flaggedMatchIds),
             selectedMatchDrafts: Object.fromEntries(selectedMatchDrafts),
-            focusModeIndex: focusModeIndex
+            focusModeIndex: focusModeIndex,
+            currentStage: currentStage
           })
         });
       } catch (e) {
@@ -1249,7 +1263,7 @@ const dashboardHTML = `
                 <td class="py-2.5 text-center">\${details.totalAmount ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
               </tr>
               <tr class="border-b border-slate-100">
-                <td class="py-2.5 text-slate-500">Styles</td>
+                <td class="py-2.5 text-slate-500">Base Style</td>
                 <td class="py-2.5 bg-blue-50/30 px-3">
                   \${ediStyles.length > 0 ? ediStyles.map(s => '<span class="inline-block bg-slate-100 px-2 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-'}
                 </td>
@@ -1257,6 +1271,12 @@ const dashboardHTML = `
                   \${zohoStyles.length > 0 ? zohoStyles.map(s => '<span class="inline-block bg-slate-100 px-2 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-'}
                 </td>
                 <td class="py-2.5 text-center">\${details.baseStyle ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+              </tr>
+              <tr class="border-b border-slate-100">
+                <td class="py-2.5 text-slate-500">Suffix</td>
+                <td class="py-2.5 bg-blue-50/30 px-3 text-xs text-slate-600">\${details.ediSuffixes || '-'}</td>
+                <td class="py-2.5 bg-green-50/30 px-3 text-xs text-slate-600">\${details.zohoSuffixes || '-'}</td>
+                <td class="py-2.5 text-center">\${details.styleSuffix ? '<span class="text-green-600">✓ match</span>' : details.baseStyle ? '<span class="text-amber-500">⚠️ diff</span>' : '-'}</td>
               </tr>
             </tbody>
           </table>
@@ -1347,7 +1367,11 @@ const dashboardHTML = `
           <button onclick="focusModeApprove()" class="px-6 py-2.5 \${selectedMatchIds.has(edi.id) ? 'bg-green-600' : 'bg-green-500'} text-white rounded-lg hover:bg-green-600 transition font-medium flex items-center gap-2">
             \${selectedMatchIds.has(edi.id) ? '✓ Selected' : '✓ Select & Next →'}
           </button>
-          \` : ''}
+          \` : \`
+          <button onclick="createZohoOrder(\${edi.id})" class="px-6 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-medium flex items-center gap-2">
+            ➕ Create in Zoho
+          </button>
+          \`}
         </div>
       </div>
 
@@ -1400,6 +1424,30 @@ const dashboardHTML = `
 
   function focusModeSkip() {
     focusModeNext();
+  }
+
+  async function createZohoOrder(ediId) {
+    if (!confirm('Create a new Sales Order in Zoho from this EDI order?\\n\\nThis will create a new draft order in Zoho Books.')) return;
+
+    try {
+      toast('Creating order in Zoho...');
+      const res = await fetch('/create-new-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ediOrderId: ediId, confirmed: true })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        toast('Order created in Zoho: ' + data.salesOrderNumber, 'success');
+        // Move to next
+        focusModeNext();
+      } else {
+        toast('Error: ' + (data.error || 'Failed to create order'), 'error');
+      }
+    } catch (e) {
+      toast('Error creating order: ' + e.message, 'error');
+    }
   }
 
   function focusModeFlag() {

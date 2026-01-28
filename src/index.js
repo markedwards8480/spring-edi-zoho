@@ -60,7 +60,7 @@ app.get('/session', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT match_results, selected_match_ids, flagged_match_ids,
-              selected_match_drafts, focus_mode_index, updated_at
+              selected_match_drafts, focus_mode_index, current_stage, updated_at
        FROM ui_session WHERE session_key = 'default'`
     );
     if (result.rows.length === 0) {
@@ -69,7 +69,8 @@ app.get('/session', async (req, res) => {
         selectedMatchIds: [],
         flaggedMatchIds: [],
         selectedMatchDrafts: {},
-        focusModeIndex: 0
+        focusModeIndex: 0,
+        currentStage: 'inbox'
       });
     }
     const row = result.rows[0];
@@ -79,6 +80,7 @@ app.get('/session', async (req, res) => {
       flaggedMatchIds: row.flagged_match_ids || [],
       selectedMatchDrafts: row.selected_match_drafts || {},
       focusModeIndex: row.focus_mode_index || 0,
+      currentStage: row.current_stage || 'inbox',
       updatedAt: row.updated_at
     });
   } catch (error) {
@@ -90,23 +92,25 @@ app.get('/session', async (req, res) => {
 // Save session state
 app.post('/session', async (req, res) => {
   try {
-    const { matchResults, selectedMatchIds, flaggedMatchIds, selectedMatchDrafts, focusModeIndex } = req.body;
+    const { matchResults, selectedMatchIds, flaggedMatchIds, selectedMatchDrafts, focusModeIndex, currentStage } = req.body;
     await pool.query(
-      `INSERT INTO ui_session (session_key, match_results, selected_match_ids, flagged_match_ids, selected_match_drafts, focus_mode_index, updated_at)
-       VALUES ('default', $1, $2, $3, $4, $5, NOW())
+      `INSERT INTO ui_session (session_key, match_results, selected_match_ids, flagged_match_ids, selected_match_drafts, focus_mode_index, current_stage, updated_at)
+       VALUES ('default', $1, $2, $3, $4, $5, $6, NOW())
        ON CONFLICT (session_key) DO UPDATE SET
          match_results = $1,
          selected_match_ids = $2,
          flagged_match_ids = $3,
          selected_match_drafts = $4,
          focus_mode_index = $5,
+         current_stage = $6,
          updated_at = NOW()`,
       [
         matchResults ? JSON.stringify(matchResults) : null,
         JSON.stringify(selectedMatchIds || []),
         JSON.stringify(flaggedMatchIds || []),
         JSON.stringify(selectedMatchDrafts || {}),
-        focusModeIndex || 0
+        focusModeIndex || 0,
+        currentStage || 'inbox'
       ]
     );
     res.json({ success: true });

@@ -133,6 +133,7 @@ async function initDatabase() {
         flagged_match_ids JSONB DEFAULT '[]',
         selected_match_drafts JSONB DEFAULT '{}',
         focus_mode_index INTEGER DEFAULT 0,
+        current_stage VARCHAR(50) DEFAULT 'inbox',
         updated_at TIMESTAMP DEFAULT NOW()
       );
 
@@ -140,6 +141,11 @@ async function initDatabase() {
       INSERT INTO ui_session (session_key)
       VALUES ('default')
       ON CONFLICT (session_key) DO NOTHING;
+    `);
+
+    // Add current_stage column if not exists (migration for existing tables)
+    await client.query(`
+      ALTER TABLE ui_session ADD COLUMN IF NOT EXISTS current_stage VARCHAR(50) DEFAULT 'inbox';
     `);
 
     logger.info('Database tables initialized');
