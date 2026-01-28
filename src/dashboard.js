@@ -2132,23 +2132,58 @@ const dashboardHTML = `
                   </div>
                 </div>
 
-                <div class="bg-amber-50 rounded-lg p-4 border border-amber-100">
-                  <div class="font-semibold text-amber-800 mb-2">📦 Pack & Pricing Details</div>
-                  <div class="grid grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <div class="text-xs text-slate-500 uppercase">Unit Price (Per EA)</div>
-                      <div class="font-semibold">$\${(items[0]?.unitPrice || pricing.unitPrice || 0).toFixed(2)}</div>
-                    </div>
-                    <div>
-                      <div class="text-xs text-slate-500 uppercase">Item Price (Per Each)</div>
-                      <div class="font-semibold text-green-600">$\${(items[0]?.unitPrice || pricing.unitPrice || 0).toFixed(2)}</div>
-                    </div>
-                    <div>
-                      <div class="text-xs text-slate-500 uppercase">Line Amount</div>
-                      <div class="font-semibold">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
-                    </div>
-                  </div>
-                </div>
+                \${(() => {
+                  const sampleItem = items[0] || {};
+                  const packQty = sampleItem.packQty || 1;
+                  const packPrice = sampleItem.packPrice || sampleItem.unitPrice || 0;
+                  const eachPrice = sampleItem.eachPrice || sampleItem.unitPrice || (packQty > 1 ? packPrice / packQty : packPrice);
+                  const isPrepack = sampleItem.isPrepack || (packQty > 1);
+                  const uom = sampleItem.unitOfMeasure || 'EA';
+
+                  if (isPrepack && packQty > 1) {
+                    return \`
+                      <div class="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                        <div class="font-semibold text-purple-800 mb-3">📦 Pre-Pack Order</div>
+                        <div class="grid grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <div class="text-xs text-slate-500 uppercase">Pack Price</div>
+                            <div class="font-bold text-purple-700 text-lg">$\${packPrice.toFixed(2)}</div>
+                          </div>
+                          <div class="flex items-center justify-center">
+                            <div class="text-slate-400 text-lg">÷</div>
+                          </div>
+                          <div>
+                            <div class="text-xs text-slate-500 uppercase">Pack Qty</div>
+                            <div class="font-bold text-purple-700 text-lg">\${packQty}</div>
+                          </div>
+                          <div>
+                            <div class="text-xs text-slate-500 uppercase">= Each Price</div>
+                            <div class="font-bold text-green-600 text-lg">$\${eachPrice.toFixed(2)}</div>
+                          </div>
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-purple-200 text-xs text-purple-600">
+                          UOM: <strong>\${uom}</strong> • Packs ordered are multiplied by pack qty to get total units
+                        </div>
+                      </div>
+                    \`;
+                  } else {
+                    return \`
+                      <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                        <div class="font-semibold text-slate-700 mb-2">💰 Pricing Details</div>
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <div class="text-xs text-slate-500 uppercase">Unit Price</div>
+                            <div class="font-bold text-green-600 text-lg">$\${eachPrice.toFixed(2)}</div>
+                          </div>
+                          <div>
+                            <div class="text-xs text-slate-500 uppercase">Total Amount</div>
+                            <div class="font-bold text-slate-700 text-lg">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+                          </div>
+                        </div>
+                      </div>
+                    \`;
+                  }
+                })()}
               </div>
 
               <!-- Line Items Tab -->
