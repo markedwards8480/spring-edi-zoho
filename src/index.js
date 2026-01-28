@@ -1442,9 +1442,9 @@ app.get('/match-session/history', async (req, res) => {
 app.get('/customer-mappings', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM customer_mappings ORDER BY edi_customer_name');
-    res.json(result.rows);
+    res.json({ mappings: result.rows });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message, mappings: [] });
   }
 });
 
