@@ -2090,13 +2090,14 @@ const dashboardHTML = `
     const severity = document.getElementById('activitySeverityFilter')?.value || '';
 
     try {
-      let url = '/audit/logs?limit=100';
+      let url = '/audit/activity?limit=100';
       if (action) url += '&action=' + action;
       if (severity) url += '&severity=' + severity;
 
       const res = await fetch(url);
       const data = await res.json();
-      activityLogData = data.logs || [];
+      activityLogData = data.activity || [];
+      document.getElementById('activityLogCount').textContent = activityLogData.length + ' entries';
       renderActivityLog();
     } catch (e) {
       console.error('Failed to load activity log:', e);
@@ -2117,20 +2118,113 @@ const dashboardHTML = `
 
     tbody.innerHTML = activityLogData.map(log => {
       const time = log.created_at ? formatDateWithTime(new Date(log.created_at)) : '-';
-      const statusClass = log.status === 'success' ? 'text-green-600' : log.status === 'error' ? 'text-red-600' : 'text-slate-500';
-      const statusIcon = log.status === 'success' ? '✓' : log.status === 'error' ? '✕' : 'ℹ';
+      const severityClass = log.severity === 'success' ? 'text-green-600' : log.severity === 'error' ? 'text-red-600' : log.severity === 'warning' ? 'text-amber-600' : 'text-slate-500';
+      const severityIcon = log.severity === 'success' ? '✓' : log.severity === 'error' ? '✕' : log.severity === 'warning' ? '⚠' : 'ℹ';
+
+      // Format details - show changes if available
+      let detailsHtml = '-';
+      if (log.details) {
+        const details = typeof log.details === 'string' ? JSON.parse(log.details) : log.details;
+        if (details.changesApplied && details.changesApplied.length > 0) {
+          detailsHtml = details.changesApplied.map(c =>
+            '<span class="inline-block bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded text-xs mr-1">' + c.field + '</span>'
+          ).join('');
+        } else if (details.zohoSoNumber) {
+          detailsHtml = 'Zoho #' + details.zohoSoNumber;
+        } else {
+          detailsHtml = JSON.stringify(details).substring(0, 40) + (JSON.stringify(details).length > 40 ? '...' : '');
+        }
+      }
+
+      // Action formatting
+      const actionLabels = {
+        'sent_to_zoho': '📤 Sent to Zoho',
+        'draft_updated': '✏️ Draft Updated',
+        'new_order_created': '➕ New Order',
+        'match_found': '🔗 Match Found',
+        'order_imported': '📥 Imported',
+        'zoho_error': '❌ Error',
+        'sftp_fetch_started': '📡 SFTP Fetch',
+        'sftp_fetch_completed': '✅ SFTP Done',
+        'match_search_completed': '🔍 Matching Done'
+      };
+      const actionLabel = actionLabels[log.action] || log.action || '-';
 
       return \`
-        <tr class="border-b border-slate-100 hover:bg-slate-50">
+        <tr class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onclick="showActivityDetail(\${log.id})">
           <td class="px-4 py-3 text-slate-500 text-sm">\${time}</td>
-          <td class="px-4 py-3 text-slate-800">\${log.action || '-'}</td>
-          <td class="px-4 py-3 font-medium text-slate-800">\${log.edi_po_number || '-'}</td>
+          <td class="px-4 py-3 text-slate-800">\${actionLabel}</td>
+          <td class="px-4 py-3 font-medium text-slate-800">\${log.edi_po_number || log.edi_order_number || '-'}</td>
           <td class="px-4 py-3 text-slate-600">\${log.customer_name || '-'}</td>
-          <td class="px-4 py-3 text-slate-500 text-sm">\${log.details ? JSON.stringify(log.details).substring(0, 50) : '-'}</td>
-          <td class="px-4 py-3 text-center \${statusClass}">\${statusIcon}</td>
+          <td class="px-4 py-3 text-slate-500 text-sm">\${detailsHtml}</td>
+          <td class="px-4 py-3 text-center \${severityClass}">\${severityIcon}</td>
         </tr>
       \`;
     }).join('');
+  }
+
+  async function showActivityDetail(logId) {
+    const log = activityLogData.find(l => l.id === logId);
+    if (!log) return;
+
+    const time = log.created_at ? formatDateWithTime(new Date(log.created_at)) : '-';
+    const details = log.details ? (typeof log.details === 'string' ? JSON.parse(log.details) : log.details) : {};
+
+    let changesHtml = '';
+    if (details.changesApplied && details.changesApplied.length > 0) {
+      changesHtml = \`
+        <div class="mt-4">
+          <div class="text-sm font-semibold text-slate-600 mb-2">Changes Applied:</div>
+          <table class="w-full text-sm border border-slate-200 rounded">
+            <thead class="bg-slate-50">
+              <tr>
+                <th class="text-left px-3 py-2 text-slate-500">Field</th>
+                <th class="text-left px-3 py-2 text-slate-500">Before</th>
+                <th class="text-left px-3 py-2 text-slate-500">After</th>
+              </tr>
+            </thead>
+            <tbody>
+              \${details.changesApplied.map(c => \`
+                <tr class="border-t border-slate-100">
+                  <td class="px-3 py-2 font-medium">\${c.field}</td>
+                  <td class="px-3 py-2 text-slate-400 line-through">\${c.from || '—'}</td>
+                  <td class="px-3 py-2 text-green-600">\${c.to || '—'}</td>
+                </tr>
+              \`).join('')}
+            </tbody>
+          </table>
+        </div>
+      \`;
+    }
+
+    const modalHtml = \`
+      <div class="modal-overlay" onclick="closeModal()">
+        <div class="bg-white rounded-xl max-w-2xl w-full mx-4 overflow-hidden max-h-[80vh] overflow-y-auto" onclick="event.stopPropagation()">
+          <div class="bg-slate-800 text-white px-6 py-4 flex justify-between items-center sticky top-0">
+            <h3 class="text-lg font-semibold">📋 Activity Detail</h3>
+            <button onclick="closeModal()" class="text-white hover:text-slate-300">✕</button>
+          </div>
+          <div class="p-6">
+            <div class="grid grid-cols-2 gap-4 text-sm">
+              <div><span class="text-slate-500">Time:</span> <span class="font-medium">\${time}</span></div>
+              <div><span class="text-slate-500">Action:</span> <span class="font-medium">\${log.action}</span></div>
+              <div><span class="text-slate-500">PO #:</span> <span class="font-medium">\${log.edi_po_number || log.edi_order_number || '-'}</span></div>
+              <div><span class="text-slate-500">Customer:</span> <span class="font-medium">\${log.customer_name || '-'}</span></div>
+              \${log.zoho_so_number ? \`<div><span class="text-slate-500">Zoho SO#:</span> <span class="font-medium">\${log.zoho_so_number}</span></div>\` : ''}
+              \${log.order_amount ? \`<div><span class="text-slate-500">Amount:</span> <span class="font-medium">$\${parseFloat(log.order_amount).toLocaleString()}</span></div>\` : ''}
+              \${log.match_confidence ? \`<div><span class="text-slate-500">Match Confidence:</span> <span class="font-medium">\${log.match_confidence}%</span></div>\` : ''}
+            </div>
+            \${changesHtml}
+            \${log.error_message ? \`<div class="mt-4 p-3 bg-red-50 border border-red-200 rounded text-red-700 text-sm">\${log.error_message}</div>\` : ''}
+          </div>
+          <div class="px-6 py-4 bg-slate-50 border-t">
+            <button onclick="closeModal()" class="px-4 py-2 bg-slate-200 rounded-lg hover:bg-slate-300">Close</button>
+          </div>
+        </div>
+      </div>
+    \`;
+
+    document.getElementById('modalContainer').innerHTML = modalHtml;
   }
 
   async function loadAuditStats() {

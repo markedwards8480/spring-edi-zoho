@@ -771,22 +771,49 @@ app.post('/confirm-matches', async (req, res) => {
       try {
         const orderResult = await pool.query('SELECT * FROM edi_orders WHERE id = $1', [match.ediOrderId]);
         if (orderResult.rows.length === 0) continue;
-        
+
         const ediOrder = orderResult.rows[0];
         const parsed = ediOrder.parsed_data || {};
         const items = parsed.items || [];
         const totalAmount = items.reduce((sum, item) => sum + ((item.quantityOrdered || 0) * (item.unitPrice || 0)), 0);
         const totalUnits = items.reduce((sum, item) => sum + (item.quantityOrdered || 0), 0);
-        
+        const ediShipDate = parsed.dates?.shipDate || parsed.dates?.shipNotBefore || null;
+        const ediCancelDate = parsed.dates?.cancelDate || parsed.dates?.shipNotAfter || null;
+
+        // Get the current Zoho draft data before updating (for audit trail)
+        let zohoBeforeData = null;
+        try {
+          zohoBeforeData = await zoho.getSalesOrderDetails(match.zohoDraftId);
+        } catch (e) {
+          logger.warn('Could not fetch Zoho draft before update', { draftId: match.zohoDraftId });
+        }
+
         const updated = await zoho.updateDraftWithEdiData(match.zohoDraftId, ediOrder);
-        
+
+        // Calculate what changed
+        const changesApplied = [];
+        if (zohoBeforeData) {
+          if (ediShipDate && ediShipDate !== zohoBeforeData.shipment_date) {
+            changesApplied.push({ field: 'Ship Date', from: zohoBeforeData.shipment_date, to: ediShipDate });
+          }
+          if (totalAmount && Math.abs(totalAmount - parseFloat(zohoBeforeData.total || 0)) > 1) {
+            changesApplied.push({ field: 'Amount', from: zohoBeforeData.total, to: totalAmount });
+          }
+          if (totalUnits && totalUnits !== (zohoBeforeData.line_items || []).reduce((s, i) => s + (i.quantity || 0), 0)) {
+            changesApplied.push({ field: 'Units', from: (zohoBeforeData.line_items || []).reduce((s, i) => s + (i.quantity || 0), 0), to: totalUnits });
+          }
+          if (items.length !== (zohoBeforeData.line_items || []).length) {
+            changesApplied.push({ field: 'Line Items', from: (zohoBeforeData.line_items || []).length, to: items.length });
+          }
+        }
+
         await pool.query(`
-          UPDATE edi_orders 
+          UPDATE edi_orders
           SET status = 'processed', zoho_so_id = $1, zoho_so_number = $2, matched_draft_id = $3, processed_at = NOW()
           WHERE id = $4
         `, [updated.salesorder_id, updated.salesorder_number, match.zohoDraftId, match.ediOrderId]);
-        
-        // Record in permanent audit log
+
+        // Record in permanent audit log with changes
         await auditLogger.recordZohoSend({
           ediOrderId: ediOrder.id,
           ediOrderNumber: ediOrder.edi_order_number,
@@ -795,7 +822,7 @@ app.post('/confirm-matches', async (req, res) => {
           orderAmount: totalAmount,
           itemCount: items.length,
           unitCount: totalUnits,
-          shipDate: parsed.dates?.shipNotBefore || parsed.dates?.shipDate,
+          shipDate: ediShipDate,
           zohoSoId: updated.salesorder_id,
           zohoSoNumber: updated.salesorder_number,
           zohoCustomerId: updated.customer_id,
@@ -805,7 +832,9 @@ app.post('/confirm-matches', async (req, res) => {
           matchConfidence: match.confidence,
           wasNewOrder: false,
           ediRawData: parsed,
-          zohoResponse: updated
+          zohoResponse: updated,
+          changesApplied: changesApplied,
+          zohoBeforeData: zohoBeforeData
         });
         
         processed++;
@@ -1821,6 +1850,11 @@ async function startServer() {
       `);
       await pool.query(`
         ALTER TABLE customer_mappings ADD COLUMN IF NOT EXISTS zoho_customer_id VARCHAR(255);
+      `);
+      // Add audit tracking columns
+      await pool.query(`
+        ALTER TABLE zoho_orders_sent ADD COLUMN IF NOT EXISTS changes_applied JSONB;
+        ALTER TABLE zoho_orders_sent ADD COLUMN IF NOT EXISTS zoho_before_data JSONB;
       `);
     } catch (e) { /* ignore */ }
     

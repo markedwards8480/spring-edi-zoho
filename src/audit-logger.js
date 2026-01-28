@@ -206,7 +206,11 @@ class AuditLogger {
           -- Raw data backup
           edi_raw_data JSONB,
           zoho_response JSONB,
-          
+
+          -- Changes applied (what was updated)
+          changes_applied JSONB,
+          zoho_before_data JSONB,
+
           -- Prevent duplicates
           UNIQUE(zoho_so_id)
         );
@@ -285,11 +289,12 @@ class AuditLogger {
           order_amount, item_count, unit_count, ship_date,
           zoho_so_id, zoho_so_number, zoho_customer_id, zoho_customer_name,
           matched_draft_id, matched_draft_number, match_confidence, was_new_order,
-          sent_by, edi_raw_data, zoho_response
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+          sent_by, edi_raw_data, zoho_response, changes_applied, zoho_before_data
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
         ON CONFLICT (zoho_so_id) DO UPDATE SET
           zoho_so_number = EXCLUDED.zoho_so_number,
-          zoho_response = EXCLUDED.zoho_response
+          zoho_response = EXCLUDED.zoho_response,
+          changes_applied = EXCLUDED.changes_applied
       `, [
         data.ediOrderNumber,
         data.poNumber || data.ediOrderNumber,
@@ -309,6 +314,8 @@ class AuditLogger {
         data.sentBy || 'system',
         data.ediRawData ? JSON.stringify(data.ediRawData) : null,
         data.zohoResponse ? JSON.stringify(data.zohoResponse) : null,
+        data.changesApplied ? JSON.stringify(data.changesApplied) : null,
+        data.zohoBeforeData ? JSON.stringify(data.zohoBeforeData) : null,
       ]);
 
       // Also log to audit trail
