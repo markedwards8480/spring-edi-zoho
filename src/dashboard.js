@@ -1,5 +1,5 @@
-// Dashboard with Matching System + Full Order Modal
-// Mark Edwards Apparel Light Theme
+// Dashboard with Matching System - Mark Edwards Apparel
+// Clean UI Design with Tailwind CSS
 
 const dashboardHTML = `
 <!DOCTYPE html>
@@ -7,4167 +7,1381 @@ const dashboardHTML = `
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Spring EDI Integration | Mark Edwards Apparel</title>
+  <title>EDI Order Processing | Mark Edwards Apparel</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f7; color: #1e3a5f; min-height: 100vh; }
-    
-    /* Header */
-    .header { background: linear-gradient(135deg, #1e3a5f 0%, #2d5a7f 100%); color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
-    .logo { display: flex; align-items: center; gap: 1rem; }
-    .logo-icon { width: 40px; height: 40px; background: white; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #1e3a5f; font-size: 0.875rem; }
-    .logo-text { font-size: 1.25rem; font-weight: 600; }
-    .logo-sub { font-size: 0.75rem; opacity: 0.8; }
-    .status-indicator { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; opacity: 0.9; }
-    .status-dot { width: 8px; height: 8px; background: #34c759; border-radius: 50%; animation: pulse 2s infinite; }
-    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-    
-    /* Layout */
-    .main-container { display: flex; min-height: calc(100vh - 70px); }
-    .sidebar { width: 220px; background: white; border-right: 1px solid rgba(0,0,0,0.06); padding: 1.5rem 0; }
-    .nav-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; padding: 0 1.5rem; margin-bottom: 0.75rem; margin-top: 1.5rem; }
-    .nav-title:first-child { margin-top: 0; }
-    .nav-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1.5rem; color: #6e6e73; cursor: pointer; transition: all 0.15s; border-left: 3px solid transparent; font-size: 0.875rem; }
-    .nav-item:hover { background: #f5f5f7; color: #1e3a5f; }
-    .nav-item.active { background: rgba(0,136,194,0.08); color: #0088c2; border-left-color: #0088c2; }
-    .nav-badge { margin-left: auto; background: #ff9500; color: white; padding: 0.15rem 0.5rem; border-radius: 10px; font-size: 0.7rem; font-weight: 600; }
-    
-    .content { flex: 1; padding: 2rem; overflow-y: auto; }
-    
-    /* Stats */
-    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2rem; }
-    .stat-card { background: white; border-radius: 12px; padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-    .stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; margin-bottom: 0.5rem; }
-    .stat-value { font-size: 2rem; font-weight: 700; color: #1e3a5f; }
-    .stat-card.success .stat-value { color: #34c759; }
-    .stat-card.warning .stat-value { color: #ff9500; }
-    
-    /* Buttons */
-    .btn { padding: 0.5rem 1rem; border-radius: 8px; font-weight: 500; cursor: pointer; transition: all 0.15s; border: none; font-size: 0.875rem; display: inline-flex; align-items: center; gap: 0.5rem; }
-    .btn-primary { background: #1e3a5f; color: white; }
-    .btn-primary:hover { background: #2d5a7f; }
-    .btn-secondary { background: white; color: #1e3a5f; border: 1px solid #d2d2d7; }
-    .btn-secondary:hover { background: #f5f5f7; }
-    .btn-success { background: #34c759; color: white; }
-    .btn-success:hover { background: #2db54d; }
-    .btn-lg { padding: 0.75rem 1.5rem; font-size: 1rem; }
-    
-    /* Table */
-    .table-container { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow: hidden; }
-    .orders-table { width: 100%; border-collapse: collapse; }
-    .orders-table th { text-align: left; padding: 1rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; border-bottom: 1px solid rgba(0,0,0,0.06); background: #f5f5f7; }
-    .orders-table td { padding: 1rem; border-bottom: 1px solid rgba(0,0,0,0.06); font-size: 0.875rem; }
-    .orders-table tr:hover { background: rgba(0,136,194,0.04); }
-    
-    .status-badge { padding: 0.25rem 0.75rem; border-radius: 980px; font-size: 0.75rem; font-weight: 500; }
-    .status-pending { background: rgba(255,149,0,0.12); color: #ff9500; }
-    .status-processed { background: rgba(52,199,89,0.12); color: #34c759; }
-    .status-matched { background: rgba(0,136,194,0.12); color: #0088c2; }
-    .status-review { background: rgba(142,142,147,0.12); color: #8e8e93; }
-    
-    .checkbox { width: 18px; height: 18px; accent-color: #0088c2; cursor: pointer; }
-    .toolbar { display: flex; gap: 1rem; margin-bottom: 1.5rem; align-items: center; flex-wrap: wrap; }
-    .search-box { background: white; border: 1px solid #d2d2d7; border-radius: 8px; padding: 0.5rem 0.75rem; color: #1e3a5f; width: 250px; font-size: 0.875rem; }
-    .filter-select { background: white; border: 1px solid #d2d2d7; border-radius: 8px; padding: 0.5rem 0.75rem; color: #1e3a5f; font-size: 0.875rem; }
-    
-    /* Modal */
-    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-    .modal { background: white; border-radius: 18px; max-width: 1100px; width: 95%; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
-    .modal.show { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; background: transparent; max-width: none; width: 100%; border-radius: 0; }
-    .modal-backdrop { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); }
-    .modal-content { position: relative; background: white; border-radius: 18px; padding: 1.5rem; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
-    .modal-header { padding: 1.25rem 1.5rem; border-bottom: 1px solid rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
-    .modal-header h2 { font-size: 1.25rem; font-weight: 600; color: #1e3a5f; display: flex; align-items: center; gap: 0.75rem; }
-    .modal-close { background: #f5f5f7; border: none; color: #86868b; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 1.25rem; }
-    .modal-close:hover { background: #e5e5e5; color: #1e3a5f; }
-    
-    .modal-tabs { display: flex; border-bottom: 1px solid rgba(0,0,0,0.06); background: #f5f5f7; padding: 0 1rem; }
-    .modal-tab { padding: 1rem 1.25rem; cursor: pointer; color: #86868b; border-bottom: 2px solid transparent; transition: all 0.15s; font-size: 0.875rem; font-weight: 500; margin-bottom: -1px; }
-    .modal-tab:hover { color: #1e3a5f; }
-    .modal-tab.active { color: #0088c2; border-bottom-color: #0088c2; background: white; border-radius: 8px 8px 0 0; }
-    
-    .modal-body { flex: 1; overflow-y: auto; padding: 1.5rem; }
-    .modal-footer { padding: 1rem 1.5rem; border-top: 1px solid rgba(0,0,0,0.06); display: flex; justify-content: flex-end; gap: 1rem; background: #f5f5f7; }
-    
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
-    
-    /* Info boxes */
-    .info-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-    .info-box { background: #f5f5f7; border-radius: 12px; padding: 1rem; }
-    .info-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; margin-bottom: 0.25rem; }
-    .info-value { font-size: 1rem; font-weight: 600; color: #1e3a5f; }
-    
-    .summary-boxes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
-    .summary-box { background: #f5f5f7; border-radius: 12px; padding: 1.25rem; text-align: center; }
-    .summary-box.highlight { background: linear-gradient(135deg, rgba(0,136,194,0.1), rgba(0,136,194,0.05)); }
-    .summary-box.green { background: linear-gradient(135deg, rgba(52,199,89,0.1), rgba(52,199,89,0.05)); }
-    .summary-number { font-size: 2rem; font-weight: 700; color: #1e3a5f; }
-    .summary-box.highlight .summary-number { color: #0088c2; }
-    .summary-box.green .summary-number { color: #34c759; }
-    .summary-label { font-size: 0.75rem; color: #86868b; margin-top: 0.25rem; }
-    
-    /* Pack details */
-    .pack-details { background: #f5f5f7; border-radius: 12px; padding: 1.25rem; margin-top: 1rem; }
-    .pack-details h4 { margin: 0 0 1rem 0; color: #1e3a5f; font-size: 0.875rem; font-weight: 600; }
-    .pack-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }
-    .pack-item-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.02em; color: #86868b; margin-bottom: 0.25rem; }
-    .pack-item-value { font-size: 1.1rem; font-weight: 600; color: #1e3a5f; }
-    .pack-item-value.success { color: #34c759; }
-    .pack-item-value.warning { color: #ff9500; }
-    .pack-item-value.muted { color: #86868b; font-style: italic; font-weight: 400; font-size: 0.875rem; }
-    
-    /* Alerts */
-    .alert { border-radius: 12px; padding: 1rem; margin-top: 1rem; font-size: 0.875rem; }
-    .alert-warning { background: rgba(255,149,0,0.1); border: 1px solid rgba(255,149,0,0.3); color: #1e3a5f; }
-    .alert-success { background: rgba(52,199,89,0.1); border: 1px solid rgba(52,199,89,0.3); color: #1e3a5f; }
-    .alert-info { background: rgba(0,136,194,0.1); border: 1px solid rgba(0,136,194,0.3); color: #1e3a5f; }
-    
-    /* UOM badges */
-    .uom-badge { display: inline-block; padding: 0.2rem 0.5rem; border-radius: 6px; font-size: 0.65rem; font-weight: 600; }
-    .uom-ea { background: #34c759; color: white; }
-    .uom-as { background: #ff9500; color: white; }
-    .uom-st { background: #0088c2; color: white; }
-    
-    /* Line items table */
-    .line-items-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
-    .line-items-table th { text-align: left; padding: 0.75rem; background: #f5f5f7; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; }
-    .line-items-table td { padding: 0.75rem; border-bottom: 1px solid rgba(0,0,0,0.06); }
-    
-    /* Data tables */
-    .data-section { margin-bottom: 2rem; }
-    .data-section h3 { font-size: 0.9375rem; margin-bottom: 1rem; color: #1e3a5f; font-weight: 600; }
-    .data-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; background: white; border-radius: 8px; overflow: hidden; }
-    .data-table th { text-align: left; padding: 0.5rem 0.75rem; background: #f5f5f7; font-size: 0.65rem; text-transform: uppercase; color: #86868b; }
-    .data-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(0,0,0,0.06); }
-    .data-table td:first-child { font-family: ui-monospace, monospace; font-size: 0.75rem; color: #86868b; max-width: 300px; word-break: break-all; }
-    .data-table tr.has-value { background: rgba(0,136,194,0.04); }
-    .data-table tr.has-value td:first-child { color: #1e3a5f; }
-    .empty-value { color: #d2d2d7; font-style: italic; }
-    
-    .raw-search { width: 100%; padding: 0.75rem; background: #f5f5f7; border: 1px solid #d2d2d7; border-radius: 8px; color: #1e3a5f; margin-bottom: 1rem; font-size: 0.875rem; }
-    .raw-search:focus { outline: none; border-color: #0088c2; }
-    
-    /* Match Review Styles */
-    .match-summary { background: #e8f5e9; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; }
-    .match-summary h3 { margin: 0 0 0.5rem 0; color: #1e3a5f; }
-    .match-summary p { margin: 0; color: #6e6e73; }
-    
-    .match-card { background: white; border: 1px solid #e5e5e5; border-radius: 12px; padding: 1.25rem; margin-bottom: 1rem; transition: all 0.15s ease; }
-    .match-card:hover { border-color: #0088c2; }
-    .match-card.selected { border-color: #34c759; background: #f0fdf4; box-shadow: 0 0 0 2px rgba(52, 199, 89, 0.2); }
-    .match-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
-    .match-po { font-size: 1.125rem; font-weight: 600; color: #1e3a5f; }
-    .match-customer { font-size: 0.875rem; color: #86868b; }
-    
-    /* Compact view styles */
-    .matches-grid { display: block; }
-    .matches-grid.compact { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
-    .matches-grid.compact .match-card { padding: 0.875rem; margin-bottom: 0; }
-    .matches-grid.compact .match-card-header { margin-bottom: 0.5rem; }
-    .matches-grid.compact .match-po { font-size: 0.9375rem; }
-    .matches-grid.compact .match-customer { font-size: 0.75rem; }
-    .matches-grid.compact .confidence-badge { padding: 0.25rem 0.5rem; font-size: 0.8125rem; }
-    .matches-grid.compact .match-criteria { display: none; }
-    .matches-grid.compact .match-comparison { gap: 0.75rem; margin-bottom: 0.5rem; }
-    .matches-grid.compact .match-side { padding: 0.5rem 0.75rem; }
-    .matches-grid.compact .match-side-label { font-size: 0.6875rem; }
-    .matches-grid.compact .match-side-amount { font-size: 1rem; }
-    .matches-grid.compact .match-side-detail { font-size: 0.6875rem; }
-    .matches-grid.compact .match-actions { gap: 0.25rem; flex-wrap: wrap; }
-    .matches-grid.compact .match-actions .btn { padding: 0.375rem 0.625rem; font-size: 0.75rem; }
-    .matches-grid.compact .match-actions .include-checkbox { font-size: 0.75rem; }
-    
-    .view-btn { padding: 0.375rem 0.625rem !important; min-width: 2rem; }
-    .view-btn.active { background: #0088c2; color: white; }
-    
-    .confidence-badge { padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600; font-size: 1rem; }
-    .confidence-high { background: #e8f5e9; color: #2e7d32; }
-    .confidence-medium { background: #fff3e0; color: #f57c00; }
-    .confidence-low { background: #ffebee; color: #c62828; }
-    
-    .match-criteria { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
-    .criteria-badge { padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.75rem; font-weight: 500; }
-    .criteria-matched { background: #e8f5e9; color: #2e7d32; }
-    .criteria-unmatched { background: #f5f5f7; color: #86868b; }
-    
-    .match-comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-    .match-side { padding: 1rem; border-radius: 8px; }
-    .match-side.edi { background: #e3f2fd; }
-    .match-side.zoho { background: #e8f5e9; }
-    .match-side-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: #86868b; margin-bottom: 0.5rem; }
-    .match-side-amount { font-size: 1.5rem; font-weight: 700; color: #1e3a5f; }
-    .match-side-detail { font-size: 0.8125rem; color: #6e6e73; margin-top: 0.25rem; }
-    
-    .match-actions { display: flex; gap: 0.75rem; margin-top: 1rem; }
-    .include-checkbox { display: flex; align-items: center; gap: 0.5rem; font-size: 0.875rem; color: #6e6e73; }
-    
-    /* Comparison modal */
-    .comparison-modal { width: 1200px; }
-    .comparison-header { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 1.5rem; }
-    .comparison-side { padding: 1.25rem; border-radius: 12px; }
-    .comparison-side.edi { background: linear-gradient(135deg, #e3f2fd, #bbdefb); }
-    .comparison-side.zoho { background: linear-gradient(135deg, #e8f5e9, #c8e6c9); }
-    .comparison-side h3 { margin: 0 0 1rem 0; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; }
-    .comparison-field { margin-bottom: 0.75rem; }
-    .comparison-field-label { font-size: 0.7rem; color: #6e6e73; text-transform: uppercase; }
-    .comparison-field-value { font-size: 0.9375rem; font-weight: 500; color: #1e3a5f; }
-    .comparison-total { font-size: 1.5rem; font-weight: 700; color: #1e3a5f; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(0,0,0,0.1); }
-    
-    .changes-summary { background: #fff3e0; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem; }
-    .changes-summary.no-changes { background: #e8f5e9; }
-    
-    .line-comparison-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
-    .line-comparison-table th { padding: 0.75rem; text-align: left; background: #f5f5f7; font-size: 0.7rem; text-transform: uppercase; color: #86868b; }
-    .line-comparison-table td { padding: 0.75rem; border-bottom: 1px solid #f0f0f0; }
-    .line-comparison-table .edi-col { background: rgba(227, 242, 253, 0.3); }
-    .line-comparison-table .zoho-col { background: rgba(232, 245, 233, 0.3); }
-    .line-comparison-table .divider { width: 1px; background: #e5e5e5; }
-    
-    .toast { position: fixed; bottom: 2rem; right: 2rem; background: #1e3a5f; color: white; padding: 1rem 1.5rem; border-radius: 12px; display: none; z-index: 2000; }
-    .toast.show { display: block; }
-    .empty-state { text-align: center; padding: 3rem; color: #86868b; }
-    
-    @media (max-width: 1200px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .info-grid { grid-template-columns: repeat(2, 1fr); } }
-    @media (max-width: 768px) { .sidebar { display: none; } }
-
-    /* Workflow Progress Bar */
-    .workflow-bar { background: white; border-bottom: 1px solid rgba(0,0,0,0.08); padding: 1rem 2rem; }
-    .workflow-stages { display: flex; align-items: center; justify-content: center; gap: 1rem; }
-    .workflow-stage { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1.25rem; border-radius: 12px; cursor: pointer; transition: all 0.2s; border: 2px solid transparent; }
-    .workflow-stage:hover { background: #f5f5f7; }
-    .workflow-stage.active { border-color: currentColor; }
-    .workflow-stage.stage-inbox { background: rgba(255,149,0,0.1); color: #ff9500; }
-    .workflow-stage.stage-inbox.active { background: #ff9500; color: white; box-shadow: 0 4px 12px rgba(255,149,0,0.3); }
-    .workflow-stage.stage-review { background: rgba(0,136,194,0.1); color: #0088c2; }
-    .workflow-stage.stage-review.active { background: #0088c2; color: white; box-shadow: 0 4px 12px rgba(0,136,194,0.3); }
-    .workflow-stage.stage-done { background: rgba(52,199,89,0.1); color: #34c759; }
-    .workflow-stage.stage-done.active { background: #34c759; color: white; box-shadow: 0 4px 12px rgba(52,199,89,0.3); }
-    .workflow-stage-icon { font-size: 1.25rem; }
-    .workflow-stage-label { font-weight: 600; font-size: 0.9375rem; }
-    .workflow-stage-count { font-size: 0.8125rem; opacity: 0.8; }
-    .workflow-arrow { color: #d2d2d7; font-size: 1.25rem; }
+    @keyframes pulse-green { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .pulse-green { animation: pulse-green 2s infinite; }
+    kbd { display: inline-block; padding: 2px 6px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; font-family: monospace; }
+    .stage-btn.active { box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: scale(1.02); }
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #1e293b; color: white; padding: 12px 20px; border-radius: 8px; font-size: 14px; z-index: 9999; animation: slideIn 0.3s ease; }
+    @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
-<body>
-  <div class="header">
-    <div class="logo">
-      <div class="logo-icon">ME</div>
-      <div>
-        <div class="logo-text">Spring EDI Integration</div>
-        <div class="logo-sub">Mark Edwards Apparel</div>
+<body class="bg-slate-50 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-slate-800 text-white px-6 py-4">
+    <div class="flex items-center justify-between max-w-7xl mx-auto">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-800 font-bold text-sm">ME</div>
+        <div>
+          <h1 class="font-semibold">Spring EDI Integration</h1>
+          <p class="text-slate-400 text-sm">Mark Edwards Apparel</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-6">
+        <button onclick="showStage('settings')" class="text-sm text-slate-400 hover:text-white transition flex items-center gap-1.5">
+          ⚙️ Settings
+        </button>
+        <button onclick="showStage('history')" class="text-sm text-slate-400 hover:text-white transition flex items-center gap-1.5">
+          📋 Activity Log
+        </button>
+        <div class="flex items-center gap-2 text-sm text-slate-400">
+          <div class="w-2 h-2 bg-green-400 rounded-full pulse-green"></div>
+          System Online
+        </div>
       </div>
     </div>
-    <div class="status-indicator">
-      <div class="status-dot"></div>
-      System Online
+  </header>
+
+  <!-- WORKFLOW PROGRESS BAR -->
+  <div class="bg-white border-b shadow-sm">
+    <div class="max-w-7xl mx-auto px-6 py-4">
+      <div class="flex items-center justify-center gap-4">
+        <!-- Stage 1: New Orders -->
+        <button onclick="showStage('inbox')" id="stage-inbox"
+          class="stage-btn flex items-center gap-3 px-5 py-3 rounded-xl transition-all bg-amber-500 text-white shadow-lg shadow-amber-200 active">
+          <span class="text-xl">📥</span>
+          <div class="text-left">
+            <div class="font-medium">New Orders</div>
+            <div class="text-sm opacity-80"><span id="inbox-count">0</span> to process</div>
+          </div>
+        </button>
+
+        <svg class="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+
+        <!-- Stage 2: Review -->
+        <button onclick="showStage('review')" id="stage-review"
+          class="stage-btn flex items-center gap-3 px-5 py-3 rounded-xl transition-all bg-blue-100 text-blue-700 border border-blue-300">
+          <span class="text-xl">🔍</span>
+          <div class="text-left">
+            <div class="font-medium">Review Matches</div>
+            <div class="text-sm opacity-70"><span id="review-count">0</span> to review</div>
+          </div>
+        </button>
+
+        <svg class="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+
+        <!-- Stage 3: Done -->
+        <button onclick="showStage('done')" id="stage-done"
+          class="stage-btn flex items-center gap-3 px-5 py-3 rounded-xl transition-all bg-green-100 text-green-700 border border-green-300">
+          <span class="text-xl">✅</span>
+          <div class="text-left">
+            <div class="font-medium">Sent to Zoho</div>
+            <div class="text-sm opacity-70"><span id="done-count">0</span> today</div>
+          </div>
+        </button>
+      </div>
     </div>
   </div>
 
-  <!-- Workflow Progress Bar -->
-  <div class="workflow-bar">
-    <div class="workflow-stages">
-      <div class="workflow-stage stage-inbox active" onclick="showTab('orders', this); updateWorkflowStage('inbox');" id="workflowInbox">
-        <span class="workflow-stage-icon">📥</span>
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-6 py-6">
+
+    <!-- ==================== INBOX STAGE ==================== -->
+    <div id="content-inbox" class="stage-content">
+      <div class="flex items-center justify-between mb-6">
         <div>
-          <div class="workflow-stage-label">New Orders</div>
-          <div class="workflow-stage-count"><span id="workflowInboxCount">0</span> to process</div>
+          <h2 class="text-xl font-semibold text-slate-800">New EDI Orders</h2>
+          <p class="text-slate-500">Orders imported from SFTP, ready to match with Zoho</p>
         </div>
-      </div>
-      <span class="workflow-arrow">→</span>
-      <div class="workflow-stage stage-review" onclick="goToReviewMatches()" id="workflowReview">
-        <span class="workflow-stage-icon">🔍</span>
-        <div>
-          <div class="workflow-stage-label">Review Matches</div>
-          <div class="workflow-stage-count"><span id="workflowReviewCount">0</span> to review</div>
-        </div>
-      </div>
-      <span class="workflow-arrow">→</span>
-      <div class="workflow-stage stage-done" onclick="showTab('sent', this); updateWorkflowStage('done');" id="workflowDone">
-        <span class="workflow-stage-icon">✅</span>
-        <div>
-          <div class="workflow-stage-label">Sent to Zoho</div>
-          <div class="workflow-stage-count"><span id="workflowDoneCount">0</span> today</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="main-container">
-    <div class="sidebar">
-      <div class="nav-title">Workflow</div>
-      <div class="nav-item active" onclick="showTab('orders', this)">
-        📥 EDI Orders <span class="nav-badge" id="pendingBadge">0</span>
-      </div>
-      <div class="nav-item" id="navReview" onclick="goToReviewMatches()">🔍 Review Matches <span class="nav-badge" id="reviewBadge" style="display:none;background:#0088c2">0</span></div>
-      <div class="nav-item" onclick="showTab('sent', this)">✅ Sent to Zoho <span class="nav-badge" id="sentBadge" style="background:#34c759">0</span></div>
-      <div class="nav-title">Settings</div>
-      <div class="nav-item" onclick="showTab('mappings', this)">🔗 Customer Mappings</div>
-      <div class="nav-title">History</div>
-      <div class="nav-item" onclick="showTab('activity', this)">📊 Activity & Logs</div>
-      <div class="nav-title">Tools</div>
-      <div class="nav-item" onclick="showTab('sftp', this)">📁 SFTP Browser</div>
-
-      <div class="nav-title">Developer</div>
-      <div class="nav-item" onclick="showTab('testing', this)">🧪 Test Scenarios</div>
-    </div>
-    
-    <div class="content">
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-label">EDI Orders</div>
-          <div class="stat-value" id="statTotal">0</div>
-        </div>
-        <div class="stat-card warning">
-          <div class="stat-label">Ready to Match</div>
-          <div class="stat-value" id="statPending">0</div>
-        </div>
-        <div class="stat-card" style="border-left: 4px solid #0088c2;">
-          <div class="stat-label">Matched</div>
-          <div class="stat-value" id="statMatched">0</div>
-        </div>
-        <div class="stat-card success">
-          <div class="stat-label">Sent to Zoho</div>
-          <div class="stat-value" id="statProcessed">0</div>
-        </div>
-      </div>
-      
-      <!-- EDI Orders Tab -->
-      <div id="tabOrders">
-        <div class="toolbar">
-          <input type="text" class="search-box" placeholder="Search PO#..." id="searchBox" onkeyup="filterOrders()">
-          <select class="filter-select" id="customerFilter" onchange="filterOrders()"><option value="">All Customers</option></select>
-          <select class="filter-select" id="statusFilter" onchange="filterOrders()">
-            <option value="">All Status</option>
-            <option value="pending" selected>Pending</option>
-            <option value="processed">Sent to Zoho</option>
-          </select>
-          <div style="flex:1"></div>
-          <button class="btn btn-primary" onclick="fetchFromSftp()">📥 Fetch from SFTP</button>
-          <button class="btn btn-success btn-lg" onclick="findMatches()">🔍 Find Matches</button>
-        </div>
-        
-        <!-- Cache Status Bar -->
-        <div id="cacheStatusBar" style="background:#f5f5f7;border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
-          <div id="cacheStatusText" style="font-size:0.875rem;color:#86868b;">
-            <span id="cacheIndicator">⏳</span> Zoho Drafts: <span id="cacheDraftsCount">-</span> cached • Last updated: <span id="cacheLastRefresh">Never</span>
-          </div>
-          <button class="btn btn-secondary" onclick="refreshZohoCache()" id="refreshCacheBtn" style="padding:0.375rem 0.75rem;font-size:0.8125rem;">🔄 Refresh Zoho Data</button>
-        </div>
-        
-        <div class="table-container">
-          <table class="orders-table">
-            <thead>
-              <tr>
-                <th style="width:40px"><input type="checkbox" class="checkbox" id="selectAll" onchange="toggleAll()"></th>
-                <th>PO #</th>
-                <th>Customer</th>
-                <th>Items</th>
-                <th>Value</th>
-                <th>Status</th>
-                <th>Imported</th>
-                <th>EDI Date</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="ordersTable">
-              <tr><td colspan="8" class="empty-state">Loading orders...</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div style="margin-top:1rem;color:#86868b;font-size:0.8125rem;" id="orderCount"></div>
-      </div>
-      
-      <!-- Review Matches Tab -->
-      <div id="tabReview" style="display:none">
-        <div class="toolbar" id="reviewToolbar" style="display:none">
-          <input type="text" class="search-box" placeholder="Search PO#..." id="reviewSearchBox" onkeyup="filterMatchResults()">
-          <select class="filter-select" id="reviewCustomerFilter" onchange="filterMatchResults()"><option value="">All Customers</option></select>
-          <select class="filter-select" id="confidenceFilter" onchange="filterMatchResults()">
-            <option value="">All Confidence</option>
-            <option value="perfect">Perfect (100%)</option>
-            <option value="high">High (80-99%)</option>
-            <option value="medium">Medium (60-79%)</option>
-            <option value="low">Low (&lt;60%)</option>
-            <option value="nomatch">No Match</option>
-          </select>
-          <div style="flex:1"></div>
-          <div class="view-toggle" style="display:flex;gap:0.25rem;margin-right:0.5rem;">
-            <button class="btn btn-secondary view-btn active" id="viewComfortable" onclick="setReviewView('comfortable')" title="Comfortable View">☰</button>
-            <button class="btn btn-secondary view-btn" id="viewCompact" onclick="setReviewView('compact')" title="Compact View">⊞</button>
-          </div>
-          <button class="btn btn-secondary" id="focusModeBtn" onclick="toggleFocusMode()" style="margin-right:0.5rem;" title="Focus Mode - Process one at a time">🎯 Focus Mode</button>
-          <button class="btn btn-secondary" onclick="clearMatchResults()">Clear Results</button>
-        </div>
-        <div id="matchReviewContent">
-          <div class="empty-state">
-            <p style="font-size:1.25rem;margin-bottom:1rem;">No matches to review</p>
-            <p>Go to <strong>EDI Orders</strong> and click <strong>"Find Matches"</strong> to search for matching Zoho drafts.</p>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Sent to Zoho Tab -->
-      <div id="tabSent" style="display:none">
-        <h2 style="margin-bottom:1rem;font-weight:600">Orders Sent to Zoho</h2>
-        <div class="toolbar" style="margin-bottom:1rem;">
-          <input type="text" class="search-box" placeholder="Search PO#..." id="sentSearchBox" onkeyup="filterSentOrders()">
-          <select class="filter-select" id="sentCustomerFilter" onchange="filterSentOrders()"><option value="">All Customers</option></select>
-          <div style="flex:1"></div>
-          <span id="sentOrderCount" style="color:#86868b;font-size:0.875rem;margin-right:1rem;"></span>
-          <button class="btn btn-secondary" onclick="exportSentToExcel()">📊 Export to Excel</button>
-        </div>
-        <div class="table-container">
-          <table class="orders-table">
-            <thead><tr><th>PO #</th><th>Customer</th><th>Zoho SO#</th><th>Value</th><th>Sent At</th><th>Actions</th></tr></thead>
-            <tbody id="sentOrdersTable"><tr><td colspan="6" class="empty-state">No orders sent yet</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-      
-      <!-- Customer Mappings Tab -->
-      <div id="tabMappings" style="display:none">
-        <h2 style="margin-bottom:1rem;font-weight:600">Customer Mappings</h2>
-        <div id="mappingsContent"></div>
-      </div>
-      
-      <!-- Activity Tab -->
-      <div id="tabActivity" style="display:none">
-        <h2 style="margin-bottom:1rem;font-weight:600">Activity & Logs</h2>
-        <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom:1.5rem;">
-          <div class="stat-card">
-            <div class="stat-label">📊 All-Time Orders Sent</div>
-            <div class="stat-value" id="statAllTimeSent">-</div>
-          </div>
-          <div class="stat-card success">
-            <div class="stat-label">💰 All-Time Value</div>
-            <div class="stat-value" id="statAllTimeValue">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">📅 Last 30 Days Sent</div>
-            <div class="stat-value" id="stat30DaySent">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">⚠️ Errors (30 days)</div>
-            <div class="stat-value" id="stat30DayErrors">-</div>
-          </div>
-        </div>
-
-        <!-- Unified Activity Log -->
-        <div class="toolbar">
-          <select class="filter-select" id="activityActionFilter" onchange="filterActivityLog()">
-            <option value="">All Actions</option>
-            <optgroup label="Zoho Operations">
-              <option value="sent_to_zoho">Sent to Zoho</option>
-              <option value="draft_updated">Draft Updated</option>
-              <option value="new_order_created">New Order Created</option>
-            </optgroup>
-            <optgroup label="Matching">
-              <option value="match_found">Match Found</option>
-              <option value="no_match_found">No Match</option>
-              <option value="user_confirmed_match">User Confirmed Match</option>
-              <option value="user_flagged_match">User Flagged Match</option>
-            </optgroup>
-            <optgroup label="System">
-              <option value="order_imported">Order Imported</option>
-              <option value="sftp_fetch_completed">SFTP Fetch</option>
-              <option value="zoho_error">Errors</option>
-            </optgroup>
-          </select>
-          <select class="filter-select" id="activitySeverityFilter" onchange="filterActivityLog()">
-            <option value="">All Severity</option>
-            <option value="success">✓ Success</option>
-            <option value="info">ℹ️ Info</option>
-            <option value="warning">⚠️ Warning</option>
-            <option value="error">❌ Error</option>
-          </select>
-          <div style="flex:1"></div>
-          <span id="activityLogCount" style="color:#86868b;font-size:0.875rem;margin-right:1rem;"></span>
-          <button class="btn btn-primary" onclick="loadActivityLog()">🔄 Refresh</button>
-        </div>
-        <div class="table-container" style="margin-top:1rem">
-          <table class="orders-table">
-            <thead>
-              <tr>
-                <th>Time</th>
-                <th>Action</th>
-                <th>PO #</th>
-                <th>Customer</th>
-                <th>Details</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody id="activityLogBody">
-              <tr><td colspan="6" class="empty-state">Loading...</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Hidden elements for backward compatibility with Zoho log functions -->
-        <div id="activityZohoTab" style="display:none"></div>
-        <div id="activityLogTab" style="display:none"></div>
-        <div id="zohoLogBody" style="display:none"></div>
-        <div id="zohoLogCount" style="display:none"></div>
-        <input type="hidden" id="zohoLogSearchBox">
-        <select id="zohoLogCustomerFilter" style="display:none"><option value="">All</option></select>
-        <input type="hidden" id="zohoLogFromDate">
-        <input type="hidden" id="zohoLogToDate">
-      </div>
-      
-      <!-- SFTP Browser Tab -->
-      <div id="tabSftp" style="display:none">
-        <div class="toolbar">
-          <h3 style="margin:0;color:#1e3a5f;">📁 SFTP File Browser</h3>
-          <div style="flex:1"></div>
-          <button class="btn btn-secondary" onclick="refreshSftpStatus()">🔄 Refresh</button>
-          <button class="btn btn-primary" onclick="fetchFromSftp()">📥 Fetch New Orders</button>
-        </div>
-        
-        <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); margin: 1.5rem 0;">
-          <div class="stat-card">
-            <div class="stat-label">Incoming Files</div>
-            <div class="stat-value" id="sftpIncomingCount">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Archived Files</div>
-            <div class="stat-value" id="sftpArchivedCount">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">Last Check</div>
-            <div class="stat-value" id="sftpLastCheck" style="font-size: 1rem;">-</div>
-          </div>
-        </div>
-        
-        <div style="display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px;">
-          <button class="btn btn-primary sftp-tab-btn active" id="sftpTabIncoming" onclick="showSftpTab('incoming')">
-            📥 Incoming <span id="sftpIncomingBadge" style="background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:10px;font-size:0.8rem;margin-left:5px;">0</span>
+        <div class="flex gap-3">
+          <button onclick="fetchFromSftp()" id="fetchSftpBtn" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition flex items-center gap-2 text-slate-600">
+            🔄 Fetch from SFTP
           </button>
-          <button class="btn btn-secondary sftp-tab-btn" id="sftpTabArchive" onclick="showSftpTab('archive')">
-            📦 Archive <span id="sftpArchiveBadge" style="background:rgba(0,0,0,0.1);padding:2px 8px;border-radius:10px;font-size:0.8rem;margin-left:5px;">0</span>
+          <button onclick="findMatchesForSelected()" id="findMatchesBtn"
+            class="px-5 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2 font-medium">
+            🔍 Find Matches (<span id="pendingCountBtn">0</span>)
           </button>
         </div>
-        
-        <div id="sftpIncomingPanel">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <span style="color: #666; font-size: 0.9rem;">Path: <code id="sftpOrdersPath">/orders</code></span>
-            <button class="btn btn-secondary" onclick="refetchSelectedIncoming()" id="refetchIncomingBtn" disabled style="padding:0.4rem 0.75rem;font-size:0.8125rem;">
-              📥 Re-fetch Selected (0)
-            </button>
-          </div>
-          <div class="table-container">
-            <table class="orders-table">
-              <thead>
-                <tr>
-                  <th style="width:40px"><input type="checkbox" class="checkbox" id="selectAllIncoming" onchange="toggleAllIncoming()"></th>
-                  <th>Filename</th>
-                  <th>Type</th>
-                  <th>Size</th>
-                  <th>Modified</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="sftpIncomingTable">
-                <tr><td colspan="6" class="empty-state">Click Refresh to load files...</td></tr>
-              </tbody>
-            </table>
+      </div>
+
+      <!-- Zoho Cache Status -->
+      <div class="bg-slate-100 rounded-lg px-4 py-3 mb-4 flex items-center justify-between text-sm">
+        <div class="flex items-center gap-2 text-slate-600">
+          <span id="cacheIndicator">🟢</span>
+          Zoho Drafts: <strong id="cacheDraftsCount">0</strong> cached • Last updated: <strong id="cacheLastRefresh">-</strong>
+        </div>
+        <button onclick="refreshZohoCache()" class="text-blue-600 hover:text-blue-800 font-medium">🔄 Refresh Zoho Data</button>
+      </div>
+
+      <!-- Filters -->
+      <div class="flex items-center gap-4 mb-4">
+        <input type="text" id="searchBox" placeholder="Search PO#..." onkeyup="filterOrders()"
+          class="px-4 py-2 border border-slate-200 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <select id="customerFilter" onchange="filterOrders()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">All Customers</option>
+        </select>
+        <label class="flex items-center gap-2 text-sm text-slate-600 ml-auto">
+          <input type="checkbox" id="selectAll" onchange="toggleAll()" class="w-4 h-4 rounded border-slate-300">
+          Select All
+        </label>
+      </div>
+
+      <!-- Order Cards -->
+      <div id="ordersContainer" class="space-y-3">
+        <div class="text-center py-12 text-slate-500">Loading orders...</div>
+      </div>
+    </div>
+
+    <!-- ==================== REVIEW STAGE (Focus Mode) ==================== -->
+    <div id="content-review" class="stage-content hidden">
+
+      <!-- Filter Bar -->
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <h2 class="text-xl font-semibold text-slate-800">Review Matches</h2>
+
+          <!-- Confidence Filter Buttons -->
+          <div id="confidenceFilters" class="flex items-center gap-1 ml-4 bg-slate-100 p-1 rounded-lg">
+            <button onclick="setConfidenceFilter('')" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium bg-white shadow-sm text-slate-700">All</button>
+            <button onclick="setConfidenceFilter('perfect')" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">100%</button>
+            <button onclick="setConfidenceFilter('high')" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">80-99%</button>
+            <button onclick="setConfidenceFilter('medium')" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">60-79%</button>
+            <button onclick="setConfidenceFilter('nomatch')" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">No Match</button>
           </div>
         </div>
-        
-        <div id="sftpArchivePanel" style="display:none;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-            <span style="color: #666; font-size: 0.9rem;">Path: <code id="sftpArchivePath">/archive</code></span>
-            <div style="display: flex; gap: 10px; align-items: center;">
-              <input type="text" id="archiveSearchBox" placeholder="Search files..." class="search-box" style="width:200px;" oninput="filterArchiveFiles()">
-              <button class="btn btn-primary" onclick="refetchSelectedArchive()" id="refetchArchiveBtn" disabled style="padding:0.4rem 0.75rem;font-size:0.8125rem;">
-                📥 Re-fetch Selected (0)
-              </button>
-            </div>
-          </div>
-          <div class="table-container">
-            <table class="orders-table">
-              <thead>
-                <tr>
-                  <th style="width:40px"><input type="checkbox" class="checkbox" id="selectAllArchive" onchange="toggleAllArchive()"></th>
-                  <th>Filename</th>
-                  <th>Type</th>
-                  <th>Size</th>
-                  <th>Modified</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="sftpArchiveTable">
-                <tr><td colspan="6" class="empty-state">Click Refresh to load files...</td></tr>
-              </tbody>
-            </table>
-          </div>
+
+        <div class="flex items-center gap-3">
+          <span id="flaggedCount" class="text-sm text-red-600 font-medium hidden">🚩 0 flagged</span>
+          <button onclick="clearMatchResults()" class="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700">Clear Results</button>
         </div>
       </div>
 
-      <!-- Testing Tab -->
-      <div id="tabTesting" style="display:none">
-        <div class="toolbar">
-          <h3 style="margin:0;color:#1e3a5f;">🧪 Test Scenario Generator</h3>
-          <div style="flex:1"></div>
-          <button class="btn btn-secondary" onclick="loadTestOrders()">🔄 Refresh</button>
-          <button class="btn btn-secondary" onclick="cleanupAllTestOrders()">🗑️ Cleanup All Test Data</button>
+      <!-- Empty State -->
+      <div id="reviewEmptyState" class="text-center py-16">
+        <div class="text-6xl mb-4">🔍</div>
+        <h3 class="text-xl font-semibold text-slate-700 mb-2">No matches to review</h3>
+        <p class="text-slate-500">Go to <strong>New Orders</strong> and click <strong>Find Matches</strong> to search for matching Zoho drafts.</p>
+      </div>
+
+      <!-- Focus Mode Container -->
+      <div id="focusModeContainer" class="max-w-4xl mx-auto hidden">
+        <!-- Will be populated by showFocusMode() -->
+      </div>
+
+      <!-- List View Container (alternative to Focus Mode) -->
+      <div id="listViewContainer" class="hidden">
+        <!-- Will be populated by showListView() -->
+      </div>
+    </div>
+
+    <!-- ==================== DONE STAGE ==================== -->
+    <div id="content-done" class="stage-content hidden">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-xl font-semibold text-slate-800">Sent to Zoho</h2>
+          <p class="text-slate-500">Orders successfully processed and sent to Zoho</p>
         </div>
-        
-        <div style="background:linear-gradient(135deg,#fff3e0,#ffe0b2);border:2px solid #ff9800;border-radius:12px;padding:1.25rem;margin:1.5rem 0;">
-          <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.75rem;">
-            <span style="font-size:1.5rem;">⚠️</span>
-            <strong style="color:#e65100;">Test Mode - Data Safety</strong>
-          </div>
-          <p style="margin:0;color:#bf360c;font-size:0.875rem;">
-            Test orders are created with <strong>Hero Test Account</strong> and PO numbers starting with <strong>TEST-</strong>.<br>
-            Both Zoho drafts and EDI records will be created. Remember to delete test data from Zoho manually after testing.
-          </p>
+        <button onclick="exportSentToExcel()" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition flex items-center gap-2 text-slate-600">
+          📊 Export Report
+        </button>
+      </div>
+
+      <!-- Filters -->
+      <div class="flex items-center gap-4 mb-4">
+        <input type="text" id="sentSearchBox" placeholder="Search PO#..." onkeyup="filterSentOrders()"
+          class="px-4 py-2 border border-slate-200 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <select id="sentCustomerFilter" onchange="filterSentOrders()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">All Customers</option>
+        </select>
+        <span id="sentOrderCount" class="text-sm text-slate-500 ml-auto"></span>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <table class="w-full">
+          <thead class="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">PO Number</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Customer</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Zoho SO#</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Value</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Sent At</th>
+              <th class="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="sentOrdersTable">
+            <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No orders sent yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ==================== HISTORY/ACTIVITY STAGE ==================== -->
+    <div id="content-history" class="stage-content hidden">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-xl font-semibold text-slate-800">Activity & Logs</h2>
+          <p class="text-slate-500">System activity and processing history</p>
         </div>
-        
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem;">
-          <!-- Generate Test Scenario Card -->
-          <div style="background:white;border-radius:12px;padding:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-            <h4 style="margin:0 0 1rem;display:flex;align-items:center;gap:0.5rem;">
-              <span style="font-size:1.25rem;">🎲</span> Generate Test Scenario
-            </h4>
-            
-            <div style="margin-bottom:1rem;">
-              <label style="display:block;font-size:0.75rem;color:#86868b;margin-bottom:0.25rem;">SCENARIO TYPE</label>
-              <select id="testScenarioType" class="filter-select" style="width:100%;">
-                <option value="perfect">✅ Perfect Match - Identical data</option>
-                <option value="qty_mismatch">📦 Quantity Mismatch - Different qty on first item</option>
-                <option value="price_mismatch">💰 Price Mismatch - Different price on first item</option>
-              </select>
-            </div>
-            
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;">
-              <div>
-                <label style="display:block;font-size:0.75rem;color:#86868b;margin-bottom:0.25rem;"># OF ITEMS</label>
-                <select id="testItemCount" class="filter-select" style="width:100%;">
-                  <option value="1">1 item</option>
-                  <option value="2">2 items</option>
-                  <option value="3" selected>3 items</option>
-                </select>
-              </div>
-              <div>
-                <label style="display:block;font-size:0.75rem;color:#86868b;margin-bottom:0.25rem;">QTY PER ITEM</label>
-                <select id="testQtyPerItem" class="filter-select" style="width:100%;">
-                  <option value="50">50 units</option>
-                  <option value="100" selected>100 units</option>
-                  <option value="200">200 units</option>
-                  <option value="500">500 units</option>
-                </select>
-              </div>
-            </div>
-            
-            <div style="background:#f5f5f7;border-radius:8px;padding:0.75rem;margin-bottom:1rem;font-size:0.8125rem;">
-              <div style="color:#86868b;margin-bottom:0.25rem;">Customer:</div>
-              <div style="font-weight:600;">Hero Test Account</div>
-              <div style="color:#86868b;margin-top:0.5rem;margin-bottom:0.25rem;">Items:</div>
-              <div>87553J-AA-BLACK (XS, S, M) @ $4.00/ea</div>
-            </div>
-            
-            <button class="btn btn-success btn-lg" style="width:100%;" onclick="generateTestScenario()">
-              🧪 Generate Test Scenario
-            </button>
-          </div>
-          
-          <!-- Test Info Card -->
-          <div style="background:white;border-radius:12px;padding:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-            <h4 style="margin:0 0 1rem;display:flex;align-items:center;gap:0.5rem;">
-              <span style="font-size:1.25rem;">📋</span> How to Test
-            </h4>
-            
-            <ol style="margin:0;padding-left:1.25rem;font-size:0.875rem;line-height:1.8;color:#1e3a5f;">
-              <li><strong>Generate</strong> a test scenario (creates both Zoho draft + EDI)</li>
-              <li>Go to <strong>EDI Orders</strong> tab</li>
-              <li>Click <strong>"Refresh Zoho Data"</strong> to load new draft</li>
-              <li>Click <strong>"Find Matches"</strong></li>
-              <li>Go to <strong>Review Matches</strong> tab</li>
-              <li>Verify the match appears with correct confidence</li>
-              <li>Test <strong>"Compare Side-by-Side"</strong></li>
-              <li>Test <strong>"Update Zoho Draft"</strong> or <strong>"Send to Zoho"</strong></li>
-              <li><strong>Cleanup</strong> test data when done</li>
-            </ol>
-            
-            <div style="background:#e3f2fd;border-radius:8px;padding:0.75rem;margin-top:1rem;font-size:0.8125rem;">
-              <strong style="color:#1565c0;">💡 Tip:</strong> 
-              <span style="color:#1976d2;">After testing, delete the Zoho draft manually in Zoho Books, then use "Cleanup All Test Data" here to remove EDI records.</span>
-            </div>
-          </div>
+        <button onclick="loadActivityLog()" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition flex items-center gap-2 text-slate-600">
+          🔄 Refresh
+        </button>
+      </div>
+
+      <!-- Stats -->
+      <div class="grid grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-xl border border-slate-200 p-4">
+          <div class="text-xs text-slate-500 uppercase mb-1">All-Time Orders Sent</div>
+          <div class="text-2xl font-bold text-slate-800" id="statAllTimeSent">-</div>
         </div>
-        
-        <!-- Test Orders List -->
-        <div style="background:white;border-radius:12px;padding:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-          <h4 style="margin:0 0 1rem;">🧪 Test Orders in Database</h4>
-          <div class="table-container" style="box-shadow:none;">
-            <table class="orders-table">
-              <thead>
-                <tr>
-                  <th>PO #</th>
-                  <th>Scenario</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="testOrdersTable">
-                <tr><td colspan="5" class="empty-state">Click Refresh to load test orders...</td></tr>
-              </tbody>
-            </table>
-          </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4">
+          <div class="text-xs text-slate-500 uppercase mb-1">All-Time Value</div>
+          <div class="text-2xl font-bold text-green-600" id="statAllTimeValue">-</div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4">
+          <div class="text-xs text-slate-500 uppercase mb-1">Last 30 Days Sent</div>
+          <div class="text-2xl font-bold text-slate-800" id="stat30DaySent">-</div>
+        </div>
+        <div class="bg-white rounded-xl border border-slate-200 p-4">
+          <div class="text-xs text-slate-500 uppercase mb-1">Errors (30 days)</div>
+          <div class="text-2xl font-bold text-amber-600" id="stat30DayErrors">-</div>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="flex items-center gap-4 mb-4">
+        <select id="activityActionFilter" onchange="filterActivityLog()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">All Actions</option>
+          <option value="sent_to_zoho">Sent to Zoho</option>
+          <option value="draft_updated">Draft Updated</option>
+          <option value="new_order_created">New Order Created</option>
+          <option value="match_found">Match Found</option>
+          <option value="order_imported">Order Imported</option>
+          <option value="zoho_error">Errors</option>
+        </select>
+        <select id="activitySeverityFilter" onchange="filterActivityLog()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">All Severity</option>
+          <option value="success">✓ Success</option>
+          <option value="info">ℹ️ Info</option>
+          <option value="warning">⚠️ Warning</option>
+          <option value="error">❌ Error</option>
+        </select>
+        <span id="activityLogCount" class="text-sm text-slate-500 ml-auto"></span>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <table class="w-full">
+          <thead class="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Time</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Action</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">PO #</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Customer</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Details</th>
+              <th class="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Status</th>
+            </tr>
+          </thead>
+          <tbody id="activityLogBody">
+            <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ==================== SETTINGS STAGE ==================== -->
+    <div id="content-settings" class="stage-content hidden">
+      <div class="max-w-3xl">
+        <h2 class="text-xl font-semibold text-slate-800 mb-6">Settings</h2>
+
+        <!-- Customer Mappings -->
+        <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+          <h3 class="text-lg font-semibold text-slate-800 mb-4">Customer Mappings</h3>
+          <p class="text-slate-500 mb-4">Map EDI customer names to Zoho accounts</p>
+          <div id="mappingsContent">Loading...</div>
+        </div>
+
+        <!-- SFTP Browser -->
+        <div class="bg-white rounded-xl border border-slate-200 p-6">
+          <h3 class="text-lg font-semibold text-slate-800 mb-4">SFTP Browser</h3>
+          <p class="text-slate-500 mb-4">Browse and manage files on the SFTP server</p>
+          <button onclick="refreshSftpStatus()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
+            🔄 Refresh SFTP
+          </button>
+          <div id="sftpContent" class="mt-4"></div>
         </div>
       </div>
     </div>
-  </div>
-  
+
+  </main>
+
+  <!-- Toast Container -->
+  <div id="toastContainer"></div>
+
+  <!-- Modal Container -->
   <div id="modalContainer"></div>
-  <div class="toast" id="toast"><span id="toastMsg"></span></div>
-  
-  <script>
-    let orders = [];
-    let selectedIds = new Set();
-    let matchResults = null;
-    let currentOrder = null;
-    let currentRawFields = {};
-    let selectedMatchIds = new Set(); // Track selected matches for bulk send
-    let selectedMatchDrafts = new Map(); // Map ediOrderId -> zohoDraftId
-    let reviewViewMode = 'comfortable'; // 'comfortable' or 'compact'
-    let focusModeActive = false; // Track if Focus Mode is active
-    let focusModeIndex = 0; // Current index in Focus Mode
-    let flaggedMatchIds = new Set(); // Track flagged matches for review
-    
-    document.addEventListener('DOMContentLoaded', () => {
-      loadOrders();
-      loadStats();
-      loadSession(); // Load saved session state
+
+<script>
+  // ============================================================
+  // STATE MANAGEMENT
+  // ============================================================
+  let orders = [];
+  let sentOrdersData = [];
+  let selectedIds = new Set();
+  let matchResults = null;
+  let selectedMatchIds = new Set();
+  let selectedMatchDrafts = new Map();
+  let flaggedMatchIds = new Set();
+  let focusModeActive = false;
+  let focusModeIndex = 0;
+  let currentConfidenceFilter = '';
+  let activityLogData = [];
+
+  // ============================================================
+  // INITIALIZATION
+  // ============================================================
+  document.addEventListener('DOMContentLoaded', () => {
+    loadOrders();
+    loadCacheStatus();
+    loadSession();
+  });
+
+  // ============================================================
+  // STAGE NAVIGATION
+  // ============================================================
+  function showStage(stage) {
+    // Hide all content
+    document.querySelectorAll('.stage-content').forEach(el => el.classList.add('hidden'));
+
+    // Remove active from all stage buttons
+    document.querySelectorAll('.stage-btn').forEach(btn => {
+      btn.classList.remove('active', 'bg-amber-500', 'bg-blue-500', 'bg-green-500', 'text-white', 'shadow-lg', 'shadow-amber-200', 'shadow-blue-200', 'shadow-green-200');
+      btn.classList.add('border');
     });
 
-    // Load saved session state from server
-    async function loadSession() {
-      try {
-        const res = await fetch('/session');
-        const data = await res.json();
-        if (data.matchResults && (data.matchResults.matches?.length > 0 || data.matchResults.noMatches?.length > 0)) {
-          matchResults = data.matchResults;
-          selectedMatchIds = new Set(data.selectedMatchIds || []);
-          flaggedMatchIds = new Set(data.flaggedMatchIds || []);
-          selectedMatchDrafts = new Map(Object.entries(data.selectedMatchDrafts || {}).map(([k, v]) => [parseInt(k), v]));
-          focusModeIndex = data.focusModeIndex || 0;
-          showMatchReview(matchResults);
-          updateWorkflowCounts();
-          const matchCount = matchResults.matches?.length || 0;
-          if (matchCount > 0) {
-            toast('Restored ' + matchCount + ' matches from previous session');
-          }
-        }
-      } catch (e) {
-        console.log('No saved session');
+    // Show selected content
+    const contentEl = document.getElementById('content-' + stage);
+    if (contentEl) contentEl.classList.remove('hidden');
+
+    // Highlight active stage button
+    const stageBtn = document.getElementById('stage-' + stage);
+    if (stageBtn) {
+      stageBtn.classList.add('active');
+      if (stage === 'inbox') {
+        stageBtn.classList.add('bg-amber-500', 'text-white', 'shadow-lg', 'shadow-amber-200');
+        stageBtn.classList.remove('bg-amber-100', 'text-amber-700', 'border', 'border-amber-300');
+      } else if (stage === 'review') {
+        stageBtn.classList.add('bg-blue-500', 'text-white', 'shadow-lg', 'shadow-blue-200');
+        stageBtn.classList.remove('bg-blue-100', 'text-blue-700', 'border', 'border-blue-300');
+      } else if (stage === 'done') {
+        stageBtn.classList.add('bg-green-500', 'text-white', 'shadow-lg', 'shadow-green-200');
+        stageBtn.classList.remove('bg-green-100', 'text-green-700', 'border', 'border-green-300');
       }
     }
 
-    // Save session state to server (debounced)
-    let saveSessionTimeout = null;
-    function saveSession() {
-      // Debounce save calls
-      if (saveSessionTimeout) clearTimeout(saveSessionTimeout);
-      saveSessionTimeout = setTimeout(async () => {
-        try {
-          await fetch('/session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              matchResults: matchResults,
-              selectedMatchIds: Array.from(selectedMatchIds),
-              flaggedMatchIds: Array.from(flaggedMatchIds),
-              selectedMatchDrafts: Object.fromEntries(selectedMatchDrafts),
-              focusModeIndex: focusModeIndex
-            })
-          });
-        } catch (e) {
-          console.error('Failed to save session:', e);
+    // Load data for specific stages
+    if (stage === 'done') loadSentOrders();
+    if (stage === 'history') { loadActivityLog(); loadAuditStats(); }
+    if (stage === 'settings') loadMappings();
+    if (stage === 'review' && matchResults && matchResults.matches && matchResults.matches.length > 0 && !focusModeActive) {
+      startFocusMode();
+    }
+  }
+
+  // ============================================================
+  // TOAST NOTIFICATIONS
+  // ============================================================
+  function toast(message) {
+    const container = document.getElementById('toastContainer');
+    const toastEl = document.createElement('div');
+    toastEl.className = 'toast';
+    toastEl.textContent = message;
+    container.appendChild(toastEl);
+    setTimeout(() => toastEl.remove(), 3000);
+  }
+
+  // ============================================================
+  // DATE FORMATTING
+  // ============================================================
+  function formatDateWithTime(date) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+    const inputDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+    if (inputDate.getTime() === today.getTime()) {
+      return 'Today, ' + timeStr;
+    } else if (inputDate.getTime() === yesterday.getTime()) {
+      return 'Yesterday, ' + timeStr;
+    } else {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + timeStr;
+    }
+  }
+
+  // ============================================================
+  // SESSION PERSISTENCE
+  // ============================================================
+  async function loadSession() {
+    try {
+      const res = await fetch('/session');
+      const data = await res.json();
+      if (data.matchResults && (data.matchResults.matches?.length > 0 || data.matchResults.noMatches?.length > 0)) {
+        matchResults = data.matchResults;
+        selectedMatchIds = new Set(data.selectedMatchIds || []);
+        flaggedMatchIds = new Set(data.flaggedMatchIds || []);
+        selectedMatchDrafts = new Map(Object.entries(data.selectedMatchDrafts || {}).map(([k, v]) => [parseInt(k), v]));
+        focusModeIndex = data.focusModeIndex || 0;
+        updateWorkflowCounts();
+        const matchCount = matchResults.matches?.length || 0;
+        if (matchCount > 0) {
+          toast('Restored ' + matchCount + ' matches from previous session');
         }
-      }, 500); // Save after 500ms of inactivity
+      }
+    } catch (e) {
+      console.log('No saved session');
+    }
+  }
+
+  let saveSessionTimeout = null;
+  function saveSession() {
+    if (saveSessionTimeout) clearTimeout(saveSessionTimeout);
+    saveSessionTimeout = setTimeout(async () => {
+      try {
+        await fetch('/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            matchResults: matchResults,
+            selectedMatchIds: Array.from(selectedMatchIds),
+            flaggedMatchIds: Array.from(flaggedMatchIds),
+            selectedMatchDrafts: Object.fromEntries(selectedMatchDrafts),
+            focusModeIndex: focusModeIndex
+          })
+        });
+      } catch (e) {
+        console.error('Failed to save session:', e);
+      }
+    }, 500);
+  }
+
+  async function clearSession() {
+    try {
+      await fetch('/session', { method: 'DELETE' });
+      matchResults = null;
+      selectedMatchIds.clear();
+      flaggedMatchIds.clear();
+      selectedMatchDrafts.clear();
+      focusModeIndex = 0;
+    } catch (e) {
+      console.error('Failed to clear session:', e);
+    }
+  }
+
+  // ============================================================
+  // ORDERS LOADING & RENDERING
+  // ============================================================
+  async function loadOrders() {
+    try {
+      const res = await fetch('/orders');
+      orders = await res.json();
+      renderOrders();
+      updateCustomerFilter();
+      updateWorkflowCounts();
+    } catch (e) {
+      toast('Failed to load orders');
+    }
+  }
+
+  function renderOrders() {
+    const search = (document.getElementById('searchBox')?.value || '').toLowerCase();
+    const customer = document.getElementById('customerFilter')?.value || '';
+
+    let filtered = orders.filter(o => {
+      if (o.status === 'processed' || o.zoho_so_number) return false; // Hide processed
+      if (search && !(o.edi_order_number || '').toLowerCase().includes(search)) return false;
+      if (customer && o.edi_customer_name !== customer) return false;
+      return true;
+    });
+
+    const container = document.getElementById('ordersContainer');
+
+    if (!filtered.length) {
+      container.innerHTML = '<div class="text-center py-12 text-slate-500">No pending orders found.</div>';
+      return;
     }
 
-    // Clear session state
-    async function clearSession() {
-      try {
-        await fetch('/session', { method: 'DELETE' });
-        matchResults = null;
+    container.innerHTML = filtered.map(o => {
+      const items = o.parsed_data?.items || [];
+      const amt = items.reduce((s, i) => s + (i.quantityOrdered || 0) * (i.unitPrice || 0), 0);
+      const importDate = new Date(o.created_at);
+      const daysSinceImport = Math.floor((new Date() - importDate) / (1000 * 60 * 60 * 24));
+      const isOld = daysSinceImport >= 3;
+      const importedStr = formatDateWithTime(importDate);
+      const ediDate = o.parsed_data?.dates?.orderDate || o.parsed_data?.dates?.poDate || '';
+      const ediDateStr = ediDate ? new Date(ediDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : 'N/A';
+
+      return \`
+        <div class="bg-white rounded-xl border \${isOld ? 'border-amber-200 bg-amber-50/30' : 'border-slate-200'} p-4 hover:border-slate-300 transition">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-4">
+              <input type="checkbox" \${selectedIds.has(o.id) ? 'checked' : ''} onchange="toggleSelect(\${o.id})"
+                class="w-5 h-5 rounded border-slate-300 text-blue-500 cursor-pointer">
+              <div>
+                <div class="font-semibold text-slate-800">\${o.edi_order_number || 'N/A'}</div>
+                <div class="text-sm text-slate-500">\${o.edi_customer_name || 'Unknown'}</div>
+              </div>
+              \${isOld ? '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">' + daysSinceImport + ' days old</span>' : ''}
+            </div>
+            <div class="flex items-center gap-8">
+              <div class="text-right">
+                <div class="text-sm text-slate-500">\${items.length} items</div>
+                <div class="font-semibold text-slate-800">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+              </div>
+              <div class="text-right">
+                <div class="text-xs text-slate-400 uppercase">Imported</div>
+                <div class="text-sm \${isOld ? 'text-amber-600 font-medium' : 'text-slate-600'}">\${importedStr}</div>
+              </div>
+              <div class="text-right">
+                <div class="text-xs text-slate-400 uppercase">EDI Date</div>
+                <div class="text-sm text-slate-600">\${ediDateStr}</div>
+              </div>
+              <button onclick="viewOrder(\${o.id})" class="p-2 hover:bg-slate-100 rounded-lg transition" title="View Details">
+                👁️
+              </button>
+            </div>
+          </div>
+        </div>
+      \`;
+    }).join('');
+  }
+
+  function filterOrders() { renderOrders(); }
+
+  function toggleSelect(id) {
+    selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id);
+    renderOrders();
+    updatePendingCount();
+  }
+
+  function toggleAll() {
+    const checked = document.getElementById('selectAll')?.checked;
+    const filtered = orders.filter(o => !o.zoho_so_number && o.status !== 'processed');
+    filtered.forEach(o => checked ? selectedIds.add(o.id) : selectedIds.delete(o.id));
+    renderOrders();
+    updatePendingCount();
+  }
+
+  function updateCustomerFilter() {
+    const customers = [...new Set(orders.map(o => o.edi_customer_name).filter(Boolean))].sort();
+    document.getElementById('customerFilter').innerHTML = '<option value="">All Customers</option>' +
+      customers.map(c => '<option value="' + c + '">' + c + '</option>').join('');
+  }
+
+  function updatePendingCount() {
+    const pending = orders.filter(o => !o.zoho_so_number && o.status !== 'processed');
+    const count = selectedIds.size > 0 ? selectedIds.size : pending.length;
+    document.getElementById('pendingCountBtn').textContent = count;
+  }
+
+  function updateWorkflowCounts() {
+    const pendingCount = orders.filter(o => o.status === 'pending' && !o.zoho_so_number).length;
+    document.getElementById('inbox-count').textContent = pendingCount;
+
+    const reviewCount = matchResults ? (matchResults.matches?.length || 0) + (matchResults.noMatches?.length || 0) : 0;
+    document.getElementById('review-count').textContent = reviewCount;
+
+    const sentCount = orders.filter(o => o.status === 'processed' || o.zoho_so_number).length;
+    document.getElementById('done-count').textContent = sentCount;
+
+    updatePendingCount();
+  }
+
+  // ============================================================
+  // SFTP & CACHE
+  // ============================================================
+  async function fetchFromSftp() {
+    const btn = document.getElementById('fetchSftpBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Fetching...';
+
+    try {
+      const res = await fetch('/fetch-sftp', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        toast('Fetched ' + (data.newOrders || 0) + ' new orders');
+        loadOrders();
+      } else {
+        toast('Error: ' + (data.error || 'Unknown'));
+      }
+    } catch (e) {
+      toast('Error: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '🔄 Fetch from SFTP';
+    }
+  }
+
+  async function loadCacheStatus() {
+    try {
+      const res = await fetch('/cache/status');
+      const data = await res.json();
+      if (data.success) {
+        document.getElementById('cacheDraftsCount').textContent = data.draftsCount || 0;
+        if (!data.lastRefresh) {
+          document.getElementById('cacheIndicator').textContent = '⚠️';
+          document.getElementById('cacheLastRefresh').textContent = 'Never';
+        } else if (data.isStale) {
+          document.getElementById('cacheIndicator').textContent = '🟡';
+          document.getElementById('cacheLastRefresh').textContent = data.minutesSinceRefresh + ' min ago (stale)';
+        } else {
+          document.getElementById('cacheIndicator').textContent = '🟢';
+          document.getElementById('cacheLastRefresh').textContent = data.minutesSinceRefresh + ' min ago';
+        }
+      }
+    } catch (e) {}
+  }
+
+  async function refreshZohoCache() {
+    toast('Refreshing Zoho data...');
+    try {
+      const res = await fetch('/cache/refresh', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        toast('Refreshed ' + data.draftsCount + ' Zoho drafts');
+        loadCacheStatus();
+      } else {
+        toast('Error: ' + (data.error || 'Unknown'));
+      }
+    } catch (e) {
+      toast('Error: ' + e.message);
+    }
+  }
+
+  // ============================================================
+  // FIND MATCHES
+  // ============================================================
+  async function findMatchesForSelected() {
+    const pendingOrders = selectedIds.size > 0
+      ? orders.filter(o => selectedIds.has(o.id))
+      : orders.filter(o => o.status === 'pending' && !o.zoho_so_number);
+
+    if (!pendingOrders.length) {
+      toast('No orders to match');
+      return;
+    }
+
+    const btn = document.getElementById('findMatchesBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Finding...';
+
+    try {
+      const res = await fetch('/find-matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: pendingOrders.map(o => o.id) })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        matchResults = data;
         selectedMatchIds.clear();
         flaggedMatchIds.clear();
         selectedMatchDrafts.clear();
         focusModeIndex = 0;
-      } catch (e) {
-        console.error('Failed to clear session:', e);
-      }
-    }
-    
-    function showTab(tab, el) {
-      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-      if (el) el.classList.add('active');
-      ['tabOrders','tabReview','tabSent','tabMappings','tabActivity','tabSftp','tabTesting'].forEach(t => {
-        const elem = document.getElementById(t);
-        if (elem) elem.style.display = 'none';
-      });
-      const tabId = 'tab' + tab.charAt(0).toUpperCase() + tab.slice(1);
-      document.getElementById(tabId).style.display = 'block';
-      if (tab === 'sent') loadSentOrders();
-      if (tab === 'mappings') loadMappings();
-      if (tab === 'activity') { loadActivityLog(); loadAuditStats(); }
-      if (tab === 'sftp') refreshSftpStatus();
-      if (tab === 'testing') loadTestOrders();
-
-      // Sync workflow bar with tab
-      if (tab === 'orders') updateWorkflowStage('inbox');
-      else if (tab === 'review') updateWorkflowStage('review');
-      else if (tab === 'sent') updateWorkflowStage('done');
-    }
-
-    function updateWorkflowStage(stage) {
-      // Remove active from all stages
-      document.querySelectorAll('.workflow-stage').forEach(s => s.classList.remove('active'));
-      // Add active to current stage
-      const stageMap = { inbox: 'workflowInbox', review: 'workflowReview', done: 'workflowDone' };
-      const stageEl = document.getElementById(stageMap[stage]);
-      if (stageEl) stageEl.classList.add('active');
-    }
-
-    function updateWorkflowCounts() {
-      // Count pending orders (inbox)
-      const pendingCount = orders.filter(o => o.status === 'pending').length;
-      document.getElementById('workflowInboxCount').textContent = pendingCount;
-
-      // Count orders to review (matched but not sent)
-      const reviewCount = matchResults ? (matchResults.matches?.length || 0) + (matchResults.noMatches?.length || 0) : 0;
-      document.getElementById('workflowReviewCount').textContent = reviewCount;
-
-      // Count sent today
-      const sentCount = orders.filter(o => o.status === 'processed' || o.zoho_so_number).length;
-      document.getElementById('workflowDoneCount').textContent = sentCount;
-    }
-
-    function goToReviewMatches() {
-      showTab('review', document.getElementById('navReview'));
-      updateWorkflowStage('review');
-      // If we have matches and Focus Mode is not already active, auto-start it
-      if (matchResults && matchResults.matches && matchResults.matches.length > 0 && !focusModeActive) {
-        focusModeActive = true;
-        focusModeIndex = 0;
-        document.addEventListener('keydown', focusModeKeyHandler);
-        showFocusMode();
-      }
-    }
-
-    async function loadOrders() {
-      try {
-        const res = await fetch('/orders');
-        orders = await res.json();
-        renderOrders();
-        updateCustomerFilter();
-        loadStats();
+        saveSession();
         updateWorkflowCounts();
-      } catch (e) { toast('Failed to load orders'); }
-    }
-    
-    function renderOrders() {
-      const search = (document.getElementById('searchBox')?.value || '').toLowerCase();
-      const customer = document.getElementById('customerFilter')?.value || '';
-      const status = document.getElementById('statusFilter')?.value || '';
-      
-      let filtered = orders.filter(o => {
-        if (search && !(o.edi_order_number || '').toLowerCase().includes(search)) return false;
-        if (customer && o.edi_customer_name !== customer) return false;
-        if (status) {
-          if (status === 'processed') {
-            // "Sent to Zoho" includes orders with zoho_so_number OR status=processed
-            if (!o.zoho_so_number && o.status !== 'processed') return false;
-          } else {
-            if (o.status !== status) return false;
-          }
-        }
-        return true;
-      });
-      
-      const tbody = document.getElementById('ordersTable');
-      if (!filtered.length) {
-        tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No orders found.</td></tr>';
-        return;
-      }
-
-      tbody.innerHTML = filtered.map(o => {
-        const items = o.parsed_data?.items || [];
-        const amt = items.reduce((s,i) => s + (i.quantityOrdered||0)*(i.unitPrice||0), 0);
-        var statusClass = 'pending';
-        var statusText = '⏳ Pending';
-        if (o.zoho_so_number) {
-          statusClass = 'processed';
-          statusText = '✓ SO#' + o.zoho_so_number;
-        } else if (o.status === 'processed') {
-          statusClass = 'processed';
-          statusText = '✓ Sent';
-        } else if (o.status === 'matched') {
-          statusClass = 'matched';
-          statusText = '🔗 Matched';
-        } else if (o.status === 'review') {
-          statusClass = 'review';
-          statusText = '📋 Review';
-        }
-
-        // Calculate days since import
-        const importDate = new Date(o.created_at);
-        const now = new Date();
-        const daysSinceImport = Math.floor((now - importDate) / (1000 * 60 * 60 * 24));
-        const isOld = daysSinceImport >= 3 && o.status === 'pending';
-        const oldBadge = isOld ? '<span style="background:#fff3e0;color:#f57c00;font-size:0.7rem;padding:0.15rem 0.4rem;border-radius:4px;margin-left:0.5rem;">' + daysSinceImport + ' days</span>' : '';
-
-        // Format imported date with time
-        const importedStr = formatDateWithTime(importDate);
-
-        // Get EDI order date from parsed data
-        const ediDate = o.parsed_data?.dates?.orderDate || o.parsed_data?.dates?.poDate || '';
-        const ediDateStr = ediDate ? new Date(ediDate).toLocaleDateString() : 'N/A';
-
-        // Row style for old orders
-        const rowStyle = isOld ? 'background:rgba(255,243,224,0.5);' : '';
-
-        return \`<tr style="\${rowStyle}">
-          <td><input type="checkbox" class="checkbox" \${selectedIds.has(o.id)?'checked':''} onchange="toggleSelect(\${o.id})"></td>
-          <td><strong>\${o.edi_order_number||'N/A'}</strong>\${oldBadge}</td>
-          <td>\${o.edi_customer_name||'Unknown'}</td>
-          <td>\${items.length} items</td>
-          <td>$\${amt.toLocaleString('en-US',{minimumFractionDigits:2})}</td>
-          <td><span class="status-badge status-\${statusClass}">\${statusText}</span></td>
-          <td style="font-size:0.8125rem;\${isOld?'color:#f57c00;font-weight:500;':''}">\${importedStr}</td>
-          <td style="font-size:0.8125rem;">\${ediDateStr}</td>
-          <td><button class="btn btn-secondary" style="padding:0.35rem 0.75rem;font-size:0.8125rem" onclick="viewOrder(\${o.id})">View</button></td>
-        </tr>\`;
-      }).join('');
-      
-      document.getElementById('orderCount').textContent = 'Showing ' + filtered.length + ' of ' + orders.length + ' orders';
-    }
-    
-    function filterOrders() { renderOrders(); }
-    function toggleSelect(id) { selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id); renderOrders(); }
-    function toggleAll() { const c = document.getElementById('selectAll')?.checked; orders.forEach(o => c ? selectedIds.add(o.id) : selectedIds.delete(o.id)); renderOrders(); }
-
-    function formatDateWithTime(date) {
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
-      const inputDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-
-      const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-
-      if (inputDate.getTime() === today.getTime()) {
-        return 'Today, ' + timeStr;
-      } else if (inputDate.getTime() === yesterday.getTime()) {
-        return 'Yesterday, ' + timeStr;
+        showStage('review');
+        startFocusMode();
+        toast('Found ' + (data.matches?.length || 0) + ' matches');
       } else {
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + timeStr;
+        toast('Error: ' + (data.error || 'Unknown'));
       }
+    } catch (e) {
+      toast('Error: ' + e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '🔍 Find Matches (<span id="pendingCountBtn">' + (selectedIds.size || orders.filter(o => o.status === 'pending' && !o.zoho_so_number).length) + '</span>)';
     }
-    
-    function updateCustomerFilter() {
-      const customers = [...new Set(orders.map(o => o.edi_customer_name).filter(Boolean))].sort();
-      document.getElementById('customerFilter').innerHTML = '<option value="">All Customers</option>' + customers.map(c => '<option value="' + c + '">' + c + '</option>').join('');
-    }
-    
-    async function loadStats() {
-      try {
-        const res = await fetch('/status');
-        const d = (await res.json()).last24Hours || {};
-        document.getElementById('statTotal').textContent = d.total || 0;
-        document.getElementById('statPending').textContent = d.pending || 0;
-        document.getElementById('statMatched').textContent = d.matched || 0;
-        document.getElementById('statProcessed').textContent = d.processed || 0;
-        document.getElementById('pendingBadge').textContent = d.pending || 0;
-        document.getElementById('sentBadge').textContent = d.processed || 0;
-      } catch(e) {}
-      
-      // Also load cache status
-      loadCacheStatus();
-    }
-    
-    async function loadCacheStatus() {
-      try {
-        const res = await fetch('/cache/status');
-        const data = await res.json();
-        
-        if (data.success) {
-          const indicator = document.getElementById('cacheIndicator');
-          const countEl = document.getElementById('cacheDraftsCount');
-          const refreshEl = document.getElementById('cacheLastRefresh');
-          
-          countEl.textContent = data.draftsCount || 0;
-          
-          if (!data.lastRefresh) {
-            indicator.textContent = '⚠️';
-            indicator.style.color = '#f59e0b';
-            refreshEl.textContent = 'Never (click Refresh)';
-          } else if (data.isStale) {
-            indicator.textContent = '🟡';
-            indicator.style.color = '#f59e0b';
-            refreshEl.textContent = data.minutesSinceRefresh + ' min ago (stale)';
-          } else {
-            indicator.textContent = '🟢';
-            indicator.style.color = '#34c759';
-            refreshEl.textContent = data.minutesSinceRefresh + ' min ago';
-          }
-          
-          if (data.lastError) {
-            refreshEl.textContent += ' (Error: ' + data.lastError.substring(0, 30) + ')';
-          }
-        }
-      } catch (e) {
-        document.getElementById('cacheIndicator').textContent = '❌';
-        document.getElementById('cacheLastRefresh').textContent = 'Error loading status';
-      }
-    }
-    
-    async function refreshZohoCache() {
-      const btn = document.getElementById('refreshCacheBtn');
-      const originalText = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = '⏳ Refreshing...';
-      
-      try {
-        const res = await fetch('/cache/refresh', { method: 'POST' });
-        const data = await res.json();
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-        
-        if (data.success) {
-          toast('Cache refreshed: ' + data.draftsCount + ' drafts loaded in ' + (data.durationMs / 1000).toFixed(1) + 's');
-          loadCacheStatus();
-        } else {
-          toast('Cache refresh failed: ' + data.error);
-        }
-      } catch (e) {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-        toast('Cache refresh failed: ' + e.message);
-      }
-    }
-    
-    async function fetchFromSftp() {
-      const btn = event.target;
-      const originalText = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = '⏳ Fetching...';
-      
-      try {
-        const res = await fetch('/fetch-sftp', { method: 'POST' });
-        const data = await res.json();
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-        toast(data.success ? 'Fetched ' + (data.result?.filesProcessed || 0) + ' files' : 'Error: ' + data.error);
-        loadOrders();
-      } catch (e) { 
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-        toast('Error: ' + e.message); 
-      }
-    }
-    
-    // ============================================================
-    // FULL ORDER MODAL WITH ALL TABS
-    // ============================================================
-    
-    function parseCSVLine(line) {
-      const result = [];
-      let current = '';
-      let inQuotes = false;
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        if (char === '"') { inQuotes = !inQuotes; }
-        else if (char === ',' && !inQuotes) { result.push(current); current = ''; }
-        else { current += char; }
-      }
-      result.push(current);
-      return result;
-    }
-    
-    async function viewOrder(orderId) {
-      try {
-        const res = await fetch('/orders/' + orderId);
-        currentOrder = await res.json();
-        
-        currentRawFields = {};
-        if (currentOrder.raw_edi) {
-          const lines = currentOrder.raw_edi.split('\\n');
-          if (lines.length >= 2) {
-            const headers = parseCSVLine(lines[0]);
-            const values = parseCSVLine(lines[1]);
-            headers.forEach((h, i) => { currentRawFields[h.trim()] = values[i] || ''; });
-          }
-        }
-        
-        renderOrderModal();
-      } catch (e) { toast('Failed to load order'); }
-    }
-    
-    function renderOrderModal() {
-      const o = currentOrder;
-      const parsed = o.parsed_data || {};
-      const items = parsed.items || [];
-      const totalUnits = items.reduce((s, i) => s + (i.quantityOrdered || 0), 0);
-      const totalValue = items.reduce((s, i) => s + ((i.quantityOrdered || 0) * (i.unitPrice || 0)), 0);
-      
-      const uom = currentRawFields['po_item_po_item_uom'] || items[0]?.unitOfMeasure || 'EA';
-      const packPrice = parseFloat(currentRawFields['po_item_po_item_unit_price']) || 0;
-      const itemPrice = parseFloat(currentRawFields['product_pack_product_pack_unit_price']) || 0;
-      const packQty = parseInt(currentRawFields['product_pack_product_pack_product_qty']) || 0;
-      const totalItems = parseInt(currentRawFields['product_pack_product_pack_product_qty_calculated']) || 0;
-      const retailPrice = parseFloat(currentRawFields['po_item_attributes_retail_price']) || 0;
-      const lineAmount = parseFloat(currentRawFields['po_item_attributes_amount']) || 0;
-      
-      const uomLabel = uom === 'AS' ? 'Prepack' : uom === 'EA' ? 'Each' : uom === 'ST' ? 'Set' : uom;
-      const uomClass = uom === 'AS' ? 'uom-as' : uom === 'EA' ? 'uom-ea' : uom === 'ST' ? 'uom-st' : '';
-      const hasItemPrice = itemPrice > 0;
-      const hasPackQty = packQty > 0;
-      
-      const html = \`
-        <div class="modal-overlay" onclick="closeModal()">
-          <div class="modal" onclick="event.stopPropagation()">
-            <div class="modal-header">
-              <h2>Order Details - \${o.edi_order_number || 'N/A'} <span class="uom-badge \${uomClass}">\${uom} - \${uomLabel}</span></h2>
-              <button class="modal-close" onclick="closeModal()">×</button>
-            </div>
-            
-            <div class="modal-tabs">
-              <div class="modal-tab active" onclick="showModalTab('summary', this)">Summary</div>
-              <div class="modal-tab" onclick="showModalTab('items', this)">Line Items</div>
-              <div class="modal-tab" onclick="showModalTab('pricing', this)">💰 Pricing Fields</div>
-              <div class="modal-tab" onclick="showModalTab('shipping', this)">Shipping</div>
-              <div class="modal-tab" onclick="showModalTab('raw', this)">All Raw Data</div>
-            </div>
-            
-            <div class="modal-body">
-              <!-- Summary Tab -->
-              <div class="tab-content active" id="tab-summary">
-                <div class="info-grid">
-                  <div class="info-box"><div class="info-label">PO Number</div><div class="info-value">\${o.edi_order_number || 'N/A'}</div></div>
-                  <div class="info-box"><div class="info-label">Customer</div><div class="info-value">\${o.edi_customer_name || 'Unknown'}</div></div>
-                  <div class="info-box"><div class="info-label">Order Date</div><div class="info-value">\${parsed.dates?.orderDate || currentRawFields['po_po_created']?.split(' ')[0] || 'N/A'}</div></div>
-                  <div class="info-box"><div class="info-label">Unit of Measure</div><div class="info-value"><span class="uom-badge \${uomClass}">\${uom}</span> \${uomLabel}</div></div>
-                </div>
-                
-                <div class="summary-boxes">
-                  <div class="summary-box highlight"><div class="summary-number">\${items.length}</div><div class="summary-label">Line Items</div></div>
-                  <div class="summary-box highlight"><div class="summary-number">\${totalUnits.toLocaleString()}</div><div class="summary-label">Units Ordered</div></div>
-                  <div class="summary-box green"><div class="summary-number">$\${totalValue.toLocaleString('en-US', {minimumFractionDigits: 2})}</div><div class="summary-label">Total Value</div></div>
-                </div>
-                
-                <div class="pack-details">
-                  <h4>📦 Pack & Pricing Details</h4>
-                  <div class="pack-grid">
-                    <div><div class="pack-item-label">Unit Price (per \${uom})</div><div class="pack-item-value">$\${packPrice.toFixed(2)}</div></div>
-                    <div><div class="pack-item-label">Item Price (per each)</div>\${hasItemPrice ? \`<div class="pack-item-value success">$\${itemPrice.toFixed(2)}</div>\` : \`<div class="pack-item-value muted">Not provided in EDI</div>\`}</div>
-                    <div><div class="pack-item-label">Items per Pack</div>\${hasPackQty ? \`<div class="pack-item-value">\${packQty}</div>\` : \`<div class="pack-item-value muted">Not provided in EDI</div>\`}</div>
-                    \${totalItems > 0 ? \`<div><div class="pack-item-label">Total Items</div><div class="pack-item-value">\${totalItems.toLocaleString()}</div></div>\` : ''}
-                    \${retailPrice > 0 ? \`<div><div class="pack-item-label">Retail Price</div><div class="pack-item-value warning">$\${retailPrice.toFixed(2)}</div></div>\` : ''}
-                    <div><div class="pack-item-label">Line Amount</div><div class="pack-item-value">$\${lineAmount > 0 ? lineAmount.toLocaleString('en-US', {minimumFractionDigits: 2}) : totalValue.toFixed(2)}</div></div>
-                  </div>
-                </div>
-                
-                \${(uom === 'AS' && !hasItemPrice) ? \`<div class="alert alert-warning"><strong>⚠️ Prepack Order:</strong> This is a prepack/assortment order. The unit price ($\${packPrice.toFixed(2)}) is for the entire prepack bundle. Individual item pricing and pack size are not provided in this EDI file.</div>\` : ''}
-                \${o.zoho_so_number ? \`<div class="alert alert-success"><strong>✓ Zoho Sales Order:</strong> \${o.zoho_so_number}</div>\` : ''}
-              </div>
-              
-              <!-- Line Items Tab -->
-              <div class="tab-content" id="tab-items">
-                <div style="background:#f5f5f7;border-radius:8px;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;gap:1.5rem;flex-wrap:wrap;font-size:0.8125rem;">
-                  <div><span class="uom-badge uom-ea">EA</span> Each - Individual items</div>
-                  <div><span class="uom-badge uom-as">AS</span> Assortment - Prepack bundle</div>
-                  <div><span class="uom-badge uom-st">ST</span> Set - Multiple items per unit</div>
-                </div>
-                
-                \${(hasPackQty || hasItemPrice) ? \`<div class="alert alert-info" style="margin-bottom:1rem;"><strong>📦 Pack Info:</strong> \${hasPackQty ? \`Pack contains <strong>\${packQty}</strong> items. \` : ''}\${hasItemPrice ? \`Item price: <strong>$\${itemPrice.toFixed(2)}</strong> per each.\` : ''}</div>\` : ''}
-                
-                <div class="table-container">
-                  <table class="line-items-table">
-                    <thead><tr><th>#</th><th>Style/SKU</th><th>Description</th><th>Color</th><th>Size</th><th>UOM</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit Price</th><th style="text-align:right">Amount</th></tr></thead>
-                    <tbody>
-                      \${items.map((item, idx) => {
-                        const itemUom = item.unitOfMeasure || uom;
-                        const iuomClass = itemUom === 'AS' ? 'uom-as' : itemUom === 'EA' ? 'uom-ea' : itemUom === 'ST' ? 'uom-st' : '';
-                        return \`<tr>
-                          <td>\${item.lineNumber || idx + 1}</td>
-                          <td><strong>\${item.productIds?.sku || item.productIds?.vendorItemNumber || item.productIds?.buyerItemNumber || 'N/A'}</strong></td>
-                          <td>\${item.description || ''}</td>
-                          <td>\${item.color || ''}</td>
-                          <td>\${item.size || ''}</td>
-                          <td><span class="uom-badge \${iuomClass}">\${itemUom}</span></td>
-                          <td style="text-align:right">\${item.quantityOrdered || 0}</td>
-                          <td style="text-align:right">$\${(item.unitPrice || 0).toFixed(2)}</td>
-                          <td style="text-align:right"><strong>$\${((item.quantityOrdered || 0) * (item.unitPrice || 0)).toFixed(2)}</strong></td>
-                        </tr>\`;
-                      }).join('')}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              
-              <!-- Pricing Tab -->
-              <div class="tab-content" id="tab-pricing">
-                <div class="data-section">
-                  <h3>💰 Price Fields</h3>
-                  <p style="color:#86868b;margin-bottom:1rem;font-size:0.8125rem">All fields containing "price", "amount", "cost", or "rate" from the raw CSV.</p>
-                  <table class="data-table">
-                    <thead><tr><th>Field Name</th><th>Value</th></tr></thead>
-                    <tbody>
-                      \${Object.entries(currentRawFields).filter(([k]) => k.toLowerCase().includes('price') || k.toLowerCase().includes('amount') || k.toLowerCase().includes('cost') || k.toLowerCase().includes('rate')).map(([k, v]) => \`<tr class="\${v ? 'has-value' : ''}"><td>\${k}</td><td>\${v || '<span class="empty-value">(empty)</span>'}</td></tr>\`).join('') || '<tr><td colspan="2">No price fields found</td></tr>'}
-                    </tbody>
-                  </table>
-                </div>
-                <div class="data-section">
-                  <h3>📦 Quantity & Pack Fields</h3>
-                  <table class="data-table">
-                    <thead><tr><th>Field Name</th><th>Value</th></tr></thead>
-                    <tbody>
-                      \${Object.entries(currentRawFields).filter(([k]) => k.toLowerCase().includes('qty') || k.toLowerCase().includes('quantity') || k.toLowerCase().includes('pack') || k.toLowerCase().includes('inner') || k.toLowerCase().includes('uom')).map(([k, v]) => \`<tr class="\${v ? 'has-value' : ''}"><td>\${k}</td><td>\${v || '<span class="empty-value">(empty)</span>'}</td></tr>\`).join('') || '<tr><td colspan="2">No quantity fields found</td></tr>'}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              
-              <!-- Shipping Tab -->
-              <div class="tab-content" id="tab-shipping">
-                <div class="info-grid" style="grid-template-columns: 1fr 1fr;">
-                  <div class="info-box">
-                    <div class="info-label">Ship To</div>
-                    <div class="info-value" style="font-size:0.9375rem;line-height:1.5;">
-                      <strong>\${currentRawFields['ship_to_location_tp_location_name'] || 'N/A'}</strong><br>
-                      \${currentRawFields['ship_to_location_tp_location_address'] || ''}<br>
-                      \${currentRawFields['ship_to_location_tp_location_address2'] ? currentRawFields['ship_to_location_tp_location_address2'] + '<br>' : ''}
-                      \${currentRawFields['ship_to_location_tp_location_city'] || ''}, \${currentRawFields['ship_to_location_tp_location_state_province'] || ''} \${currentRawFields['ship_to_location_tp_location_postal'] || ''}
-                    </div>
-                  </div>
-                  <div class="info-box">
-                    <div class="info-label">Shipping Dates</div>
-                    <div class="info-value" style="font-size:0.9375rem;line-height:1.8;">
-                      <strong>Ship Open:</strong> \${currentRawFields['po_po_ship_open_date'] || 'N/A'}<br>
-                      <strong>Ship Close:</strong> \${currentRawFields['po_po_ship_close_date'] || 'N/A'}<br>
-                      <strong>Must Arrive:</strong> \${currentRawFields['po_attributes_must_arrive_by_date'] || 'N/A'}
-                    </div>
-                  </div>
-                </div>
-                <div class="data-section" style="margin-top:1.5rem">
-                  <h3>🚚 All Shipping Fields</h3>
-                  <table class="data-table">
-                    <thead><tr><th>Field Name</th><th>Value</th></tr></thead>
-                    <tbody>
-                      \${Object.entries(currentRawFields).filter(([k]) => k.toLowerCase().includes('ship') || k.toLowerCase().includes('location') || k.toLowerCase().includes('address') || k.toLowerCase().includes('carrier')).map(([k, v]) => \`<tr class="\${v ? 'has-value' : ''}"><td>\${k}</td><td>\${v || '<span class="empty-value">(empty)</span>'}</td></tr>\`).join('') || '<tr><td colspan="2">No shipping fields found</td></tr>'}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              
-              <!-- Raw Data Tab -->
-              <div class="tab-content" id="tab-raw">
-                <input type="text" class="raw-search" placeholder="Search fields..." id="rawSearch" onkeyup="filterRawData()">
-                <div style="max-height:400px;overflow-y:auto">
-                  <table class="data-table" id="rawDataTable">
-                    <thead><tr><th style="width:50px">#</th><th>Field Name</th><th>Value</th></tr></thead>
-                    <tbody>
-                      \${Object.entries(currentRawFields).map(([k, v], idx) => \`<tr class="raw-row \${v ? 'has-value' : ''}" data-field="\${k.toLowerCase()}" data-value="\${(v || '').toLowerCase()}"><td style="color:#86868b">\${idx}</td><td>\${k}</td><td>\${v || '<span class="empty-value">(empty)</span>'}</td></tr>\`).join('')}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-            
-            <div class="modal-footer">
-              <button class="btn btn-secondary" onclick="closeModal()">Close</button>
-              \${o.status !== 'processed' ? '<button class="btn btn-success" onclick="sendToZoho(' + o.id + ')">Send to Zoho</button>' : ''}
-            </div>
-          </div>
-        </div>
-      \`;
-      
-      document.getElementById('modalContainer').innerHTML = html;
-    }
-    
-    function showModalTab(tabName, el) {
-      document.querySelectorAll('.modal-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-      el.classList.add('active');
-      document.getElementById('tab-' + tabName).classList.add('active');
-    }
-    
-    function filterRawData() {
-      const search = document.getElementById('rawSearch').value.toLowerCase();
-      document.querySelectorAll('.raw-row').forEach(row => {
-        row.style.display = (row.dataset.field.includes(search) || row.dataset.value.includes(search)) ? '' : 'none';
-      });
-    }
-    
-    function closeModal() {
-      document.getElementById('modalContainer').innerHTML = '';
-      currentOrder = null;
-      currentRawFields = {};
-    }
-    
-    async function sendToZoho(orderId) {
-      // Find the order to show details
-      const order = orders.find(o => o.id === orderId);
-      if (!order) {
-        toast('Order not found');
-        return;
-      }
-      
-      const parsed = order.parsed_data || {};
-      const items = parsed.items || [];
-      const totalUnits = items.reduce((s, i) => s + (i.quantityOrdered || 0), 0);
-      const totalAmount = items.reduce((s, i) => s + ((i.quantityOrdered || 0) * (i.unitPrice || 0)), 0);
-      const shipDate = parsed.dates?.shipNotBefore || 'N/A';
-      const cancelDate = parsed.dates?.cancelAfter || 'N/A';
-      
-      // Get unique styles
-      const styles = [...new Set(items.map(i => (i.productIds?.sku || i.productIds?.vendorItemNumber || '').split('-')[0]).filter(Boolean))];
-      
-      const html = \`
-        <div class="modal-overlay" onclick="closeCreateConfirmModal()">
-          <div class="modal" onclick="event.stopPropagation()" style="max-width:550px;">
-            <div class="modal-header" style="background:#1e3a5f;">
-              <h2 style="color:white;">📦 Create New Zoho Order</h2>
-              <button class="modal-close" onclick="closeCreateConfirmModal()" style="color:white;">×</button>
-            </div>
-            <div class="modal-body" style="padding:1.5rem;">
-              <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px;padding:1rem;margin-bottom:1.25rem;">
-                <div style="font-size:0.75rem;color:#2e7d32;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Creating New Order</div>
-                <div style="font-size:1.125rem;font-weight:600;color:#1b5e20;">PO# \${order.edi_order_number || 'N/A'}</div>
-                <div style="font-size:0.875rem;color:#388e3c;margin-top:0.25rem;">\${order.edi_customer_name || 'Unknown Customer'}</div>
-              </div>
-              
-              <div style="margin-bottom:1rem;">
-                <div style="font-size:0.875rem;font-weight:600;color:#1d1d1f;margin-bottom:0.75rem;border-bottom:1px solid #e5e5e7;padding-bottom:0.5rem;">Order Details:</div>
-                <table style="width:100%;font-size:0.875rem;border-collapse:collapse;">
-                  <tr style="border-bottom:1px solid #f0f0f0;">
-                    <td style="padding:0.5rem 0;color:#666;width:120px;">Ship Date</td>
-                    <td style="padding:0.5rem 0;font-weight:500;">\${shipDate}</td>
-                  </tr>
-                  <tr style="border-bottom:1px solid #f0f0f0;">
-                    <td style="padding:0.5rem 0;color:#666;">Cancel Date</td>
-                    <td style="padding:0.5rem 0;font-weight:500;">\${cancelDate}</td>
-                  </tr>
-                  <tr style="border-bottom:1px solid #f0f0f0;">
-                    <td style="padding:0.5rem 0;color:#666;">Items</td>
-                    <td style="padding:0.5rem 0;font-weight:500;">\${items.length} lines, \${totalUnits.toLocaleString()} units</td>
-                  </tr>
-                  <tr style="border-bottom:1px solid #f0f0f0;">
-                    <td style="padding:0.5rem 0;color:#666;">Amount</td>
-                    <td style="padding:0.5rem 0;font-weight:600;color:#1e3a5f;">$\${totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:0.5rem 0;color:#666;">Styles</td>
-                    <td style="padding:0.5rem 0;">
-                      <div style="display:flex;flex-wrap:wrap;gap:0.375rem;">
-                        \${styles.slice(0, 5).map(s => '<span style="background:#f3f4f6;padding:0.125rem 0.5rem;border-radius:3px;font-size:0.75rem;font-family:monospace;">' + s + '</span>').join('')}
-                        \${styles.length > 5 ? '<span style="font-size:0.75rem;color:#666;">+' + (styles.length - 5) + ' more</span>' : ''}
-                      </div>
-                    </td>
-                  </tr>
-                </table>
-              </div>
-              
-              <div style="background:#f0f9ff;border-radius:8px;padding:0.875rem;font-size:0.8125rem;color:#0277bd;">
-                <strong>💡 Note:</strong> This will create a new sales order in Zoho Books.
-              </div>
-            </div>
-            <div class="modal-footer" style="border-top:1px solid #e5e5e7;padding:1rem 1.5rem;display:flex;gap:0.75rem;justify-content:flex-end;">
-              <button class="btn btn-secondary" onclick="closeCreateConfirmModal()">Cancel</button>
-              <button id="confirmCreateBtn" class="btn btn-success" onclick="executeCreateOrder(\${orderId})" style="min-width:180px;">
-                ✓ Create Order in Zoho
-              </button>
-            </div>
-          </div>
-        </div>
-      \`;
-      
-      let createConfirmContainer = document.getElementById('createConfirmModalContainer');
-      if (!createConfirmContainer) {
-        createConfirmContainer = document.createElement('div');
-        createConfirmContainer.id = 'createConfirmModalContainer';
-        document.body.appendChild(createConfirmContainer);
-      }
-      createConfirmContainer.innerHTML = html;
-    }
-    
-    function closeCreateConfirmModal() {
-      const container = document.getElementById('createConfirmModalContainer');
-      if (container) container.innerHTML = '';
-    }
-    
-    async function executeCreateOrder(orderId) {
-      const btn = document.getElementById('confirmCreateBtn');
-      if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:0.5rem;"><span class="spinner" style="width:16px;height:16px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;"></span> Creating...</span>';
-      }
-      
-      try {
-        const res = await fetch('/orders/' + orderId + '/process', { method: 'POST' });
-        const data = await res.json();
-        if (data.success) { 
-          closeCreateConfirmModal();
-          closeModal();
-          toast('✅ Order created! SO#: ' + (data.zohoSoNumber || 'Created')); 
-          loadOrders(); 
-        } else { 
-          if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '✓ Create Order in Zoho';
-          }
-          toast('❌ Error: ' + (data.error || 'Unknown')); 
-        }
-      } catch (e) { 
-        if (btn) {
-          btn.disabled = false;
-          btn.innerHTML = '✓ Create Order in Zoho';
-        }
-        toast('❌ Error: ' + e.message); 
-      }
-    }
-    
-    // ============================================================
-    // MATCHING SYSTEM
-    // ============================================================
-    
-    async function findMatches() {
-      const btn = event.target;
-      const originalText = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = '⏳ Finding Matches...';
-      
-      const pendingOrders = orders.filter(o => o.status === 'pending');
-      if (pendingOrders.length === 0) { 
-        toast('No pending orders to match'); 
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-        return; 
-      }
-      
-      // Show persistent progress in the Review tab
-      document.getElementById('matchReviewContent').innerHTML = \`
-        <div style="text-align:center;padding:3rem;">
-          <div style="font-size:3rem;margin-bottom:1rem;">⏳</div>
-          <h3 style="margin-bottom:0.5rem;">Finding Matches...</h3>
-          <p style="color:#86868b;">Searching \${pendingOrders.length} EDI orders against Zoho drafts.</p>
-          <p style="color:#86868b;">This may take 1-2 minutes. Please wait...</p>
-          <div style="margin-top:1.5rem;width:200px;height:4px;background:#e5e5e5;border-radius:2px;margin:1.5rem auto;overflow:hidden;">
-            <div style="width:100%;height:100%;background:linear-gradient(90deg,#0088c2,#34c759,#0088c2);background-size:200% 100%;animation:loading 1.5s ease-in-out infinite;"></div>
-          </div>
-        </div>
-        <style>@keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }</style>
-      \`;
-      showTab('review', document.getElementById('navReview'));
-      
-      try {
-        const res = await fetch('/find-matches', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderIds: pendingOrders.map(o => o.id) })
-        });
-        const data = await res.json();
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-        if (data.success) {
-          matchResults = data;
-          showMatchReview(data, true); // Auto-start Focus Mode
-          showTab('review', document.getElementById('navReview'));
-          updateWorkflowCounts();
-          saveSession(); // Persist match results
-          toast('Found ' + (data.matches?.length || 0) + ' matches');
-        } else { toast('Error: ' + (data.error || 'Unknown')); }
-      } catch (e) { 
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-        toast('Error: ' + e.message); 
-      }
-    }
-    
-    function showMatchReview(data, autoStartFocusMode = false) {
-      const allMatches = data.matches || [];
-      const noMatches = data.noMatches || [];
+  }
 
-      // Auto-start Focus Mode if requested and there are matches
-      if (autoStartFocusMode && allMatches.length > 0) {
-        focusModeActive = true;
-        focusModeIndex = 0;
-        document.addEventListener('keydown', focusModeKeyHandler);
-        showFocusMode();
-        // Update badge
-        const reviewBadge = document.getElementById('reviewBadge');
-        reviewBadge.textContent = allMatches.length;
-        reviewBadge.style.display = 'inline';
-        return;
-      }
+  // ============================================================
+  // FOCUS MODE
+  // ============================================================
+  function startFocusMode() {
+    if (!matchResults || !matchResults.matches || matchResults.matches.length === 0) {
+      document.getElementById('reviewEmptyState').classList.remove('hidden');
+      document.getElementById('focusModeContainer').classList.add('hidden');
+      return;
+    }
 
-      // Show toolbar and update badge
-      document.getElementById('reviewToolbar').style.display = 'flex';
-      const reviewBadge = document.getElementById('reviewBadge');
-      reviewBadge.textContent = allMatches.length;
-      reviewBadge.style.display = allMatches.length > 0 ? 'inline' : 'none';
-      
-      // Calculate confidence counts
-      const perfectCount = allMatches.filter(m => (m.confidence || 0) >= 100).length;
-      const highCount = allMatches.filter(m => { const c = m.confidence || 0; return c >= 80 && c < 100; }).length;
-      const mediumCount = allMatches.filter(m => { const c = m.confidence || 0; return c >= 60 && c < 80; }).length;
-      const lowCount = allMatches.filter(m => (m.confidence || 0) < 60).length;
-      const noMatchCount = noMatches.length;
-      
-      // Update customer filter with unique customers from matches AND noMatches
-      const matchCustomers = allMatches.map(m => m.ediOrder.customer);
-      const noMatchCustomers = noMatches.map(m => m.ediOrder.customer);
-      const customers = [...new Set([...matchCustomers, ...noMatchCustomers].filter(Boolean))].sort();
-      document.getElementById('reviewCustomerFilter').innerHTML = '<option value="">All Customers</option>' + customers.map(c => '<option value="' + c + '">' + c + '</option>').join('');
-      
-      // Apply filters
-      const search = (document.getElementById('reviewSearchBox')?.value || '').toLowerCase();
-      const customer = document.getElementById('reviewCustomerFilter')?.value || '';
-      const confidence = document.getElementById('confidenceFilter')?.value || '';
-      
-      // Filter for No Match orders separately
-      let filteredNoMatches = noMatches.filter(m => {
-        if (search && !(m.ediOrder.poNumber || '').toLowerCase().includes(search)) return false;
-        if (customer && m.ediOrder.customer !== customer) return false;
-        return true;
-      });
-      
-      let matches = allMatches.filter(m => {
-        if (search && !(m.ediOrder.poNumber || '').toLowerCase().includes(search)) return false;
-        if (customer && m.ediOrder.customer !== customer) return false;
-        if (confidence && confidence !== 'nomatch') {
-          const conf = m.confidence || 0;
-          if (confidence === 'perfect' && conf < 100) return false;
-          if (confidence === 'high' && (conf < 80 || conf >= 100)) return false;
-          if (confidence === 'medium' && (conf < 60 || conf >= 80)) return false;
-          if (confidence === 'low' && conf >= 60) return false;
-        }
-        return true;
-      });
-      
-      // If nomatch filter is selected, hide matches section
-      const showMatchesSection = confidence !== 'nomatch';
-      const showNoMatchSection = confidence === '' || confidence === 'nomatch';
-      
-      // Confidence summary tiles
-      const currentFilter = document.getElementById('confidenceFilter')?.value || '';
-      let html = \`
-        <div class="confidence-tiles" style="display:grid;grid-template-columns:repeat(5,1fr);gap:0.75rem;margin-bottom:1.5rem;">
-          <div class="conf-tile \${currentFilter === 'perfect' ? 'active' : ''}" onclick="setConfidenceFilter('perfect')" style="background:\${currentFilter === 'perfect' ? '#34c759' : '#f0fdf4'};border:2px solid \${currentFilter === 'perfect' ? '#34c759' : '#bbf7d0'};border-radius:8px;padding:1rem;cursor:pointer;text-align:center;">
-            <div style="font-size:1.75rem;font-weight:700;color:#15803d">\${perfectCount}</div>
-            <div style="font-size:0.75rem;color:#166534">🟢 Perfect (100%+)</div>
-          </div>
-          <div class="conf-tile \${currentFilter === 'high' ? 'active' : ''}" onclick="setConfidenceFilter('high')" style="background:\${currentFilter === 'high' ? '#3b82f6' : '#eff6ff'};border:2px solid \${currentFilter === 'high' ? '#3b82f6' : '#bfdbfe'};border-radius:8px;padding:1rem;cursor:pointer;text-align:center;">
-            <div style="font-size:1.75rem;font-weight:700;color:#1d4ed8">\${highCount}</div>
-            <div style="font-size:0.75rem;color:#1e40af">🔵 High (80-99%)</div>
-          </div>
-          <div class="conf-tile \${currentFilter === 'medium' ? 'active' : ''}" onclick="setConfidenceFilter('medium')" style="background:\${currentFilter === 'medium' ? '#f59e0b' : '#fffbeb'};border:2px solid \${currentFilter === 'medium' ? '#f59e0b' : '#fde68a'};border-radius:8px;padding:1rem;cursor:pointer;text-align:center;">
-            <div style="font-size:1.75rem;font-weight:700;color:#b45309">\${mediumCount}</div>
-            <div style="font-size:0.75rem;color:#92400e">🟡 Medium (60-79%)</div>
-          </div>
-          <div class="conf-tile \${currentFilter === 'low' ? 'active' : ''}" onclick="setConfidenceFilter('low')" style="background:\${currentFilter === 'low' ? '#ef4444' : '#fef2f2'};border:2px solid \${currentFilter === 'low' ? '#ef4444' : '#fecaca'};border-radius:8px;padding:1rem;cursor:pointer;text-align:center;">
-            <div style="font-size:1.75rem;font-weight:700;color:#dc2626">\${lowCount}</div>
-            <div style="font-size:0.75rem;color:#991b1b">🔴 Low (&lt;60%)</div>
-          </div>
-          <div class="conf-tile \${currentFilter === 'nomatch' ? 'active' : ''}" onclick="setConfidenceFilter('nomatch')" style="background:\${currentFilter === 'nomatch' ? '#6b7280' : '#f3f4f6'};border:2px solid \${currentFilter === 'nomatch' ? '#6b7280' : '#d1d5db'};border-radius:8px;padding:1rem;cursor:pointer;text-align:center;">
-            <div style="font-size:1.75rem;font-weight:700;color:#374151">\${noMatchCount}</div>
-            <div style="font-size:0.75rem;color:#4b5563">⚠️ No Match</div>
-          </div>
+    focusModeActive = true;
+    document.getElementById('reviewEmptyState').classList.add('hidden');
+    document.getElementById('focusModeContainer').classList.remove('hidden');
+    document.addEventListener('keydown', focusModeKeyHandler);
+    showFocusMode();
+  }
+
+  function exitFocusMode() {
+    focusModeActive = false;
+    document.removeEventListener('keydown', focusModeKeyHandler);
+    showStage('inbox');
+  }
+
+  function focusModeKeyHandler(e) {
+    if (!focusModeActive) return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    if (e.key === 'a' || e.key === 'A') { e.preventDefault(); focusModeApprove(); }
+    else if (e.key === 's' || e.key === 'S') { e.preventDefault(); focusModeSkip(); }
+    else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); focusModeFlag(); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); focusModeNext(); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); focusModePrev(); }
+    else if (e.key === 'Escape') { e.preventDefault(); exitFocusMode(); }
+  }
+
+  function showFocusMode() {
+    const allMatches = matchResults.matches || [];
+    if (allMatches.length === 0) {
+      exitFocusMode();
+      return;
+    }
+
+    if (focusModeIndex >= allMatches.length) focusModeIndex = allMatches.length - 1;
+    if (focusModeIndex < 0) focusModeIndex = 0;
+
+    const match = allMatches[focusModeIndex];
+    const edi = match.ediOrder;
+    const zoho = match.zohoDraft;
+    const conf = match.confidence || 0;
+    const score = match.score || {};
+    const details = score.details || {};
+
+    // Status determination
+    let statusBg, statusIcon, statusTitle, statusDesc;
+    if (conf >= 100) {
+      statusBg = 'bg-green-50 border-green-500'; statusIcon = '✅';
+      statusTitle = 'Perfect Match'; statusDesc = 'All fields match - safe to approve';
+    } else if (conf >= 80) {
+      statusBg = 'bg-blue-50 border-blue-500'; statusIcon = '👍';
+      statusTitle = 'High Confidence'; statusDesc = 'Most fields match';
+    } else if (conf >= 60) {
+      statusBg = 'bg-amber-50 border-amber-500'; statusIcon = '⚠️';
+      statusTitle = 'Review Recommended'; statusDesc = 'Some differences found';
+    } else {
+      statusBg = 'bg-red-50 border-red-500'; statusIcon = '🚨';
+      statusTitle = 'Low Confidence'; statusDesc = 'Significant differences - verify carefully';
+    }
+
+    // Confidence badge color
+    let confBg = conf >= 100 ? 'bg-green-100 text-green-700 border-green-200' :
+                 conf >= 80 ? 'bg-blue-100 text-blue-700 border-blue-200' :
+                 conf >= 60 ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                 'bg-red-100 text-red-700 border-red-200';
+
+    const selectedCount = selectedMatchIds.size;
+    const flaggedCount = flaggedMatchIds.size;
+    const progressPercent = Math.round(((focusModeIndex + 1) / allMatches.length) * 100);
+
+    // Format data
+    const ediShipDate = edi.shipDate ? edi.shipDate.split('T')[0] : 'N/A';
+    const zohoShipDate = zoho.shipDate ? zoho.shipDate.split('T')[0] : 'N/A';
+    const ediCancelDate = edi.cancelDate || 'N/A';
+
+    // Build HTML
+    const html = \`
+      <!-- Progress Bar -->
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-sm text-slate-500">Match <strong class="text-slate-700">\${focusModeIndex + 1}</strong> of <strong class="text-slate-700">\${allMatches.length}</strong></span>
+        <div class="flex items-center gap-4 text-sm">
+          <span class="text-green-600"><strong>\${selectedCount}</strong> selected</span>
+          \${flaggedCount > 0 ? '<span class="text-red-600"><strong>' + flaggedCount + '</strong> flagged</span>' : ''}
         </div>
-        <div class="match-summary" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+      </div>
+      <div class="h-1.5 bg-slate-200 rounded-full mb-6">
+        <div class="h-full bg-slate-700 rounded-full transition-all" style="width: \${progressPercent}%"></div>
+      </div>
+
+      <!-- Focus Card -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+
+        <!-- Status Banner -->
+        <div class="px-5 py-3 flex items-center gap-3 \${statusBg} border-b-2">
+          <span class="text-xl">\${statusIcon}</span>
           <div>
-            <h3 style="margin:0">Found \${allMatches.length} potential matches</h3>
-            <p style="margin:0.25rem 0 0;color:#86868b">\${matches.length !== allMatches.length ? 'Showing ' + matches.length + ' filtered • ' : ''}\${noMatches.length} EDI orders have no match</p>
-          </div>
-          <div style="display:flex;gap:0.5rem;align-items:center;">
-            <button class="btn btn-secondary" onclick="selectAllMatches()">Select All Visible</button>
-            <button class="btn btn-secondary" onclick="deselectAllMatches()">Deselect All</button>
-            <button class="btn btn-success" onclick="sendSelectedToZoho()" id="sendSelectedBtn" disabled>Send Selected to Zoho (0)</button>
-          </div>
-        </div>\`;
-      
-      if (showMatchesSection && matches.length > 0) {
-        html += \`<div class="matches-grid \${reviewViewMode === 'compact' ? 'compact' : ''}">\`;
-        matches.forEach((match, idx) => {
-          const actualIdx = allMatches.indexOf(match);
-          const conf = match.confidence || 0;
-          const confLevel = conf >= 100 ? 'high' : conf >= 80 ? 'high' : conf >= 60 ? 'medium' : 'low';
-          const confLabel = conf >= 100 ? 'Perfect Match' : conf >= 80 ? 'High' : conf >= 60 ? 'Medium' : 'Low';
-          const isChecked = selectedMatchIds.has(match.ediOrder.id);
-          html += \`
-            <div class="match-card \${isChecked ? 'selected' : ''}" data-match-id="\${match.ediOrder.id}">
-              <div class="match-card-header">
-              <div><div class="match-po">PO# \${match.ediOrder.poNumber}</div><div class="match-customer">\${match.ediOrder.customer}</div></div>
-              <div style="text-align:right"><div class="confidence-badge confidence-\${confLevel}">\${conf}%</div><div style="font-size:0.75rem;color:#86868b;margin-top:0.25rem">\${confLabel} Confidence</div></div>
-            </div>
-            <div class="match-criteria">
-              <span class="criteria-badge \${match.score.details.poNumber ? 'criteria-matched' : 'criteria-unmatched'}">\${match.score.details.poNumber ? '✓' : '○'} PO Number</span>
-              <span class="criteria-badge \${match.score.details.customer ? 'criteria-matched' : 'criteria-unmatched'}">\${match.score.details.customer ? '✓' : '○'} Customer</span>
-              <span class="criteria-badge \${match.score.details.shipDate ? 'criteria-matched' : 'criteria-unmatched'}">\${match.score.details.shipDate ? '✓' : '○'} Ship Date</span>
-              <span class="criteria-badge \${match.score.details.totalAmount ? 'criteria-matched' : 'criteria-unmatched'}">\${match.score.details.totalAmount ? '✓' : '○'} Total Amount</span>
-              <span class="criteria-badge \${match.score.details.styles ? 'criteria-matched' : 'criteria-unmatched'}">\${match.score.details.styles ? '✓' : '○'} Styles</span>
-            </div>
-            <div class="match-comparison">
-              <div class="match-side edi"><div class="match-side-label">EDI Order</div><div class="match-side-amount">$\${match.ediOrder.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</div><div class="match-side-detail">\${match.ediOrder.itemCount} items • \${match.ediOrder.totalUnits.toLocaleString()} units</div></div>
-              <div class="match-side zoho"><div class="match-side-label">Zoho #\${match.zohoDraft.number}</div><div class="match-side-amount">$\${match.zohoDraft.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</div><div class="match-side-detail">\${match.zohoDraft.itemCount} items • \${match.zohoDraft.status}</div></div>
-            </div>
-            <div class="match-actions">
-              <label class="include-checkbox" style="margin-right:1rem;"><input type="checkbox" class="match-select-checkbox" data-edi-id="\${match.ediOrder.id}" data-draft-id="\${match.zohoDraft.id}" \${isChecked ? 'checked' : ''} onchange="toggleMatchSelection(\${match.ediOrder.id}, '\${match.zohoDraft.id}', this.checked)"> Select</label>
-              <button class="btn btn-secondary" onclick="viewOrder(\${match.ediOrder.id})">📄 EDI Details</button>
-              <button class="btn btn-secondary" onclick="window.open('https://books.zoho.com/app/677681121#/salesorders/\${match.zohoDraft.id}','_blank')">🔗 Zoho Order</button>
-              <button class="btn btn-primary" onclick="showComparison(\${actualIdx})">Compare Side-by-Side</button>
-            </div>
-          </div>
-        \`;
-        });
-        html += \`</div>\`; // Close matches-grid
-      }
-      
-      if (showNoMatchSection && filteredNoMatches.length > 0) {
-        html += \`<h3 style="margin-top:2rem;margin-bottom:1rem;color:#ff9500">⚠️ No Match Found (\${filteredNoMatches.length})</h3><p style="color:#86868b;margin-bottom:1rem">No matching Zoho draft found. You can create new Sales Orders for these:</p>\`;
-        html += \`<div class="matches-grid \${reviewViewMode === 'compact' ? 'compact' : ''}">\`;
-        filteredNoMatches.forEach((item, idx) => {
-          html += \`
-            <div class="match-card" style="border-left:4px solid #ff9500" id="no-match-card-\${item.ediOrder.id}">
-              <div class="match-card-header">
-                <div><div class="match-po">PO# \${item.ediOrder.poNumber}</div><div class="match-customer">\${item.ediOrder.customer}</div></div>
-                <span class="status-badge status-pending">No Draft Found</span>
-              </div>
-              <div class="match-comparison">
-                <div class="match-side edi">
-                  <div class="match-side-label">EDI Order</div>
-                  <div class="match-side-amount">$\${item.ediOrder.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</div>
-                  <div class="match-side-detail">\${item.ediOrder.itemCount} items • \${(item.ediOrder.totalUnits || 0).toLocaleString()} units</div>
-                  <div class="match-side-detail" style="margin-top:0.5rem">Ship: \${item.ediOrder.shipDate || 'Not specified'}</div>
-                </div>
-                <div class="match-side" style="background:#fff3e0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:0.5rem;">
-                  <div style="color:#f57c00;font-weight:500;">No Matching Draft</div>
-                  <div style="font-size:0.75rem;color:#86868b;">Click Preview to create new</div>
-                </div>
-              </div>
-              <div class="match-actions">
-                <button class="btn btn-secondary" onclick="viewOrder(\${item.ediOrder.id})">📄 EDI Details</button>
-                <button class="btn btn-primary" onclick="previewNewOrder(\${item.ediOrder.id})">👁️ Preview & Create in Zoho</button>
-              </div>
-            </div>
-          \`;
-        });
-        html += \`</div>\`; // Close matches-grid for no-matches
-      }
-      
-      html += \`<div style="margin-top:2rem;padding-top:1.5rem;border-top:1px solid #e5e5e5;display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:600">\${allMatches.length + noMatches.length}</span> orders total</div><button class="btn btn-success btn-lg" onclick="confirmSelectedMatches()">✓ Confirm Selected Matches</button></div>\`;
-      
-      document.getElementById('matchReviewContent').innerHTML = html;
-    }
-    
-    // Preview and create new order for unmatched EDI orders
-    async function previewNewOrder(ediOrderId) {
-      try {
-        const res = await fetch('/preview-new-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ediOrderId })
-        });
-        const data = await res.json();
-        
-        if (!data.success) {
-          toast('Error: ' + data.error);
-          return;
-        }
-        
-        const preview = data.preview;
-        showCreateOrderModal(preview);
-        
-      } catch (e) {
-        toast('Error loading preview: ' + e.message);
-      }
-    }
-    
-    function showCreateOrderModal(preview) {
-      const canCreate = preview.canCreate;
-      const customer = preview.customer;
-      
-      let itemsHtml = '';
-      preview.lineItems.forEach((item, idx) => {
-        itemsHtml += \`
-          <tr>
-            <td style="font-weight:500">\${item.style}</td>
-            <td>\${item.color || '-'}</td>
-            <td>\${item.size || '-'}</td>
-            <td style="text-align:right">\${item.quantity}</td>
-            <td style="text-align:right">$\${item.unitPrice.toFixed(2)}</td>
-            <td style="text-align:right;font-weight:500">$\${item.lineTotal.toFixed(2)}</td>
-          </tr>
-        \`;
-      });
-      
-      const modalHtml = \`
-        <div class="modal-backdrop" onclick="closeCreateOrderModal()"></div>
-        <div class="modal-content" style="max-width:900px;max-height:85vh;overflow-y:auto;">
-          <div class="modal-header">
-            <h2>Create New Sales Order in Zoho</h2>
-            <button class="modal-close" onclick="closeCreateOrderModal()">×</button>
-          </div>
-          
-          \${!canCreate ? \`
-            <div style="background:#ffebee;border:1px solid #ef9a9a;border-radius:8px;padding:1rem;margin-bottom:1.5rem;">
-              <div style="color:#c62828;font-weight:600;">⚠️ Cannot Create Order</div>
-              <div style="color:#b71c1c;margin-top:0.5rem;">\${preview.customerError}</div>
-              <div style="margin-top:1rem;">
-                <a href="#" onclick="closeCreateOrderModal();showTab('mappings', document.querySelector('[onclick*=mappings]'));return false;" style="color:#1976d2;">
-                  → Go to Customer Mappings to add this customer
-                </a>
-              </div>
-            </div>
-          \` : ''}
-          
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;">
-            <div style="background:#f5f5f7;padding:1rem;border-radius:8px;">
-              <div style="font-size:0.75rem;color:#86868b;margin-bottom:0.25rem;">PO NUMBER</div>
-              <div style="font-size:1.125rem;font-weight:600;color:#1e3a5f;">\${preview.poNumber}</div>
-            </div>
-            <div style="background:\${canCreate ? '#e8f5e9' : '#ffebee'};padding:1rem;border-radius:8px;">
-              <div style="font-size:0.75rem;color:#86868b;margin-bottom:0.25rem;">ZOHO CUSTOMER</div>
-              <div style="font-size:1.125rem;font-weight:600;color:\${canCreate ? '#2e7d32' : '#c62828'};">
-                \${canCreate ? customer.zohoName : 'NOT FOUND'}
-              </div>
-              \${canCreate ? '<div style="font-size:0.75rem;color:#86868b;margin-top:0.25rem;">ID: ' + customer.zohoId + '</div>' : ''}
-            </div>
-          </div>
-          
-          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem;">
-            <div style="background:#f5f5f7;padding:0.75rem;border-radius:8px;text-align:center;">
-              <div style="font-size:0.75rem;color:#86868b;">ORDER DATE</div>
-              <div style="font-weight:600;">\${preview.dates.orderDate || 'Today'}</div>
-            </div>
-            <div style="background:#f5f5f7;padding:0.75rem;border-radius:8px;text-align:center;">
-              <div style="font-size:0.75rem;color:#86868b;">SHIP DATE</div>
-              <div style="font-weight:600;">\${preview.dates.shipDate || 'Not set'}</div>
-            </div>
-            <div style="background:#f5f5f7;padding:0.75rem;border-radius:8px;text-align:center;">
-              <div style="font-size:0.75rem;color:#86868b;">ITEMS / UNITS</div>
-              <div style="font-weight:600;">\${preview.summary.itemCount} / \${preview.summary.totalUnits.toLocaleString()}</div>
-            </div>
-            <div style="background:#e3f2fd;padding:0.75rem;border-radius:8px;text-align:center;">
-              <div style="font-size:0.75rem;color:#86868b;">TOTAL AMOUNT</div>
-              <div style="font-weight:700;color:#1976d2;font-size:1.125rem;">$\${preview.summary.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</div>
-            </div>
-          </div>
-          
-          <div style="margin-bottom:1rem;">
-            <h3 style="margin-bottom:0.75rem;font-size:1rem;">Line Items to be Created (\${preview.lineItems.length})</h3>
-            <div style="max-height:300px;overflow-y:auto;border:1px solid #e5e5e5;border-radius:8px;">
-              <table class="orders-table" style="margin:0;">
-                <thead>
-                  <tr>
-                    <th>Style</th>
-                    <th>Color</th>
-                    <th>Size</th>
-                    <th style="text-align:right">Qty</th>
-                    <th style="text-align:right">Price</th>
-                    <th style="text-align:right">Total</th>
-                  </tr>
-                </thead>
-                <tbody>\${itemsHtml}</tbody>
-              </table>
-            </div>
-          </div>
-          
-          <div style="display:flex;justify-content:flex-end;gap:1rem;padding-top:1rem;border-top:1px solid #e5e5e5;">
-            <button class="btn btn-secondary" onclick="closeCreateOrderModal()">Cancel</button>
-            \${canCreate ? \`
-              <button class="btn btn-success btn-lg" onclick="confirmCreateOrder(\${preview.ediOrderId})" id="createOrderBtn">
-                ✓ Create Sales Order in Zoho
-              </button>
-            \` : \`
-              <button class="btn btn-success btn-lg" disabled style="opacity:0.5;">
-                ✓ Create Sales Order in Zoho
-              </button>
-            \`}
+            <div class="font-semibold">\${statusTitle}</div>
+            <div class="text-sm opacity-80">\${statusDesc}</div>
           </div>
         </div>
-      \`;
-      
-      const modal = document.createElement('div');
-      modal.className = 'modal';
-      modal.id = 'createOrderModal';
-      modal.innerHTML = modalHtml;
-      document.body.appendChild(modal);
-      modal.classList.add('show');
-    }
-    
-    function closeCreateOrderModal() {
-      const modal = document.getElementById('createOrderModal');
-      if (modal) {
-        modal.classList.remove('show');
-        setTimeout(() => modal.remove(), 200);
-      }
-    }
-    
-    async function confirmCreateOrder(ediOrderId) {
-      const btn = document.getElementById('createOrderBtn');
-      const originalText = btn.innerHTML;
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span> Creating...';
-      
-      try {
-        const res = await fetch('/create-new-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ediOrderId, confirmed: true })
-        });
-        const data = await res.json();
-        
-        if (data.success) {
-          closeCreateOrderModal();
-          toast('✅ Order created! Zoho SO#: ' + data.zohoSalesOrder.number);
-          
-          // Remove this order from the no-match list
-          const card = document.getElementById('no-match-card-' + ediOrderId);
-          if (card) {
-            card.style.transition = 'all 0.3s ease';
-            card.style.opacity = '0';
-            card.style.transform = 'translateX(20px)';
-            setTimeout(() => card.remove(), 300);
-          }
-          
-          // Update the noMatches in matchResults
-          if (matchResults && matchResults.noMatches) {
-            matchResults.noMatches = matchResults.noMatches.filter(m => m.ediOrder.id !== ediOrderId);
-          }
-          
-          // Refresh data
-          loadOrders();
-          loadStats();
-          
-        } else {
-          btn.disabled = false;
-          btn.innerHTML = originalText;
-          toast('❌ Error: ' + data.error);
-        }
-        
-      } catch (e) {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-        toast('❌ Error: ' + e.message);
-      }
-    }
-    
-    function filterMatchResults() {
-      if (matchResults) showMatchReview(matchResults);
-    }
-    
-    async function clearMatchResults() {
-      if (!confirm('Clear all match results? You will need to run Find Matches again.')) return;
 
-      // Clear session on server
-      await clearSession();
-
-      document.getElementById('reviewToolbar').style.display = 'none';
-      document.getElementById('reviewBadge').style.display = 'none';
-      document.getElementById('matchReviewContent').innerHTML = '<div class="empty-state"><p style="font-size:1.25rem;margin-bottom:1rem;">No matches to review</p><p>Go to <strong>EDI Orders</strong> and click <strong>"Find Matches"</strong> to search for matching Zoho drafts.</p></div>';
-      updateWorkflowCounts();
-    }
-    
-    // Confidence tile click handler
-    function setConfidenceFilter(level) {
-      const dropdown = document.getElementById('confidenceFilter');
-      if (dropdown.value === level) {
-        dropdown.value = ''; // Toggle off if already selected
-      } else {
-        dropdown.value = level;
-      }
-      filterMatchResults();
-    }
-    
-    function setReviewView(mode) {
-      reviewViewMode = mode;
-      // Update button states
-      document.getElementById('viewComfortable').classList.toggle('active', mode === 'comfortable');
-      document.getElementById('viewCompact').classList.toggle('active', mode === 'compact');
-      // Update grid class
-      const matchesGrid = document.querySelector('.matches-grid');
-      if (matchesGrid) {
-        matchesGrid.classList.toggle('compact', mode === 'compact');
-      }
-    }
-    
-    // ============================================================
-    // FOCUS MODE
-    // ============================================================
-    
-    function toggleFocusMode() {
-      if (!matchResults || !matchResults.matches || matchResults.matches.length === 0) {
-        toast('No matches to review in Focus Mode');
-        return;
-      }
-      
-      focusModeActive = !focusModeActive;
-      
-      if (focusModeActive) {
-        focusModeIndex = 0;
-        showFocusMode();
-        // Add keyboard listener
-        document.addEventListener('keydown', focusModeKeyHandler);
-      } else {
-        exitFocusMode();
-      }
-    }
-    
-    function exitFocusMode() {
-      focusModeActive = false;
-      document.removeEventListener('keydown', focusModeKeyHandler);
-      showMatchReview(matchResults);
-    }
-
-    function showListView() {
-      // Exit Focus Mode and show list view
-      focusModeActive = false;
-      document.removeEventListener('keydown', focusModeKeyHandler);
-      showMatchReview(matchResults, false); // Show list view, not focus mode
-    }
-
-    function focusModeKeyHandler(e) {
-      if (!focusModeActive) return;
-      // Don't trigger if typing in an input
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      
-      if (e.key === 'a' || e.key === 'A') {
-        e.preventDefault();
-        focusModeApprove();
-      } else if (e.key === 's' || e.key === 'S') {
-        e.preventDefault();
-        focusModeSkip();
-      } else if (e.key === 'f' || e.key === 'F') {
-        e.preventDefault();
-        focusModeFlag();
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        focusModeNext();
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        focusModePrev();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        exitFocusMode();
-      }
-    }
-    
-    function showFocusMode() {
-      const allMatches = matchResults.matches || [];
-      if (allMatches.length === 0) {
-        exitFocusMode();
-        return;
-      }
-      
-      // Clamp index
-      if (focusModeIndex >= allMatches.length) focusModeIndex = allMatches.length - 1;
-      if (focusModeIndex < 0) focusModeIndex = 0;
-      
-      const match = allMatches[focusModeIndex];
-      const edi = match.ediOrder;
-      const zoho = match.zohoDraft;
-      const score = match.score || {};
-      const details = score.details || {};
-      
-      // Calculate stats
-      const selectedCount = selectedMatchIds.size;
-      const flaggedCount = flaggedMatchIds.size;
-      const progressPercent = Math.round(((focusModeIndex + 1) / allMatches.length) * 100);
-      
-      // Calculate differences
-      const amtDiff = edi.totalAmount - zoho.totalAmount;
-      const hasAmtDiff = Math.abs(amtDiff) > 100;
-      const unitsDiff = edi.totalUnits - zoho.totalUnits;
-      
-      // Parse dates
-      const ediShipDate = edi.shipDate ? edi.shipDate.split('T')[0] : 'N/A';
-      const zohoShipDate = zoho.shipDate ? zoho.shipDate.split('T')[0] : 'N/A';
-      const ediCancelDate = edi.cancelDate || 'N/A';
-      
-      // Get full styles with suffixes for comparison
-      const ediFullStyles = [...new Set((edi.items || []).map(i => (i.productIds?.sku || i.productIds?.vendorItemNumber || '')).filter(Boolean))];
-      const zohoFullStyles = [...new Set((zoho.items || []).map(i => (i.name || '').split(' ')[0]).filter(Boolean))];
-      
-      // Get base styles (without suffix)
-      const ediBaseStyles = [...new Set(ediFullStyles.map(s => s.split('-')[0]).filter(Boolean))];
-      const zohoBaseStyles = [...new Set(zohoFullStyles.map(s => s.split('-')[0]).filter(Boolean))];
-      
-      // Get suffixes for comparison
-      const ediSuffixes = [...new Set(ediFullStyles.map(s => { const parts = s.split('-'); return parts.length > 1 ? parts[1] : ''; }).filter(Boolean))];
-      const zohoSuffixes = [...new Set(zohoFullStyles.map(s => { const parts = s.split('-'); return parts.length > 1 ? parts[1] : ''; }).filter(Boolean))];
-      
-      // Create short display versions (base-suffix only, e.g. "79643J-EA")
-      const ediShortStyles = [...new Set(ediFullStyles.map(s => { const parts = s.split('-'); return parts.length >= 2 ? parts[0] + '-' + parts[1] : parts[0]; }).filter(Boolean))];
-      const zohoShortStyles = [...new Set(zohoFullStyles.map(s => { const parts = s.split('-'); return parts.length >= 2 ? parts[0] + '-' + parts[1] : parts[0]; }).filter(Boolean))];
-      
-      // Check if suffixes match
-      const suffixMatch = ediSuffixes.length > 0 && zohoSuffixes.length > 0 && ediSuffixes.some(es => zohoSuffixes.includes(es));
-      const hasSuffixMismatch = ediSuffixes.length > 0 && zohoSuffixes.length > 0 && !suffixMatch;
-      
-      // Determine status
-      let statusClass = 'good';
-      let statusIcon = '✓';
-      let statusTitle = 'Ready to Approve';
-      let statusDesc = 'All key fields match';
-      
-      if (hasAmtDiff && Math.abs(amtDiff) > 1000) {
-        statusClass = 'review';
-        statusIcon = '⚠️';
-        statusTitle = 'Review Recommended';
-        statusDesc = 'Amount difference exceeds $1,000';
-      } else if (!details.styles) {
-        statusClass = 'problem';
-        statusIcon = '🚨';
-        statusTitle = 'Style Mismatch';
-        statusDesc = 'Styles do not match - verify this is correct';
-      } else if (hasSuffixMismatch) {
-        statusClass = 'review';
-        statusIcon = '⚠️';
-        statusTitle = 'Suffix Mismatch';
-        statusDesc = 'Base style matches but suffix differs (' + ediSuffixes[0] + ' vs ' + zohoSuffixes[0] + ')';
-      }
-      
-      const conf = match.confidence || 0;
-      const confClass = conf >= 80 ? 'high' : conf >= 60 ? 'medium' : 'low';
-      
-      // Build selected list HTML
-      let selectedListHtml = '';
-      if (selectedCount > 0) {
-        const selectedMatches = allMatches.filter(m => selectedMatchIds.has(m.ediOrder.id));
-        selectedListHtml = \`
-          <div class="focus-list-section">
-            <button class="focus-list-toggle" onclick="toggleFocusList('selected')">
-              <span>✓ Selected (\${selectedCount})</span>
-              <span id="selectedListIcon">▼</span>
-            </button>
-            <div class="focus-list-content" id="selectedListContent">
-              \${selectedMatches.map((m, i) => {
-                const idx = allMatches.indexOf(m);
-                return '<div class="focus-list-item"><span class="focus-list-po" onclick="focusModeJumpTo(' + idx + ')">' + m.ediOrder.poNumber + '</span><span class="focus-list-customer">' + (m.ediOrder.customer || '').substring(0, 20) + '</span><span class="focus-list-amount">$' + m.ediOrder.totalAmount.toLocaleString('en-US', {minimumFractionDigits:0}) + '</span><button class="focus-list-remove" onclick="focusModeRemoveFromSelected(' + m.ediOrder.id + ')">×</button></div>';
-              }).join('')}
-            </div>
-          </div>
-        \`;
-      }
-      
-      // Build flagged list HTML
-      let flaggedListHtml = '';
-      if (flaggedCount > 0) {
-        const flaggedMatches = allMatches.filter(m => flaggedMatchIds.has(m.ediOrder.id));
-        flaggedListHtml = \`
-          <div class="focus-list-section flagged">
-            <button class="focus-list-toggle flagged" onclick="toggleFocusList('flagged')">
-              <span>🚩 Flagged (\${flaggedCount})</span>
-              <span id="flaggedListIcon">▼</span>
-            </button>
-            <div class="focus-list-content" id="flaggedListContent">
-              \${flaggedMatches.map((m, i) => {
-                const idx = allMatches.indexOf(m);
-                return '<div class="focus-list-item flagged"><span class="focus-list-po" onclick="focusModeJumpTo(' + idx + ')">' + m.ediOrder.poNumber + '</span><span class="focus-list-customer">' + (m.ediOrder.customer || '').substring(0, 20) + '</span><span class="focus-list-amount">$' + m.ediOrder.totalAmount.toLocaleString('en-US', {minimumFractionDigits:0}) + '</span><button class="focus-list-remove" onclick="focusModeRemoveFromFlagged(' + m.ediOrder.id + ')">×</button></div>';
-              }).join('')}
-            </div>
-          </div>
-        \`;
-      }
-      
-      // Build suffix status display
-      let suffixStatusHtml = '✓ base match';
-      let suffixRowClass = '';
-      if (hasSuffixMismatch) {
-        suffixStatusHtml = '✓ base<br><span style="color:#92400e;font-size:0.6875rem;">⚠️ suffix: ' + ediSuffixes[0] + ' ≠ ' + zohoSuffixes[0] + '</span>';
-        suffixRowClass = 'has-warn';
-      } else if (suffixMatch) {
-        suffixStatusHtml = '✓ full match';
-      }
-      
-      const html = \`
-        <div class="focus-mode-container">
-          <!-- Focus Mode Header -->
-          <div class="focus-header">
-            <div class="focus-header-left">
-              <h2>Focus Mode</h2>
-              <span class="focus-progress-text">Match <strong>\${focusModeIndex + 1}</strong> of <strong>\${allMatches.length}</strong></span>
-              <div class="focus-stats">
-                <span class="focus-stat"><strong>\${selectedCount}</strong> selected</span>
-                \${flaggedCount > 0 ? '<span class="focus-stat" style="color:#b91c1c;"><strong>' + flaggedCount + '</strong> flagged</span>' : ''}
-              </div>
-            </div>
-            <div style="display:flex;gap:0.5rem;">
-              \${selectedCount > 0 ? '<button class="btn btn-success" onclick="showFocusModeFinish()" style="font-size:0.8125rem;">Finish & Review →</button>' : ''}
-              <button class="btn btn-secondary" onclick="showListView()" title="Switch to list view">☰ List View</button>
-              <button class="btn btn-secondary" onclick="exitFocusMode()">← Exit</button>
-            </div>
-          </div>
-          
-          <!-- Progress Bar -->
-          <div class="focus-progress-bar">
-            <div class="focus-progress-fill" style="width:\${progressPercent}%"></div>
-          </div>
-          
-          <!-- Selected/Flagged Lists -->
-          \${selectedListHtml}
-          \${flaggedListHtml}
-          
-          <!-- Match Card -->
-          <div class="focus-card">
-            <!-- Status Banner -->
-            <div class="focus-status focus-status-\${statusClass}">
-              <span class="focus-status-icon">\${statusIcon}</span>
-              <div class="focus-status-text">
-                <strong>\${statusTitle}</strong>
-                <span>\${statusDesc}</span>
-              </div>
-            </div>
-            
-            <!-- Card Header -->
-            <div class="focus-card-header">
-              <div class="focus-match-info">
-                <span class="focus-match-title">\${edi.customer}</span>
-                <span class="focus-match-subtitle">PO# \${edi.poNumber} → Zoho #\${zoho.number}</span>
-              </div>
-              <span class="focus-confidence focus-confidence-\${confClass}">\${conf}% confidence</span>
-            </div>
-            
-            <!-- Data Grid -->
-            <table class="focus-grid">
-              <thead>
-                <tr>
-                  <th>Field</th>
-                  <th class="col-edi">EDI Order</th>
-                  <th class="col-zoho">Zoho Order <span class="focus-zoho-status">\${zoho.status || 'Draft'}</span></th>
-                  <th class="col-status">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="label">PO / Ref</td>
-                  <td class="value">\${edi.poNumber}</td>
-                  <td class="value muted">\${zoho.reference || 'N/A'}</td>
-                  <td class="status \${details.poNumber ? 'match' : 'diff'}">\${details.poNumber ? '✓ match' : 'different'}</td>
-                </tr>
-                <tr>
-                  <td class="label">Customer</td>
-                  <td class="value">\${edi.customer}</td>
-                  <td class="value">\${zoho.customer}</td>
-                  <td class="status \${details.customer ? 'match' : 'diff'}">\${details.customer ? '✓ match' : 'different'}</td>
-                </tr>
-                <tr>
-                  <td class="label">Ship Date</td>
-                  <td class="value">\${ediShipDate}</td>
-                  <td class="value">\${zohoShipDate}</td>
-                  <td class="status \${details.shipDate ? 'match' : 'warn'}">\${details.shipDate ? '✓ match' : (details.shipDateDiffDays ? details.shipDateDiffDays + ' days' : 'different')}</td>
-                </tr>
-                <tr class="\${ediCancelDate !== 'N/A' && !zoho.cancelDate ? 'has-warn' : ''}">
-                  <td class="label">Cancel Date</td>
-                  <td class="value">\${ediCancelDate}</td>
-                  <td class="value muted">—</td>
-                  <td class="status warn">\${ediCancelDate !== 'N/A' ? '⚠️ missing' : '—'}</td>
-                </tr>
-                <tr class="\${Math.abs(unitsDiff) > 100 ? 'has-diff' : ''}">
-                  <td class="label">Units</td>
-                  <td class="value">\${edi.totalUnits.toLocaleString()}</td>
-                  <td class="value">\${zoho.totalUnits.toLocaleString()}</td>
-                  <td class="status \${Math.abs(unitsDiff) <= 100 ? 'match' : 'diff'}">\${Math.abs(unitsDiff) <= 100 ? '✓ match' : (unitsDiff > 0 ? '+' : '') + unitsDiff.toLocaleString()}</td>
-                </tr>
-                <tr class="\${hasAmtDiff ? 'has-diff' : ''}">
-                  <td class="label">Amount</td>
-                  <td class="value">$\${edi.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</td>
-                  <td class="value">$\${zoho.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</td>
-                  <td class="status \${hasAmtDiff ? 'diff' : 'match'}">\${hasAmtDiff ? (amtDiff > 0 ? '+$' : '-$') + Math.abs(amtDiff).toLocaleString('en-US', {minimumFractionDigits:0}) : '✓ match'}</td>
-                </tr>
-                <tr class="\${hasSuffixMismatch ? 'has-warn' : ''}">
-                  <td class="label">Styles</td>
-                  <td class="value"><div class="focus-style-list">\${ediShortStyles.slice(0,2).map(s => '<span class="focus-style-pill">' + s + '</span>').join('')}\${ediShortStyles.length > 2 ? '<span class="focus-style-more">+' + (ediShortStyles.length-2) + '</span>' : ''}</div></td>
-                  <td class="value"><div class="focus-style-list">\${zohoShortStyles.slice(0,2).map(s => '<span class="focus-style-pill">' + s + '</span>').join('')}\${zohoShortStyles.length > 2 ? '<span class="focus-style-more">+' + (zohoShortStyles.length-2) + '</span>' : ''}</div></td>
-                  <td class="status \${details.styles ? (hasSuffixMismatch ? 'warn' : 'match') : 'diff'}">\${suffixStatusHtml}</td>
-                </tr>
-              </tbody>
-            </table>
-            
-            <!-- Warning if needed -->
-            \${hasAmtDiff && Math.abs(amtDiff) > 1000 ? '<div class="focus-warning">⚠️ Amount difference exceeds $1,000 — verify before approving</div>' : ''}
-            \${hasSuffixMismatch ? '<div class="focus-warning" style="background:#fef3c7;border-color:#fcd34d;">⚠️ Suffix mismatch: EDI has <strong>' + ediSuffixes.join(', ') + '</strong>, Zoho has <strong>' + zohoSuffixes.join(', ') + '</strong> — colors may differ</div>' : ''}
-            
-            <!-- Details Toggle -->
-            <button class="focus-details-toggle" onclick="toggleFocusDetails()">
-              <span>View line items (\${edi.itemCount} EDI → \${zoho.itemCount} Zoho)</span>
-              <span id="focusToggleIcon">▼</span>
-            </button>
-            
-            <div class="focus-details-content" id="focusDetailsContent">
-              <table class="focus-line-items">
-                <thead>
-                  <tr>
-                    <th colspan="4" class="edi-header">EDI Order</th>
-                    <th class="divider"></th>
-                    <th colspan="3" class="zoho-header">Zoho Order</th>
-                  </tr>
-                  <tr>
-                    <th>Style</th>
-                    <th>Color</th>
-                    <th>Qty</th>
-                    <th>Price</th>
-                    <th class="divider"></th>
-                    <th>Item</th>
-                    <th>Qty</th>
-                    <th>Rate</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  \${renderFocusLineItems(edi.items || [], zoho.items || [])}
-                </tbody>
-              </table>
-            </div>
-            
-            <!-- Actions -->
-            <div class="focus-actions">
-              <div class="focus-actions-left">
-                <button class="btn btn-secondary" onclick="focusModeSkip()">Skip</button>
-                <button class="btn focus-btn-flag \${flaggedMatchIds.has(edi.id) ? 'active' : ''}" onclick="focusModeFlag()">\${flaggedMatchIds.has(edi.id) ? '🚩 Flagged' : 'Flag'}</button>
-                <button class="btn btn-secondary" onclick="viewOrder(\${edi.id})" title="View full EDI order details">📄 EDI Details</button>
-                <button class="btn btn-secondary" onclick="window.open('https://books.zoho.com/app/677681121#/salesorders/\${zoho.id}','_blank')" title="Open in Zoho">🔗 Zoho</button>
-              </div>
-              <button class="btn focus-btn-approve \${selectedMatchIds.has(edi.id) ? 'selected' : ''}" onclick="focusModeApprove()">
-                \${selectedMatchIds.has(edi.id) ? '✓ Selected' : 'Select & Next →'}
+        <!-- Header -->
+        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <div class="text-lg font-semibold text-slate-800">\${edi.customer}</div>
+            <div class="text-sm text-slate-500 flex items-center gap-3">
+              <span>PO# \${edi.poNumber} → Zoho #\${zoho.number}</span>
+              <button onclick="viewOrder(\${edi.id})" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded transition">
+                📄 View EDI Details
               </button>
             </div>
           </div>
-          
-          <!-- Navigation Footer -->
-          <div class="focus-nav-footer">
-            <button class="focus-nav-btn" onclick="focusModePrev()" \${focusModeIndex === 0 ? 'disabled' : ''}>← Previous</button>
-            <div class="focus-shortcuts">
-              <kbd>A</kbd> select <kbd>S</kbd> skip <kbd>F</kbd> flag <kbd>←</kbd><kbd>→</kbd> navigate <kbd>Esc</kbd> exit
-            </div>
-            <button class="focus-nav-btn" onclick="focusModeNext()" \${focusModeIndex >= allMatches.length - 1 ? 'disabled' : ''}>Next →</button>
+          <div class="px-4 py-2 rounded-lg \${confBg} border font-bold text-xl">
+            \${conf}%
           </div>
         </div>
-        
-        <style>
-          .focus-mode-container { max-width:850px; margin:0 auto; padding:1rem; }
-          .focus-header { display:flex; justify-content:space-between; align-items:center; padding:0.75rem 0; margin-bottom:0.5rem; }
-          .focus-header h2 { font-size:1rem; font-weight:600; margin:0; }
-          .focus-header-left { display:flex; align-items:center; gap:1.5rem; }
-          .focus-progress-text { font-size:0.875rem; color:#666; }
-          .focus-progress-text strong { color:#333; }
-          .focus-stats { display:flex; gap:1rem; font-size:0.8125rem; color:#666; }
-          .focus-stat strong { color:#333; }
-          .focus-progress-bar { height:3px; background:#e5e5e5; margin-bottom:1rem; }
-          .focus-progress-fill { height:100%; background:#1e3a5f; transition:width 0.3s; }
-          
-          .focus-list-section { margin-bottom:0.75rem; }
-          .focus-list-toggle { width:100%; padding:0.5rem 0.75rem; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:4px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-size:0.8125rem; color:#166534; font-weight:500; }
-          .focus-list-toggle.flagged { background:#fef2f2; border-color:#fecaca; color:#b91c1c; }
-          .focus-list-content { display:none; border:1px solid #bbf7d0; border-top:none; border-radius:0 0 4px 4px; background:#fff; max-height:150px; overflow-y:auto; }
-          .focus-list-content.show { display:block; }
-          .focus-list-section.flagged .focus-list-content { border-color:#fecaca; }
-          .focus-list-item { display:flex; align-items:center; padding:0.375rem 0.75rem; border-bottom:1px solid #f0f0f0; font-size:0.8125rem; gap:0.5rem; }
-          .focus-list-item:last-child { border-bottom:none; }
-          .focus-list-item.flagged { background:#fef2f2; }
-          .focus-list-po { font-weight:500; cursor:pointer; color:#1e3a5f; }
-          .focus-list-po:hover { text-decoration:underline; }
-          .focus-list-customer { flex:1; color:#666; font-size:0.75rem; }
-          .focus-list-amount { font-size:0.75rem; color:#333; }
-          .focus-list-remove { background:none; border:none; color:#999; cursor:pointer; font-size:1rem; padding:0 0.25rem; }
-          .focus-list-remove:hover { color:#c00; }
-          
-          .focus-card { background:#fff; border:1px solid #ddd; border-radius:4px; }
-          
-          .focus-status { padding:0.875rem 1.25rem; display:flex; align-items:center; gap:0.75rem; border-bottom:2px solid; }
-          .focus-status-good { background:#f0fdf4; border-color:#22c55e; }
-          .focus-status-review { background:#fffbeb; border-color:#f59e0b; }
-          .focus-status-problem { background:#fef2f2; border-color:#ef4444; }
-          .focus-status-icon { font-size:1.25rem; }
-          .focus-status-text { display:flex; flex-direction:column; gap:0.125rem; }
-          .focus-status-text strong { font-size:0.9375rem; }
-          .focus-status-good .focus-status-text strong { color:#166534; }
-          .focus-status-review .focus-status-text strong { color:#92400e; }
-          .focus-status-problem .focus-status-text strong { color:#991b1b; }
-          .focus-status-text span { font-size:0.8125rem; opacity:0.8; }
-          
-          .focus-card-header { padding:1rem 1.25rem; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; }
-          .focus-match-info { display:flex; flex-direction:column; gap:0.25rem; }
-          .focus-match-title { font-size:1rem; font-weight:600; }
-          .focus-match-subtitle { font-size:0.8125rem; color:#888; }
-          .focus-confidence { font-size:0.8125rem; padding:0.375rem 0.75rem; border-radius:4px; font-weight:500; }
-          .focus-confidence-high { background:#f0f0f0; color:#333; }
-          .focus-confidence-medium { background:#fef9e7; color:#92400e; border:1px solid #fcd34d; }
-          .focus-confidence-low { background:#fef2f2; color:#b91c1c; border:1px solid #fca5a5; }
-          
-          .focus-grid { width:100%; border-collapse:collapse; }
-          .focus-grid th { text-align:left; padding:0.625rem 1rem; background:#f9f9f9; border-bottom:2px solid #e5e5e5; font-weight:600; font-size:0.6875rem; text-transform:uppercase; letter-spacing:0.5px; color:#666; }
-          .focus-grid th:first-child { width:110px; padding-left:1.25rem; }
-          .focus-grid th.col-edi { width:200px; }
-          .focus-grid th.col-zoho { width:240px; }
-          .focus-grid th.col-status { width:100px; text-align:right; padding-right:1.25rem; }
-          .focus-grid td { padding:0.625rem 1rem; border-bottom:1px solid #f0f0f0; font-size:0.875rem; }
-          .focus-grid td:first-child { padding-left:1.25rem; }
-          .focus-grid td:last-child { padding-right:1.25rem; }
-          .focus-grid tr:last-child td { border-bottom:none; }
-          .focus-grid .label { font-weight:500; color:#666; font-size:0.8125rem; }
-          .focus-grid .value { color:#333; }
-          .focus-grid .value.muted { color:#999; }
-          .focus-grid .status { text-align:right; font-size:0.8125rem; }
-          .focus-grid .status.match { color:#555; }
-          .focus-grid .status.diff { color:#b91c1c; font-weight:500; }
-          .focus-grid .status.warn { color:#92400e; }
-          .focus-grid tr.has-diff { background:#fffbf7; }
-          .focus-grid tr.has-diff td { border-bottom-color:#fee2e2; }
-          .focus-grid tr.has-warn { background:#fffdf7; }
-          .focus-grid tr.has-warn td { border-bottom-color:#fef3c7; }
-          .focus-zoho-status { display:inline-block; font-size:0.625rem; padding:0.125rem 0.5rem; border-radius:3px; margin-left:0.375rem; font-weight:500; text-transform:uppercase; background:#e0e7ff; color:#3730a3; }
-          
-          .focus-style-list { display:flex; flex-wrap:wrap; gap:0.25rem; }
-          .focus-style-pill { background:#f3f4f6; padding:0.125rem 0.5rem; border-radius:3px; font-size:0.75rem; font-family:monospace; color:#374151; }
-          .focus-style-more { font-size:0.75rem; color:#666; }
-          
-          .focus-warning { padding:0.75rem 1.25rem; background:#fffbeb; border-top:1px solid #fde68a; font-size:0.8125rem; color:#92400e; }
-          
-          .focus-details-toggle { width:100%; padding:0.75rem 1.25rem; background:#fafafa; border:none; border-top:1px solid #eee; cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-size:0.8125rem; color:#666; text-align:left; }
-          .focus-details-toggle:hover { background:#f5f5f5; }
-          .focus-details-content { display:none; border-top:1px solid #eee; }
-          .focus-details-content.show { display:block; }
-          
-          .focus-line-items { width:100%; border-collapse:collapse; font-size:0.8125rem; }
-          .focus-line-items th { text-align:left; padding:0.5rem 0.625rem; background:#f5f5f5; font-weight:600; font-size:0.625rem; text-transform:uppercase; letter-spacing:0.5px; color:#666; border-bottom:1px solid #ddd; }
-          .focus-line-items th.edi-header { background:#f0f4ff; color:#3730a3; }
-          .focus-line-items th.zoho-header { background:#f5f0ff; color:#6d28d9; }
-          .focus-line-items td { padding:0.5rem 0.625rem; border-bottom:1px solid #f0f0f0; color:#444; }
-          .focus-line-items .divider { width:2px; background:#e5e5e5; padding:0; }
-          .focus-line-items tr:hover { background:#f9f9f9; }
-          .focus-line-items tr:last-child td { border-bottom:none; }
-          
-          .focus-actions { padding:1rem 1.25rem; background:#f9f9f9; border-top:1px solid #eee; display:flex; justify-content:space-between; align-items:center; }
-          .focus-actions-left { display:flex; gap:0.5rem; }
-          .focus-btn-flag { background:#fff; color:#b91c1c; border:1px solid #fecaca; }
-          .focus-btn-flag:hover { background:#fef2f2; }
-          .focus-btn-flag.active { background:#fef2f2; border-color:#f87171; }
-          .focus-btn-approve { background:#1e3a5f; color:#fff; border:1px solid #1e3a5f; padding:0.625rem 1.5rem; font-weight:500; }
-          .focus-btn-approve:hover { background:#2d4a6f; }
-          .focus-btn-approve.selected { background:#166534; border-color:#166534; }
-          
-          .focus-nav-footer { display:flex; justify-content:space-between; align-items:center; margin-top:1rem; padding:0 0.25rem; }
-          .focus-nav-btn { display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.75rem; background:#fff; border:1px solid #ddd; border-radius:4px; cursor:pointer; font-size:0.8125rem; color:#666; }
-          .focus-nav-btn:hover:not(:disabled) { background:#f5f5f5; border-color:#ccc; }
-          .focus-nav-btn:disabled { opacity:0.4; cursor:not-allowed; }
-          .focus-shortcuts { font-size:0.75rem; color:#999; }
-          .focus-shortcuts kbd { background:#f0f0f0; padding:0.125rem 0.375rem; border-radius:3px; border:1px solid #ddd; font-family:inherit; font-size:0.6875rem; margin:0 0.125rem; }
-        </style>
-      \`;
-      
-      document.getElementById('matchReviewContent').innerHTML = html;
-    }
-    
-    function toggleFocusList(listType) {
-      const content = document.getElementById(listType + 'ListContent');
-      const icon = document.getElementById(listType + 'ListIcon');
-      if (content && icon) {
-        content.classList.toggle('show');
-        icon.textContent = content.classList.contains('show') ? '▲' : '▼';
-      }
-    }
-    
-    function renderFocusLineItems(ediItems, zohoItems) {
-      const maxRows = Math.max(ediItems.length, zohoItems.length, 1);
-      let html = '';
-      for (let i = 0; i < Math.min(maxRows, 10); i++) {
-        const edi = ediItems[i];
-        const zoho = zohoItems[i];
-        html += '<tr>';
-        if (edi) {
-          const sku = edi.productIds?.sku || edi.productIds?.vendorItemNumber || 'N/A';
-          html += '<td>' + sku + '</td>';
-          html += '<td>' + (edi.color || '-') + '</td>';
-          html += '<td>' + (edi.quantityOrdered || 0).toLocaleString() + '</td>';
-          html += '<td>$' + (edi.unitPrice || 0).toFixed(2) + '</td>';
-        } else {
-          html += '<td>-</td><td>-</td><td>-</td><td>-</td>';
-        }
-        html += '<td class="divider"></td>';
-        if (zoho) {
-          html += '<td>' + (zoho.name || 'N/A') + '</td>';
-          html += '<td>' + (zoho.quantity || 0).toLocaleString() + '</td>';
-          html += '<td>$' + (zoho.rate || 0).toFixed(2) + '</td>';
-        } else {
-          html += '<td>-</td><td>-</td><td>-</td>';
-        }
-        html += '</tr>';
-      }
-      if (maxRows > 10) {
-        html += '<tr><td colspan="8" style="text-align:center;color:#666;font-style:italic;padding:0.75rem;">... and ' + (maxRows - 10) + ' more items</td></tr>';
-      }
-      return html;
-    }
-    
-    function toggleFocusDetails() {
-      const content = document.getElementById('focusDetailsContent');
-      const icon = document.getElementById('focusToggleIcon');
-      content.classList.toggle('show');
-      icon.textContent = content.classList.contains('show') ? '▲' : '▼';
-    }
-    
-    function focusModeApprove() {
-      const allMatches = matchResults.matches || [];
-      if (focusModeIndex >= allMatches.length) return;
 
-      const match = allMatches[focusModeIndex];
-      const ediId = match.ediOrder.id;
-      const draftId = match.zohoDraft.id;
+        <!-- Comparison Table -->
+        <div class="px-5 py-4">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-slate-200">
+                <th class="text-left py-2 font-medium text-slate-500 w-28">Field</th>
+                <th class="text-left py-2 font-medium text-blue-600 bg-blue-50/50 px-3 rounded-tl-lg">EDI Order</th>
+                <th class="text-left py-2 font-medium text-green-600 bg-green-50/50 px-3">Zoho Draft</th>
+                <th class="text-center py-2 font-medium text-slate-500 w-24">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-slate-100">
+                <td class="py-2.5 text-slate-500">PO / Ref</td>
+                <td class="py-2.5 bg-blue-50/30 px-3">\${edi.poNumber}</td>
+                <td class="py-2.5 bg-green-50/30 px-3">\${zoho.poReference || zoho.number}</td>
+                <td class="py-2.5 text-center">\${details.po ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+              </tr>
+              <tr class="border-b border-slate-100">
+                <td class="py-2.5 text-slate-500">Customer</td>
+                <td class="py-2.5 bg-blue-50/30 px-3">\${edi.customer}</td>
+                <td class="py-2.5 bg-green-50/30 px-3">\${zoho.customer || '-'}</td>
+                <td class="py-2.5 text-center">\${details.customer ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+              </tr>
+              <tr class="border-b border-slate-100">
+                <td class="py-2.5 text-slate-500">Ship Date</td>
+                <td class="py-2.5 bg-blue-50/30 px-3">\${ediShipDate}</td>
+                <td class="py-2.5 bg-green-50/30 px-3">\${zohoShipDate}</td>
+                <td class="py-2.5 text-center">\${ediShipDate === zohoShipDate ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+              </tr>
+              <tr class="border-b border-slate-100">
+                <td class="py-2.5 text-slate-500">Units</td>
+                <td class="py-2.5 bg-blue-50/30 px-3 font-semibold">\${(edi.totalUnits || 0).toLocaleString()}</td>
+                <td class="py-2.5 bg-green-50/30 px-3 font-semibold">\${(zoho.totalUnits || 0).toLocaleString()}</td>
+                <td class="py-2.5 text-center">\${edi.totalUnits === zoho.totalUnits ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+              </tr>
+              <tr class="border-b border-slate-100">
+                <td class="py-2.5 text-slate-500">Amount</td>
+                <td class="py-2.5 bg-blue-50/30 px-3 font-semibold">$\${(edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                <td class="py-2.5 bg-green-50/30 px-3 font-semibold">$\${(zoho.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                <td class="py-2.5 text-center">\${Math.abs(edi.totalAmount - zoho.totalAmount) < 1 ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-      // Add to selection (remove from flagged if it was there)
-      selectedMatchIds.add(ediId);
-      selectedMatchDrafts.set(ediId, draftId);
+        <!-- Actions -->
+        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <button onclick="focusModeSkip()" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition text-slate-600 font-medium">
+              Skip
+            </button>
+            <button onclick="focusModeFlag()" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-red-50 hover:border-red-200 transition text-slate-600 font-medium \${flaggedMatchIds.has(edi.id) ? 'bg-red-100 border-red-300 text-red-700' : ''}">
+              \${flaggedMatchIds.has(edi.id) ? '🚩 Flagged' : '🚩 Flag'}
+            </button>
+            <button onclick="window.open('https://books.zoho.com/app/677681121#/salesorders/\${zoho.id}','_blank')" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition text-slate-600 font-medium">
+              🔗 Zoho
+            </button>
+          </div>
+          <button onclick="focusModeApprove()" class="px-6 py-2.5 \${selectedMatchIds.has(edi.id) ? 'bg-green-600' : 'bg-green-500'} text-white rounded-lg hover:bg-green-600 transition font-medium flex items-center gap-2">
+            \${selectedMatchIds.has(edi.id) ? '✓ Selected' : '✓ Select & Next →'}
+          </button>
+        </div>
+      </div>
+
+      <!-- Navigation Footer -->
+      <div class="flex items-center justify-between mt-4 text-sm">
+        <button onclick="focusModePrev()" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition text-slate-600 \${focusModeIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''}" \${focusModeIndex === 0 ? 'disabled' : ''}>
+          ← Previous
+        </button>
+        <div class="text-slate-400">
+          <kbd>A</kbd> select <kbd>S</kbd> skip <kbd>F</kbd> flag <kbd>←</kbd><kbd>→</kbd> navigate <kbd>Esc</kbd> exit
+        </div>
+        <button onclick="focusModeNext()" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition text-slate-600 \${focusModeIndex >= allMatches.length - 1 ? 'opacity-50 cursor-not-allowed' : ''}" \${focusModeIndex >= allMatches.length - 1 ? 'disabled' : ''}>
+          Next →
+        </button>
+      </div>
+
+      <!-- Finish Bar -->
+      \${selectedCount > 0 ? \`
+      <div class="mt-6 p-4 bg-green-50 border border-green-200 rounded-xl flex items-center justify-between">
+        <div class="text-green-800">
+          <strong>\${selectedCount}</strong> order\${selectedCount > 1 ? 's' : ''} selected for Zoho
+        </div>
+        <button onclick="sendSelectedToZoho()" class="px-6 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-medium">
+          Finish & Send to Zoho →
+        </button>
+      </div>
+      \` : ''}
+    \`;
+
+    document.getElementById('focusModeContainer').innerHTML = html;
+  }
+
+  function focusModeApprove() {
+    const allMatches = matchResults.matches || [];
+    if (focusModeIndex >= allMatches.length) return;
+
+    const match = allMatches[focusModeIndex];
+    const ediId = match.ediOrder.id;
+    const draftId = match.zohoDraft.id;
+
+    selectedMatchIds.add(ediId);
+    selectedMatchDrafts.set(ediId, draftId);
+    flaggedMatchIds.delete(ediId);
+    saveSession();
+    focusModeNext();
+  }
+
+  function focusModeSkip() {
+    focusModeNext();
+  }
+
+  function focusModeFlag() {
+    const allMatches = matchResults.matches || [];
+    if (focusModeIndex >= allMatches.length) return;
+
+    const match = allMatches[focusModeIndex];
+    const ediId = match.ediOrder.id;
+
+    if (flaggedMatchIds.has(ediId)) {
       flaggedMatchIds.delete(ediId);
-      updateSendSelectedButton();
-      saveSession(); // Persist state
-
-      // Move to next
-      focusModeNext();
-    }
-
-    function focusModeSkip() {
-      focusModeNext();
-    }
-
-    function focusModeFlag() {
-      const allMatches = matchResults.matches || [];
-      if (focusModeIndex >= allMatches.length) return;
-
-      const match = allMatches[focusModeIndex];
-      const ediId = match.ediOrder.id;
-
-      // Add to flagged (remove from selected if it was there)
+    } else {
       flaggedMatchIds.add(ediId);
       selectedMatchIds.delete(ediId);
       selectedMatchDrafts.delete(ediId);
-      updateSendSelectedButton();
-      saveSession(); // Persist state
-
-      toast('Flagged for review');
-      focusModeNext();
     }
+    saveSession();
+    showFocusMode();
+  }
 
-    function focusModeRemoveFromSelected(ediId) {
-      selectedMatchIds.delete(ediId);
-      selectedMatchDrafts.delete(ediId);
-      updateSendSelectedButton();
-      saveSession(); // Persist state
+  function focusModeNext() {
+    const allMatches = matchResults.matches || [];
+    if (focusModeIndex < allMatches.length - 1) {
+      focusModeIndex++;
+      saveSession();
+      showFocusMode();
+    } else {
+      // End of list
       showFocusMode();
     }
+  }
 
-    function focusModeRemoveFromFlagged(ediId) {
-      flaggedMatchIds.delete(ediId);
-      saveSession(); // Persist state
+  function focusModePrev() {
+    if (focusModeIndex > 0) {
+      focusModeIndex--;
+      saveSession();
       showFocusMode();
     }
-    
-    function focusModeJumpTo(index) {
-      focusModeIndex = index;
-      showFocusMode();
+  }
+
+  function clearMatchResults() {
+    if (!confirm('Clear all match results?')) return;
+    clearSession();
+    document.getElementById('reviewEmptyState').classList.remove('hidden');
+    document.getElementById('focusModeContainer').classList.add('hidden');
+    updateWorkflowCounts();
+  }
+
+  function setConfidenceFilter(level) {
+    currentConfidenceFilter = level;
+    // Update filter button styles
+    document.querySelectorAll('.conf-filter').forEach(btn => {
+      btn.classList.remove('bg-white', 'shadow-sm', 'text-slate-700');
+      btn.classList.add('text-slate-500');
+    });
+    const buttons = document.querySelectorAll('.conf-filter');
+    const index = level === '' ? 0 : level === 'perfect' ? 1 : level === 'high' ? 2 : level === 'medium' ? 3 : 4;
+    if (buttons[index]) {
+      buttons[index].classList.add('bg-white', 'shadow-sm', 'text-slate-700');
+      buttons[index].classList.remove('text-slate-500');
     }
-    
-    function focusModeNext() {
-      const allMatches = matchResults.matches || [];
-      if (focusModeIndex < allMatches.length - 1) {
-        focusModeIndex++;
-        saveSession(); // Persist position
-        showFocusMode();
-      } else {
-        // End of list - show finish summary
-        showFocusModeFinish();
-      }
+    // Filter logic would go here
+  }
+
+  // ============================================================
+  // SEND TO ZOHO
+  // ============================================================
+  async function sendSelectedToZoho() {
+    if (selectedMatchIds.size === 0) {
+      toast('No matches selected');
+      return;
     }
 
-    function focusModePrev() {
-      if (focusModeIndex > 0) {
-        focusModeIndex--;
-        saveSession(); // Persist position
-        showFocusMode();
-      }
-    }
-    
-    function showFocusModeFinish() {
-      const allMatches = matchResults.matches || [];
-      const selectedCount = selectedMatchIds.size;
-      const flaggedCount = flaggedMatchIds.size;
-      const skippedCount = allMatches.length - selectedCount - flaggedCount;
-      
-      // Build selected orders summary
-      let selectedHtml = '';
-      if (selectedCount > 0) {
-        selectedHtml = '<div style="margin-bottom:1rem;"><h4 style="margin:0 0 0.5rem;color:#166534;">✓ Selected for Update (' + selectedCount + ')</h4>';
-        selectedHtml += '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;max-height:200px;overflow-y:auto;">';
-        selectedHtml += '<table style="width:100%;font-size:0.8125rem;border-collapse:collapse;">';
-        allMatches.filter(m => selectedMatchIds.has(m.ediOrder.id)).forEach(m => {
-          selectedHtml += '<tr style="border-bottom:1px solid #dcfce7;"><td style="padding:0.5rem 0.75rem;font-weight:500;">' + m.ediOrder.poNumber + '</td><td style="padding:0.5rem 0.75rem;">' + (m.ediOrder.customer || '').substring(0, 25) + '</td><td style="padding:0.5rem 0.75rem;text-align:right;">$' + m.ediOrder.totalAmount.toLocaleString('en-US', {minimumFractionDigits:0}) + '</td></tr>';
-        });
-        selectedHtml += '</table></div></div>';
-      }
-      
-      // Build flagged orders summary
-      let flaggedHtml = '';
-      if (flaggedCount > 0) {
-        flaggedHtml = '<div style="margin-bottom:1rem;"><h4 style="margin:0 0 0.5rem;color:#b91c1c;">🚩 Flagged for Review (' + flaggedCount + ')</h4>';
-        flaggedHtml += '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;max-height:150px;overflow-y:auto;">';
-        flaggedHtml += '<table style="width:100%;font-size:0.8125rem;border-collapse:collapse;">';
-        allMatches.filter(m => flaggedMatchIds.has(m.ediOrder.id)).forEach(m => {
-          flaggedHtml += '<tr style="border-bottom:1px solid #fecaca;"><td style="padding:0.5rem 0.75rem;font-weight:500;">' + m.ediOrder.poNumber + '</td><td style="padding:0.5rem 0.75rem;">' + (m.ediOrder.customer || '').substring(0, 25) + '</td><td style="padding:0.5rem 0.75rem;text-align:right;">$' + m.ediOrder.totalAmount.toLocaleString('en-US', {minimumFractionDigits:0}) + '</td></tr>';
-        });
-        flaggedHtml += '</table></div></div>';
-      }
-      
-      const html = \`
-        <div class="focus-mode-container">
-          <div class="focus-header">
-            <div class="focus-header-left">
-              <h2>Focus Mode - Summary</h2>
-              <span class="focus-progress-text">Review Complete</span>
-            </div>
-            <button class="btn btn-secondary" onclick="exitFocusMode()">← Exit Focus Mode</button>
-          </div>
-          
-          <div class="focus-progress-bar">
-            <div class="focus-progress-fill" style="width:100%"></div>
-          </div>
-          
-          <div class="focus-card" style="padding:1.5rem;">
-            <div style="text-align:center;margin-bottom:1.5rem;">
-              <div style="font-size:2.5rem;margin-bottom:0.5rem;">🎯</div>
-              <h3 style="margin:0 0 0.5rem;">Review Complete!</h3>
-              <p style="color:#666;margin:0;">You've reviewed all \${allMatches.length} matches</p>
-            </div>
-            
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem;text-align:center;">
-              <div style="background:#f0fdf4;border-radius:8px;padding:1rem;">
-                <div style="font-size:1.5rem;font-weight:700;color:#166534;">\${selectedCount}</div>
-                <div style="font-size:0.75rem;color:#166534;">Selected</div>
-              </div>
-              <div style="background:#fef2f2;border-radius:8px;padding:1rem;">
-                <div style="font-size:1.5rem;font-weight:700;color:#b91c1c;">\${flaggedCount}</div>
-                <div style="font-size:0.75rem;color:#b91c1c;">Flagged</div>
-              </div>
-              <div style="background:#f5f5f5;border-radius:8px;padding:1rem;">
-                <div style="font-size:1.5rem;font-weight:700;color:#666;">\${skippedCount}</div>
-                <div style="font-size:0.75rem;color:#666;">Skipped</div>
-              </div>
-            </div>
-            
-            \${selectedHtml}
-            \${flaggedHtml}
-            
-            <div style="display:flex;gap:0.75rem;justify-content:center;margin-top:1.5rem;">
-              <button class="btn btn-secondary" onclick="focusModeIndex = 0; showFocusMode();">← Review Again</button>
-              \${selectedCount > 0 ? '<button class="btn btn-success" onclick="focusModeFinishAndSend()" style="padding:0.75rem 2rem;">✓ Send ' + selectedCount + ' Selected to Zoho</button>' : ''}
-              <button class="btn btn-secondary" onclick="exitFocusMode()">Exit to List View</button>
-            </div>
-          </div>
-        </div>
-        
-        <style>
-          .focus-mode-container { max-width:850px; margin:0 auto; padding:1rem; }
-          .focus-header { display:flex; justify-content:space-between; align-items:center; padding:0.75rem 0; margin-bottom:0.5rem; }
-          .focus-header h2 { font-size:1rem; font-weight:600; margin:0; }
-          .focus-header-left { display:flex; align-items:center; gap:1.5rem; }
-          .focus-progress-text { font-size:0.875rem; color:#666; }
-          .focus-progress-bar { height:3px; background:#e5e5e5; margin-bottom:1.5rem; }
-          .focus-progress-fill { height:100%; background:#1e3a5f; }
-          .focus-card { background:#fff; border:1px solid #ddd; border-radius:4px; }
-        </style>
-      \`;
-      
-      document.getElementById('matchReviewContent').innerHTML = html;
-    }
-    
-    function focusModeFinishAndSend() {
-      // This will trigger the bulk confirmation modal we already have
-      sendSelectedToZoho();
-    }
-    
-    // Selection functions
-    function toggleMatchSelection(ediOrderId, draftId, checked) {
-      if (checked) {
-        selectedMatchIds.add(ediOrderId);
-        selectedMatchDrafts.set(ediOrderId, draftId);
-      } else {
-        selectedMatchIds.delete(ediOrderId);
-        selectedMatchDrafts.delete(ediOrderId);
-      }
-      updateSendSelectedButton();
-      // Update card visual
-      const card = document.querySelector('[data-match-id="' + ediOrderId + '"]');
-      if (card) card.classList.toggle('selected', checked);
-      saveSession(); // Persist selection state
-    }
-    
-    function selectAllMatches() {
-      const checkboxes = document.querySelectorAll('.match-select-checkbox');
-      checkboxes.forEach(cb => {
-        cb.checked = true;
-        const ediId = parseInt(cb.dataset.ediId);
-        const draftId = cb.dataset.draftId;
-        selectedMatchIds.add(ediId);
-        selectedMatchDrafts.set(ediId, draftId);
-        const card = document.querySelector('[data-match-id="' + ediId + '"]');
-        if (card) card.classList.add('selected');
-      });
-      updateSendSelectedButton();
-    }
-    
-    function deselectAllMatches() {
-      const checkboxes = document.querySelectorAll('.match-select-checkbox');
-      checkboxes.forEach(cb => {
-        cb.checked = false;
-        const ediId = parseInt(cb.dataset.ediId);
-        selectedMatchIds.delete(ediId);
-        selectedMatchDrafts.delete(ediId);
-        const card = document.querySelector('[data-match-id="' + ediId + '"]');
-        if (card) card.classList.remove('selected');
-      });
-      updateSendSelectedButton();
-    }
-    
-    function updateSendSelectedButton() {
-      const btn = document.getElementById('sendSelectedBtn');
-      if (btn) {
-        const count = selectedMatchIds.size;
-        btn.textContent = 'Send Selected to Zoho (' + count + ')';
-        btn.disabled = count === 0;
-      }
-    }
-    
-    async function sendSelectedToZoho() {
-      if (selectedMatchIds.size === 0) {
-        toast('No matches selected');
-        return;
-      }
+    const selectedMatches = matchResults.matches.filter(m => selectedMatchIds.has(m.ediOrder.id));
 
-      // Build summary of what's being sent
-      const selectedMatches = matchResults.matches.filter(m => selectedMatchIds.has(m.ediOrder.id));
-
-      let ordersHtml = '';
-      let totalChanges = 0;
-      let warningCount = 0;
-
-      selectedMatches.forEach((match, idx) => {
-        const edi = match.ediOrder;
-        const zoho = match.zohoDraft;
-
-        // Track changes for this order
-        let changes = [];
-
-        // Compare PO reference
-        const ediPO = edi.poNumber || '';
-        const zohoPO = zoho.poReference || zoho.customerPO || '';
-        if (ediPO !== zohoPO) {
-          changes.push({ field: 'PO Reference', from: zohoPO || '(none)', to: ediPO, type: 'update' });
-        }
-
-        // Compare ship date
-        const ediShip = edi.shipDate ? edi.shipDate.split('T')[0] : '';
-        const zohoShip = zoho.shipDate ? zoho.shipDate.split('T')[0] : '';
-        if (ediShip && ediShip !== zohoShip) {
-          changes.push({ field: 'Ship Date', from: zohoShip || '(none)', to: ediShip, type: 'update' });
-        }
-
-        // Compare cancel date
-        const ediCancel = edi.cancelDate ? edi.cancelDate.split('T')[0] : '';
-        const zohoCancel = zoho.cancelDate ? zoho.cancelDate.split('T')[0] : '';
-        if (ediCancel && ediCancel !== zohoCancel) {
-          changes.push({ field: 'Cancel Date', from: zohoCancel || '(none)', to: ediCancel, type: 'update' });
-        }
-
-        // Compare amount
-        const amtDiff = edi.totalAmount - zoho.totalAmount;
-        if (Math.abs(amtDiff) > 1) {
-          const changeType = Math.abs(amtDiff) > 100 ? 'warning' : 'update';
-          if (changeType === 'warning') warningCount++;
-          changes.push({
-            field: 'Total Amount',
-            from: '$' + zoho.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2}),
-            to: '$' + edi.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2}),
-            diff: (amtDiff > 0 ? '+' : '') + '$' + amtDiff.toLocaleString('en-US', {minimumFractionDigits:2}),
-            type: changeType
-          });
-        }
-
-        // Compare unit count
-        const unitsDiff = (edi.totalUnits || 0) - (zoho.totalUnits || 0);
-        if (Math.abs(unitsDiff) > 0) {
-          changes.push({
-            field: 'Total Units',
-            from: (zoho.totalUnits || 0).toLocaleString(),
-            to: (edi.totalUnits || 0).toLocaleString(),
-            diff: (unitsDiff > 0 ? '+' : '') + unitsDiff.toLocaleString(),
-            type: 'update'
-          });
-        }
-
-        // Compare item count
-        const itemsDiff = (edi.itemCount || 0) - (zoho.itemCount || 0);
-        if (itemsDiff !== 0) {
-          changes.push({
-            field: 'Line Items',
-            from: (zoho.itemCount || 0).toString(),
-            to: (edi.itemCount || 0).toString(),
-            diff: (itemsDiff > 0 ? '+' : '') + itemsDiff.toString(),
-            type: 'update'
-          });
-        }
-
-        totalChanges += changes.length;
-
-        // Build diff table for this order
-        let diffRows = '';
-        if (changes.length === 0) {
-          diffRows = '<tr><td colspan="3" style="padding:0.75rem;text-align:center;color:#34c759;font-size:0.8125rem;">✓ No changes detected - order data matches</td></tr>';
-        } else {
-          changes.forEach(c => {
-            const rowBg = c.type === 'warning' ? 'background:#fff7ed;' : '';
-            const diffColor = c.type === 'warning' ? 'color:#c2410c;font-weight:600;' : 'color:#059669;';
-            diffRows += \`
-              <tr style="border-bottom:1px solid #f0f0f0;\${rowBg}">
-                <td style="padding:0.5rem 0.75rem;font-size:0.8125rem;color:#64748b;width:25%;">\${c.field}</td>
-                <td style="padding:0.5rem 0.75rem;font-size:0.8125rem;text-decoration:line-through;color:#94a3b8;width:30%;">\${c.from}</td>
-                <td style="padding:0.5rem 0.75rem;font-size:0.8125rem;\${diffColor}width:30%;">\${c.to}\${c.diff ? ' <span style="font-size:0.75rem;opacity:0.8;">(' + c.diff + ')</span>' : ''}</td>
-              </tr>
-            \`;
-          });
-        }
-
-        const hasWarnings = changes.some(c => c.type === 'warning');
-        const cardBorder = hasWarnings ? 'border-left:4px solid #f59e0b;' : 'border-left:4px solid #22c55e;';
-
-        ordersHtml += \`
-          <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:1rem;overflow:hidden;\${cardBorder}">
-            <div style="background:#f8fafc;padding:0.75rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
-              <div>
-                <span style="font-weight:600;color:#1e293b;">PO# \${edi.poNumber}</span>
-                <span style="color:#64748b;font-size:0.8125rem;margin-left:0.75rem;">\${(edi.customer || '').substring(0, 25)}</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:0.75rem;">
-                <span style="font-size:0.75rem;color:#64748b;">Zoho #\${zoho.number}</span>
-                <span style="font-size:0.75rem;padding:0.25rem 0.5rem;border-radius:4px;\${hasWarnings ? 'background:#fef3c7;color:#b45309;' : 'background:#dcfce7;color:#15803d;'}">\${changes.length} change\${changes.length !== 1 ? 's' : ''}</span>
-              </div>
-            </div>
-            <table style="width:100%;border-collapse:collapse;">
-              <thead>
-                <tr style="background:#f1f5f9;">
-                  <th style="padding:0.5rem 0.75rem;text-align:left;font-size:0.6875rem;text-transform:uppercase;color:#64748b;font-weight:500;">Field</th>
-                  <th style="padding:0.5rem 0.75rem;text-align:left;font-size:0.6875rem;text-transform:uppercase;color:#64748b;font-weight:500;">Current (Zoho)</th>
-                  <th style="padding:0.5rem 0.75rem;text-align:left;font-size:0.6875rem;text-transform:uppercase;color:#64748b;font-weight:500;">New (EDI)</th>
-                </tr>
-              </thead>
-              <tbody>
-                \${diffRows}
-              </tbody>
-            </table>
-          </div>
-        \`;
-      });
-      
-      const html = \`
-        <div class="modal-overlay" onclick="closeBulkConfirmModal()">
-          <div class="modal" onclick="event.stopPropagation()" style="max-width:750px;">
-            <div class="modal-header" style="background:#1e3a5f;">
-              <h2 style="color:white;">📋 Review Changes — \${selectedMatches.length} Order\${selectedMatches.length > 1 ? 's' : ''}</h2>
-              <button class="modal-close" onclick="closeBulkConfirmModal()" style="color:white;">×</button>
-            </div>
-            <div class="modal-body" style="padding:1.5rem;background:#f8fafc;">
-              <div style="display:flex;gap:1rem;margin-bottom:1.25rem;">
-                <div style="flex:1;background:white;border:1px solid #e2e8f0;border-radius:8px;padding:1rem;text-align:center;">
-                  <div style="font-size:1.5rem;font-weight:700;color:#1e3a5f;">\${selectedMatches.length}</div>
-                  <div style="font-size:0.75rem;color:#64748b;">Orders</div>
-                </div>
-                <div style="flex:1;background:white;border:1px solid #e2e8f0;border-radius:8px;padding:1rem;text-align:center;">
-                  <div style="font-size:1.5rem;font-weight:700;color:#059669;">\${totalChanges}</div>
-                  <div style="font-size:0.75rem;color:#64748b;">Total Changes</div>
-                </div>
-                <div style="flex:1;background:white;border:1px solid \${warningCount > 0 ? '#fbbf24' : '#e2e8f0'};border-radius:8px;padding:1rem;text-align:center;">
-                  <div style="font-size:1.5rem;font-weight:700;color:\${warningCount > 0 ? '#d97706' : '#64748b'};">\${warningCount}</div>
-                  <div style="font-size:0.75rem;color:#64748b;">Warnings</div>
-                </div>
-              </div>
-
-              \${warningCount > 0 ? \`
-              <div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:0.875rem;margin-bottom:1rem;font-size:0.8125rem;color:#92400e;">
-                ⚠️ <strong>\${warningCount} order\${warningCount > 1 ? 's have' : ' has'} significant amount differences</strong> — review highlighted items below.
-              </div>
-              \` : ''}
-
-              <div style="font-size:0.8125rem;font-weight:600;color:#334155;margin-bottom:0.75rem;">Changes by Order:</div>
-              <div style="max-height:350px;overflow-y:auto;">
-                \${ordersHtml}
-              </div>
-
-              <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:0.875rem;margin-top:1rem;font-size:0.8125rem;color:#64748b;">
-                💡 <strong>What happens next:</strong> EDI data will update the matching Zoho orders. All changes are logged.
-              </div>
-            </div>
-            <div class="modal-footer" style="border-top:1px solid #e5e5e7;padding:1rem 1.5rem;display:flex;gap:0.75rem;justify-content:flex-end;background:white;">
-              <button class="btn btn-secondary" onclick="closeBulkConfirmModal()">Cancel</button>
-              <button id="confirmBulkBtn" class="btn btn-success" onclick="executeBulkUpdate()" style="min-width:220px;">
-                ✓ Apply \${totalChanges} Change\${totalChanges !== 1 ? 's' : ''} to \${selectedMatches.length} Order\${selectedMatches.length > 1 ? 's' : ''}
-              </button>
-            </div>
-          </div>
-        </div>
-      \`;
-      
-      let bulkConfirmContainer = document.getElementById('bulkConfirmModalContainer');
-      if (!bulkConfirmContainer) {
-        bulkConfirmContainer = document.createElement('div');
-        bulkConfirmContainer.id = 'bulkConfirmModalContainer';
-        document.body.appendChild(bulkConfirmContainer);
-      }
-      bulkConfirmContainer.innerHTML = html;
-    }
-    
-    function closeBulkConfirmModal() {
-      const container = document.getElementById('bulkConfirmModalContainer');
-      if (container) container.innerHTML = '';
-    }
-    
-    async function executeBulkUpdate() {
-      const btn = document.getElementById('confirmBulkBtn');
-      const originalText = btn.textContent;
-      btn.disabled = true;
-      btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:0.5rem;"><span class="spinner" style="width:16px;height:16px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;"></span> Updating...</span>';
-      
-      let success = 0, failed = 0;
-      
-      for (const [ediOrderId, draftId] of selectedMatchDrafts) {
-        try {
-          const res = await fetch('/update-draft', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ediOrderId: ediOrderId, zohoDraftId: draftId })
-          });
-          const data = await res.json();
-          if (data.success) {
-            success++;
-            selectedMatchIds.delete(ediOrderId);
-            selectedMatchDrafts.delete(ediOrderId);
-          } else {
-            failed++;
-          }
-        } catch (e) {
-          failed++;
-        }
-      }
-      
-      closeBulkConfirmModal();
-      updateSendSelectedButton();
-      
-      toast('✅ ' + success + ' order' + (success > 1 ? 's' : '') + ' updated in Zoho' + (failed > 0 ? ', ' + failed + ' failed' : ''));
-      
-      loadOrders();
-      loadStats();
-      
-      if (success > 0) {
-        if (matchResults && matchResults.matches) {
-          matchResults.matches = matchResults.matches.filter(m => !selectedMatchIds.has(m.ediOrder.id) && !selectedMatchDrafts.has(m.ediOrder.id));
-          showMatchReview(matchResults);
-        }
-      }
-    }
-    
-    async function showComparison(matchIndex) {
-      const match = matchResults.matches[matchIndex];
-      if (!match) return;
+    // Build diff table
+    let ordersHtml = '';
+    selectedMatches.forEach(match => {
       const edi = match.ediOrder;
       const zoho = match.zohoDraft;
-      
-      // Fetch full order details to get raw_edi for prepack info (same as EDI Details modal)
-      let fullOrder = null;
-      let rawFields = {};
-      try {
-        const orderRes = await fetch('/orders/' + edi.id);
-        if (orderRes.ok) {
-          fullOrder = await orderRes.json();
-          // Parse raw_edi the same way as viewOrder does
-          if (fullOrder.raw_edi) {
-            const lines = fullOrder.raw_edi.split('\\n');
-            if (lines.length >= 2) {
-              const headers = parseCSVLine(lines[0]);
-              const values = parseCSVLine(lines[1]);
-              headers.forEach((h, i) => { rawFields[h.trim()] = values[i] || ''; });
-            }
-          }
-        }
-      } catch (e) { console.log('Could not fetch full order details'); }
-      
-      // Extract prepack pricing info from rawFields (same as EDI Details modal)
-      const items = fullOrder?.parsed_data?.items || edi.items || [];
-      const uom = rawFields['po_item_po_item_uom'] || items[0]?.unitOfMeasure || 'EA';
-      const packPrice = parseFloat(rawFields['po_item_po_item_unit_price']) || 0;
-      const itemPrice = parseFloat(rawFields['product_pack_product_pack_unit_price']) || 0;
-      const packQty = parseInt(rawFields['product_pack_product_pack_product_qty']) || 0;
-      const totalItems = parseInt(rawFields['product_pack_product_pack_product_qty_calculated']) || items.reduce((s, i) => s + (i.quantityOrdered || 0), 0);
-      const retailPrice = parseFloat(rawFields['po_item_attributes_retail_price']) || 0;
-      const lineAmount = parseFloat(rawFields['po_item_attributes_amount']) || 0;
-      const isPrepack = uom === 'AS' || uom === 'ST' || packQty > 0;
-      const uomLabel = uom === 'AS' ? 'Prepack' : uom === 'EA' ? 'Each' : uom === 'ST' ? 'Set' : uom;
-      
-      // Calculate all differences
-      const amtDiff = Math.abs(edi.totalAmount - zoho.totalAmount);
-      const hasAmtDiff = amtDiff > 0.01;
-      
-      // Check ship date difference
-      const ediShipDate = edi.shipDate ? new Date(edi.shipDate) : null;
-      const zohoShipDate = zoho.shipDate ? new Date(zoho.shipDate) : null;
-      let shipDateDiffDays = 0;
-      if (ediShipDate && zohoShipDate) {
-        shipDateDiffDays = Math.abs(Math.round((ediShipDate - zohoShipDate) / (1000 * 60 * 60 * 24)));
+
+      let changes = [];
+      if (edi.shipDate !== zoho.shipDate) {
+        changes.push({ field: 'Ship Date', from: zoho.shipDate || '—', to: edi.shipDate || '—' });
       }
-      const hasShipDateDiff = shipDateDiffDays > 7;
-      
-      // Check style differences
-      const ediStyles = new Set((edi.items || []).map(i => (i.productIds?.sku || i.productIds?.vendorItemNumber || '').toUpperCase()).filter(Boolean));
-      const zohoStyles = new Set((zoho.items || []).map(i => (i.name || '').split(' ')[0].toUpperCase()).filter(Boolean));
-      let styleMatchCount = 0;
-      ediStyles.forEach(es => {
-        zohoStyles.forEach(zs => {
-          if (es === zs || es.includes(zs) || zs.includes(es)) styleMatchCount++;
-        });
-      });
-      const hasStyleMismatch = ediStyles.size > 0 && zohoStyles.size > 0 && styleMatchCount === 0;
-      
-      // Build warnings HTML
-      let warningsHtml = '';
-      if (hasStyleMismatch) {
-        warningsHtml += \`<div class="changes-summary" style="background:#ffebee;border:2px solid #c62828;"><span style="font-size:1.5rem">🚨</span><span style="color:#c62828;font-weight:600">STYLE MISMATCH - EDI styles (\${[...ediStyles].slice(0,3).join(', ')}) do not match Zoho styles (\${[...zohoStyles].slice(0,3).join(', ')}). This may be the WRONG match!</span></div>\`;
+      if (Math.abs(edi.totalAmount - zoho.totalAmount) > 1) {
+        changes.push({ field: 'Amount', from: '$' + zoho.totalAmount.toFixed(2), to: '$' + edi.totalAmount.toFixed(2) });
       }
-      if (hasShipDateDiff) {
-        warningsHtml += \`<div class="changes-summary" style="background:#fff3e0;"><span style="font-size:1.5rem">⚠️</span><span>Ship date difference: \${shipDateDiffDays} days (EDI: \${edi.shipDate || 'N/A'} vs Zoho: \${zoho.shipDate || 'N/A'})</span></div>\`;
+      if (edi.totalUnits !== zoho.totalUnits) {
+        changes.push({ field: 'Units', from: zoho.totalUnits, to: edi.totalUnits });
       }
-      if (hasAmtDiff) {
-        warningsHtml += \`<div class="changes-summary" style="background:#fff3e0;"><span style="font-size:1.5rem">⚠️</span><span>Amount difference: $\${amtDiff.toFixed(2)}</span></div>\`;
-      }
-      if (!warningsHtml) {
-        warningsHtml = \`<div class="changes-summary no-changes"><span style="font-size:1.5rem">✓</span><span>No significant differences found</span></div>\`;
-      }
-      
-      const html = \`
-        <div class="modal-overlay" onclick="closeModal()">
-          <div class="modal comparison-modal" onclick="event.stopPropagation()">
-            <div class="modal-header">
-              <h2>Compare: EDI Order vs Draft \${isPrepack ? '<span style="background:rgba(88,86,214,0.12);color:#5856d6;padding:0.25rem 0.75rem;border-radius:20px;font-size:0.75rem;font-weight:600;margin-left:0.5rem;">📦 ' + uomLabel + '</span>' : ''}</h2>
-              <button class="modal-close" onclick="closeModal()">×</button>
+
+      ordersHtml += \`
+        <div class="bg-white border border-slate-200 rounded-lg p-4 mb-3">
+          <div class="flex justify-between items-center mb-2">
+            <div class="font-semibold">PO# \${edi.poNumber}</div>
+            <div class="text-sm text-slate-500">→ Zoho #\${zoho.number}</div>
+          </div>
+          \${changes.length > 0 ? \`
+            <div class="text-sm">
+              \${changes.map(c => '<div class="flex gap-4"><span class="text-slate-500 w-20">' + c.field + '</span><span class="line-through text-slate-400">' + c.from + '</span><span class="text-green-600">→ ' + c.to + '</span></div>').join('')}
             </div>
-            <div class="modal-body">
-              \${warningsHtml}
-              
-              <div class="comparison-header">
-                <div class="comparison-side edi">
-                  <h3>📄 EDI Order (Confirmed)</h3>
-                  <div class="comparison-field"><div class="comparison-field-label">PO#</div><div class="comparison-field-value">\${edi.poNumber}</div></div>
-                  <div class="comparison-field"><div class="comparison-field-label">Customer</div><div class="comparison-field-value">\${edi.customer}</div></div>
-                  <div class="comparison-field"><div class="comparison-field-label">Ship Date</div><div class="comparison-field-value" style="\${hasShipDateDiff ? 'color:#f57c00;font-weight:600' : ''}">\${edi.shipDate || 'N/A'}</div></div>
-                  <div class="comparison-field"><div class="comparison-field-label">Items</div><div class="comparison-field-value">\${edi.itemCount} lines, \${edi.totalUnits.toLocaleString()} units</div></div>
-                  <div class="comparison-total" style="\${hasAmtDiff ? 'color:#f57c00' : ''}">Total: $\${edi.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</div>
+          \` : '<div class="text-sm text-green-600">✓ No changes needed</div>'}
+        </div>
+      \`;
+    });
+
+    const modalHtml = \`
+      <div class="modal-overlay" onclick="closeModal()">
+        <div class="bg-white rounded-xl max-w-2xl w-full mx-4 overflow-hidden" onclick="event.stopPropagation()">
+          <div class="bg-slate-800 text-white px-6 py-4 flex justify-between items-center">
+            <h3 class="text-lg font-semibold">📋 Review Changes — \${selectedMatches.length} Orders</h3>
+            <button onclick="closeModal()" class="text-white hover:text-slate-300">✕</button>
+          </div>
+          <div class="p-6 max-h-96 overflow-y-auto">
+            \${ordersHtml}
+          </div>
+          <div class="px-6 py-4 bg-slate-50 border-t flex justify-end gap-3">
+            <button onclick="closeModal()" class="px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-100">Cancel</button>
+            <button onclick="executeBulkUpdate()" id="confirmBulkBtn" class="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 font-medium">
+              ✓ Send \${selectedMatches.length} to Zoho
+            </button>
+          </div>
+        </div>
+      </div>
+    \`;
+
+    document.getElementById('modalContainer').innerHTML = modalHtml;
+  }
+
+  function closeModal() {
+    document.getElementById('modalContainer').innerHTML = '';
+  }
+
+  async function executeBulkUpdate() {
+    const btn = document.getElementById('confirmBulkBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Updating...';
+
+    let success = 0, failed = 0;
+
+    for (const [ediOrderId, draftId] of selectedMatchDrafts) {
+      try {
+        const res = await fetch('/update-draft', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ediOrderId: ediOrderId, zohoDraftId: draftId })
+        });
+        const data = await res.json();
+        if (data.success) {
+          success++;
+          selectedMatchIds.delete(ediOrderId);
+          selectedMatchDrafts.delete(ediOrderId);
+        } else {
+          failed++;
+        }
+      } catch (e) {
+        failed++;
+      }
+    }
+
+    closeModal();
+    toast('✅ ' + success + ' order' + (success !== 1 ? 's' : '') + ' sent to Zoho' + (failed > 0 ? ', ' + failed + ' failed' : ''));
+
+    saveSession();
+    loadOrders();
+    updateWorkflowCounts();
+
+    if (success > 0 && matchResults) {
+      matchResults.matches = matchResults.matches.filter(m => !selectedMatchIds.has(m.ediOrder.id));
+      if (matchResults.matches.length > 0) {
+        focusModeIndex = 0;
+        showFocusMode();
+      } else {
+        showStage('done');
+      }
+    }
+  }
+
+  // ============================================================
+  // SENT ORDERS
+  // ============================================================
+  async function loadSentOrders() {
+    sentOrdersData = orders.filter(o => o.status === 'processed' || o.zoho_so_number);
+
+    const customers = [...new Set(sentOrdersData.map(o => o.edi_customer_name).filter(Boolean))].sort();
+    document.getElementById('sentCustomerFilter').innerHTML = '<option value="">All Customers</option>' +
+      customers.map(c => '<option value="' + c + '">' + c + '</option>').join('');
+
+    filterSentOrders();
+  }
+
+  function filterSentOrders() {
+    const search = (document.getElementById('sentSearchBox')?.value || '').toLowerCase();
+    const customer = document.getElementById('sentCustomerFilter')?.value || '';
+
+    let filtered = sentOrdersData.filter(o => {
+      if (search && !(o.edi_order_number || '').toLowerCase().includes(search)) return false;
+      if (customer && o.edi_customer_name !== customer) return false;
+      return true;
+    });
+
+    const tbody = document.getElementById('sentOrdersTable');
+
+    if (!filtered.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No orders found</td></tr>';
+      document.getElementById('sentOrderCount').textContent = '';
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(o => {
+      const items = o.parsed_data?.items || [];
+      const amt = items.reduce((s, i) => s + (i.quantityOrdered || 0) * (i.unitPrice || 0), 0);
+      const zohoId = o.zoho_so_id || o.matched_draft_id || '';
+      const zohoNum = o.zoho_so_number || zohoId || 'N/A';
+      const zohoLink = zohoId ?
+        '<a href="https://books.zoho.com/app/677681121#/salesorders/' + zohoId + '" target="_blank" class="text-green-600 font-medium hover:underline">' + zohoNum + ' ↗</a>' :
+        zohoNum;
+      const sentAtHtml = o.processed_at ? formatDateWithTime(new Date(o.processed_at)) : '-';
+
+      return \`
+        <tr class="border-b border-slate-100 hover:bg-slate-50">
+          <td class="px-4 py-3 font-medium text-slate-800">\${o.edi_order_number || 'N/A'}</td>
+          <td class="px-4 py-3 text-slate-600">\${o.edi_customer_name || 'Unknown'}</td>
+          <td class="px-4 py-3">\${zohoLink}</td>
+          <td class="px-4 py-3 text-right text-slate-800">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+          <td class="px-4 py-3 text-right text-slate-500">\${sentAtHtml}</td>
+          <td class="px-4 py-3 text-center">
+            <button onclick="viewOrder(\${o.id})" class="px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 rounded transition">View</button>
+          </td>
+        </tr>
+      \`;
+    }).join('');
+
+    document.getElementById('sentOrderCount').textContent = 'Showing ' + filtered.length + ' of ' + sentOrdersData.length + ' orders';
+  }
+
+  function exportSentToExcel() {
+    toast('Exporting to CSV...');
+    // Implementation would go here
+  }
+
+  // ============================================================
+  // ACTIVITY LOG
+  // ============================================================
+  async function loadActivityLog() {
+    const action = document.getElementById('activityActionFilter')?.value || '';
+    const severity = document.getElementById('activitySeverityFilter')?.value || '';
+
+    try {
+      let url = '/audit/logs?limit=100';
+      if (action) url += '&action=' + action;
+      if (severity) url += '&severity=' + severity;
+
+      const res = await fetch(url);
+      const data = await res.json();
+      activityLogData = data.logs || [];
+      renderActivityLog();
+    } catch (e) {
+      console.error('Failed to load activity log:', e);
+    }
+  }
+
+  function filterActivityLog() {
+    loadActivityLog();
+  }
+
+  function renderActivityLog() {
+    const tbody = document.getElementById('activityLogBody');
+
+    if (!activityLogData.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No activity found</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = activityLogData.map(log => {
+      const time = log.created_at ? formatDateWithTime(new Date(log.created_at)) : '-';
+      const statusClass = log.status === 'success' ? 'text-green-600' : log.status === 'error' ? 'text-red-600' : 'text-slate-500';
+      const statusIcon = log.status === 'success' ? '✓' : log.status === 'error' ? '✕' : 'ℹ';
+
+      return \`
+        <tr class="border-b border-slate-100 hover:bg-slate-50">
+          <td class="px-4 py-3 text-slate-500 text-sm">\${time}</td>
+          <td class="px-4 py-3 text-slate-800">\${log.action || '-'}</td>
+          <td class="px-4 py-3 font-medium text-slate-800">\${log.edi_po_number || '-'}</td>
+          <td class="px-4 py-3 text-slate-600">\${log.customer_name || '-'}</td>
+          <td class="px-4 py-3 text-slate-500 text-sm">\${log.details ? JSON.stringify(log.details).substring(0, 50) : '-'}</td>
+          <td class="px-4 py-3 text-center \${statusClass}">\${statusIcon}</td>
+        </tr>
+      \`;
+    }).join('');
+  }
+
+  async function loadAuditStats() {
+    try {
+      const res = await fetch('/audit/stats');
+      const data = await res.json();
+      document.getElementById('statAllTimeSent').textContent = data.allTimeSent || 0;
+      document.getElementById('statAllTimeValue').textContent = '$' + ((data.allTimeValue || 0) / 1000).toFixed(1) + 'K';
+      document.getElementById('stat30DaySent').textContent = data.last30DaysSent || 0;
+      document.getElementById('stat30DayErrors').textContent = data.last30DaysErrors || 0;
+    } catch (e) {}
+  }
+
+  // ============================================================
+  // VIEW ORDER MODAL
+  // ============================================================
+  async function viewOrder(orderId) {
+    try {
+      const res = await fetch('/orders/' + orderId);
+      const order = await res.json();
+
+      const items = order.parsed_data?.items || [];
+      const amt = items.reduce((s, i) => s + (i.quantityOrdered || 0) * (i.unitPrice || 0), 0);
+
+      const modalHtml = \`
+        <div class="modal-overlay" onclick="closeModal()">
+          <div class="bg-white rounded-xl max-w-4xl w-full mx-4 overflow-hidden max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
+            <div class="bg-slate-800 text-white px-6 py-4 flex justify-between items-center">
+              <h3 class="text-lg font-semibold">📄 EDI Order Details — \${order.edi_order_number}</h3>
+              <button onclick="closeModal()" class="text-white hover:text-slate-300">✕</button>
+            </div>
+            <div class="p-6 overflow-y-auto">
+              <div class="grid grid-cols-4 gap-4 mb-6">
+                <div class="bg-slate-50 rounded-lg p-3">
+                  <div class="text-xs text-slate-500 uppercase">PO Number</div>
+                  <div class="font-semibold">\${order.edi_order_number || 'N/A'}</div>
                 </div>
-                <div class="comparison-side zoho">
-                  <h3>📋 Zoho Draft #\${zoho.number}</h3>
-                  <div class="comparison-field"><div class="comparison-field-label">Reference</div><div class="comparison-field-value">\${zoho.reference || 'N/A'}</div></div>
-                  <div class="comparison-field"><div class="comparison-field-label">Customer</div><div class="comparison-field-value">\${zoho.customer}</div></div>
-                  <div class="comparison-field"><div class="comparison-field-label">Ship Date</div><div class="comparison-field-value" style="\${hasShipDateDiff ? 'color:#f57c00;font-weight:600' : ''}">\${zoho.shipDate || 'N/A'}</div></div>
-                  <div class="comparison-field"><div class="comparison-field-label">Items</div><div class="comparison-field-value">\${zoho.itemCount} lines, \${zoho.totalUnits.toLocaleString()} units</div></div>
-                  <div class="comparison-total" style="\${hasAmtDiff ? 'color:#f57c00' : ''}">Total: $\${zoho.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2})}</div>
+                <div class="bg-slate-50 rounded-lg p-3">
+                  <div class="text-xs text-slate-500 uppercase">Customer</div>
+                  <div class="font-semibold">\${order.edi_customer_name || 'Unknown'}</div>
+                </div>
+                <div class="bg-slate-50 rounded-lg p-3">
+                  <div class="text-xs text-slate-500 uppercase">Total Value</div>
+                  <div class="font-semibold">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+                </div>
+                <div class="bg-slate-50 rounded-lg p-3">
+                  <div class="text-xs text-slate-500 uppercase">Status</div>
+                  <div class="font-semibold">\${order.status}</div>
                 </div>
               </div>
-              
-              \${isPrepack ? \`
-              <div style="background:#f5f5f7;border-radius:8px;padding:1rem;margin:1.5rem 0;">
-                <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.75rem;">
-                  <span style="background:rgba(88,86,214,0.12);color:#5856d6;padding:0.25rem 0.75rem;border-radius:20px;font-size:0.75rem;font-weight:600;">📦 \${uomLabel}</span>
-                  <h4 style="font-size:0.875rem;font-weight:600;color:#1d1d1f;">Pack & Pricing Details</h4>
-                </div>
-                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;text-align:center;">
-                  <div>
-                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Unit Price (per \${uom})</div>
-                    <div style="font-size:1rem;font-weight:600;color:#1d1d1f;">$\${packPrice.toFixed(2)}</div>
-                  </div>
-                  <div>
-                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Item Price (per each)</div>
-                    <div style="font-size:1rem;font-weight:600;color:\${itemPrice > 0 ? '#34c759' : '#86868b'};">\${itemPrice > 0 ? '$' + itemPrice.toFixed(2) : 'N/A'}</div>
-                  </div>
-                  <div>
-                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Items/Pack</div>
-                    <div style="font-size:1rem;font-weight:600;color:#1d1d1f;">\${packQty > 0 ? packQty : 'N/A'}</div>
-                  </div>
-                </div>
-                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;text-align:center;margin-top:0.75rem;">
-                  <div>
-                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Total Items</div>
-                    <div style="font-size:1rem;font-weight:600;color:#1d1d1f;">\${totalItems > 0 ? totalItems.toLocaleString() : 'N/A'}</div>
-                  </div>
-                  <div>
-                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Retail Price</div>
-                    <div style="font-size:1rem;font-weight:600;color:#ff9500;">\${retailPrice > 0 ? '$' + retailPrice.toFixed(2) : 'N/A'}</div>
-                  </div>
-                  <div>
-                    <div style="font-size:0.6875rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">Line Amount</div>
-                    <div style="font-size:1rem;font-weight:600;color:#1d1d1f;">\${lineAmount > 0 ? '$' + lineAmount.toLocaleString('en-US', {minimumFractionDigits:2}) : 'N/A'}</div>
-                  </div>
-                </div>
-                \${itemPrice > 0 && packQty > 0 ? \`
-                <div style="display:flex;align-items:center;justify-content:center;gap:0.5rem;padding:0.75rem;background:rgba(52,199,89,0.1);border-radius:8px;margin-top:1rem;">
-                  <span style="font-size:0.875rem;font-weight:500;color:#34c759;">✓ Price breakdown: $\${itemPrice.toFixed(2)}/item × \${packQty} items = $\${(itemPrice * packQty).toFixed(2)}/pack</span>
-                </div>
-                \` : ''}
-              </div>
-              \` : ''}
-              
-              <h3 style="margin:1.5rem 0 1rem">Line Item Comparison:</h3>
-              <div class="table-container">
-                <table class="line-comparison-table">
-                  <thead><tr><th class="edi-col">Style</th><th class="edi-col">Color</th><th class="edi-col">Qty</th><th class="edi-col">Price</th><th class="divider"></th><th class="zoho-col">Style/Item</th><th class="zoho-col">Desc</th><th class="zoho-col">Qty</th><th class="zoho-col">Rate</th></tr></thead>
-                  <tbody>\${renderLineComparison(edi.items, zoho.items)}</tbody>
+
+              <h4 class="font-semibold mb-3">Line Items (\${items.length})</h4>
+              <div class="border border-slate-200 rounded-lg overflow-hidden">
+                <table class="w-full text-sm">
+                  <thead class="bg-slate-50">
+                    <tr>
+                      <th class="text-left px-3 py-2 text-slate-500">SKU</th>
+                      <th class="text-left px-3 py-2 text-slate-500">Description</th>
+                      <th class="text-right px-3 py-2 text-slate-500">Qty</th>
+                      <th class="text-right px-3 py-2 text-slate-500">Price</th>
+                      <th class="text-right px-3 py-2 text-slate-500">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    \${items.map(item => \`
+                      <tr class="border-t border-slate-100">
+                        <td class="px-3 py-2 font-medium">\${item.productIds?.sku || item.productIds?.vendorItemNumber || '-'}</td>
+                        <td class="px-3 py-2 text-slate-600">\${item.description || '-'}</td>
+                        <td class="px-3 py-2 text-right">\${item.quantityOrdered || 0}</td>
+                        <td class="px-3 py-2 text-right">$\${(item.unitPrice || 0).toFixed(2)}</td>
+                        <td class="px-3 py-2 text-right font-medium">$\${((item.quantityOrdered || 0) * (item.unitPrice || 0)).toFixed(2)}</td>
+                      </tr>
+                    \`).join('')}
+                  </tbody>
                 </table>
               </div>
             </div>
-            <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Cancel</button><button class="btn btn-success" onclick="showUpdateConfirmation(\${matchIndex})">\${hasStyleMismatch ? '⚠️ Update Anyway' : '✓ Update Zoho Draft'}</button></div>
-          </div>
-        </div>
-      \`;
-      document.getElementById('modalContainer').innerHTML = html;
-    }
-    
-    function renderLineComparison(ediItems, zohoItems) {
-      const maxRows = Math.max(ediItems.length, zohoItems.length);
-      let html = '';
-      for (let i = 0; i < maxRows; i++) {
-        const edi = ediItems[i];
-        const zoho = zohoItems[i];
-        html += '<tr>';
-        html += edi ? \`<td class="edi-col">\${edi.productIds?.sku || edi.productIds?.vendorItemNumber || '-'}</td><td class="edi-col">\${edi.color || '-'}</td><td class="edi-col">\${edi.quantityOrdered || 0}</td><td class="edi-col">$\${(edi.unitPrice || 0).toFixed(2)}</td>\` : '<td class="edi-col">-</td><td class="edi-col">-</td><td class="edi-col">-</td><td class="edi-col">-</td>';
-        html += '<td class="divider"></td>';
-        html += zoho ? \`<td class="zoho-col">\${zoho.name || '-'}</td><td class="zoho-col">\${(zoho.description || '').substring(0, 30)}</td><td class="zoho-col">\${zoho.quantity || 0}</td><td class="zoho-col">$\${(zoho.rate || 0).toFixed(2)}</td>\` : '<td class="zoho-col">-</td><td class="zoho-col">-</td><td class="zoho-col">-</td><td class="zoho-col">-</td>';
-        html += '</tr>';
-      }
-      return html;
-    }
-    
-    async function confirmSelectedMatches() {
-      const btn = event.target;
-      const originalText = btn.innerHTML;
-      
-      const selectedMatches = [];
-      const selectedNewOrders = [];
-      
-      if (matchResults) {
-        matchResults.matches.forEach((match, idx) => {
-          const cb = document.getElementById('include-' + idx);
-          if (cb && cb.checked) selectedMatches.push({ ediOrderId: match.ediOrder.id, zohoDraftId: match.zohoDraft.id });
-        });
-        matchResults.noMatches.forEach((item, idx) => {
-          const cb = document.getElementById('include-new-' + idx);
-          if (cb && cb.checked) selectedNewOrders.push({ ediOrderId: item.ediOrder.id });
-        });
-      }
-      
-      if (selectedMatches.length === 0 && selectedNewOrders.length === 0) { toast('No orders selected'); return; }
-      
-      btn.disabled = true;
-      btn.innerHTML = '⏳ Processing...';
-      toast('Processing ' + (selectedMatches.length + selectedNewOrders.length) + ' orders...');
-      
-      try {
-        const res = await fetch('/confirm-matches', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ matches: selectedMatches, newOrders: selectedNewOrders })
-        });
-        const data = await res.json();
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-        if (data.success) {
-          toast('Processed ' + data.processed + ' orders');
-          matchResults = null;
-          document.getElementById('matchReviewContent').innerHTML = '<div class="empty-state"><p>✓ All matches confirmed!</p><p>Go to "Sent to Zoho" to see results.</p></div>';
-          loadOrders();
-          loadStats();
-        } else { toast('Error: ' + (data.error || 'Unknown')); }
-      } catch (e) { 
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-        toast('Error: ' + e.message); 
-      }
-    }
-    
-    // Show confirmation modal before updating Zoho
-    function showUpdateConfirmation(matchIndex) {
-      const match = matchResults.matches[matchIndex];
-      if (!match) return;
-      
-      const edi = match.ediOrder;
-      const zoho = match.zohoDraft;
-      
-      // Calculate differences for display
-      const amtDiff = Math.abs(edi.totalAmount - zoho.totalAmount);
-      const hasAmtDiff = amtDiff > 10;
-      
-      // Ship date difference
-      let shipDateDiff = '';
-      if (edi.shipDate && zoho.shipDate) {
-        const ediDate = new Date(edi.shipDate);
-        const zohoDate = new Date(zoho.shipDate);
-        const diffDays = Math.round(Math.abs(ediDate - zohoDate) / (1000 * 60 * 60 * 24));
-        if (diffDays > 0) {
-          shipDateDiff = diffDays + ' days';
-        }
-      }
-      
-      // Build changes list
-      let changesHtml = '';
-      
-      // PO Reference change
-      if (edi.poNumber && edi.poNumber !== zoho.reference) {
-        changesHtml += '<div class="confirm-change-item"><span class="change-label">PO Reference:</span>';
-        if (zoho.reference) {
-          changesHtml += '<span class="change-old">' + zoho.reference + '</span><span class="change-arrow">→</span>';
-        }
-        changesHtml += '<span class="change-new">' + edi.poNumber + '</span></div>';
-      }
-      
-      // Ship date change
-      if (edi.shipDate) {
-        const ediShipFormatted = edi.shipDate.split('T')[0];
-        const zohoShipFormatted = zoho.shipDate ? zoho.shipDate.split('T')[0] : 'Not set';
-        if (ediShipFormatted !== zohoShipFormatted) {
-          changesHtml += '<div class="confirm-change-item"><span class="change-label">Ship Date:</span>';
-          changesHtml += '<span class="change-old">' + zohoShipFormatted + '</span><span class="change-arrow">→</span>';
-          changesHtml += '<span class="change-new">' + ediShipFormatted + '</span></div>';
-        }
-      }
-      
-      // Items/Units change
-      if (edi.itemCount !== zoho.itemCount || edi.totalUnits !== zoho.totalUnits) {
-        changesHtml += '<div class="confirm-change-item"><span class="change-label">Items:</span>';
-        changesHtml += '<span class="change-old">' + zoho.itemCount + ' lines, ' + zoho.totalUnits.toLocaleString() + ' units</span><span class="change-arrow">→</span>';
-        changesHtml += '<span class="change-new">' + edi.itemCount + ' lines, ' + edi.totalUnits.toLocaleString() + ' units</span></div>';
-      }
-      
-      // Amount change
-      if (hasAmtDiff) {
-        changesHtml += '<div class="confirm-change-item"><span class="change-label">Total Amount:</span>';
-        changesHtml += '<span class="change-old">$' + zoho.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2}) + '</span><span class="change-arrow">→</span>';
-        changesHtml += '<span class="change-new">$' + edi.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2}) + '</span></div>';
-      }
-      
-      if (!changesHtml) {
-        changesHtml = '<div style="color:#34c759;padding:0.5rem 0;">✓ No significant changes detected - data appears to match</div>';
-      }
-      
-      // Build warnings
-      let warningsHtml = '';
-      if (hasAmtDiff && amtDiff > 1000) {
-        warningsHtml += '<div class="confirm-warning" style="background:#fff3e0;border:1px solid #ff9800;"><span>⚠️</span><span>Large amount difference: <strong>$' + amtDiff.toLocaleString('en-US', {minimumFractionDigits:2}) + '</strong></span></div>';
-      }
-      if (shipDateDiff && parseInt(shipDateDiff) > 14) {
-        warningsHtml += '<div class="confirm-warning" style="background:#fff3e0;border:1px solid #ff9800;"><span>⚠️</span><span>Ship date difference: <strong>' + shipDateDiff + '</strong></span></div>';
-      }
-      
-      const html = \`
-        <div class="modal-overlay" onclick="closeConfirmModal()">
-          <div class="modal" onclick="event.stopPropagation()" style="max-width:550px;">
-            <div class="modal-header" style="background:linear-gradient(135deg,#1e3a5f,#2d5a87);">
-              <h2 style="color:white;">⚠️ Confirm Update to Zoho</h2>
-              <button class="modal-close" onclick="closeConfirmModal()" style="color:white;">×</button>
-            </div>
-            <div class="modal-body" style="padding:1.5rem;">
-              <div style="background:#f5f5f7;border-radius:12px;padding:1rem;margin-bottom:1.25rem;">
-                <div style="font-size:0.75rem;color:#86868b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">You are about to update</div>
-                <div style="font-size:1.125rem;font-weight:600;color:#1e3a5f;">📋 Zoho Order #\${zoho.number}</div>
-                <div style="font-size:0.875rem;color:#86868b;margin-top:0.25rem;">Status: \${zoho.status || 'Draft'}</div>
-              </div>
-              
-              <div style="background:#e3f2fd;border-radius:12px;padding:1rem;margin-bottom:1.25rem;">
-                <div style="font-size:0.75rem;color:#1565c0;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.25rem;">With EDI data from</div>
-                <div style="font-size:1.125rem;font-weight:600;color:#1565c0;">📦 PO# \${edi.poNumber}</div>
-                <div style="font-size:0.875rem;color:#1976d2;margin-top:0.25rem;">\${edi.customer}</div>
-              </div>
-              
-              \${warningsHtml}
-              
-              <div style="margin-top:1.25rem;">
-                <div style="font-size:0.875rem;font-weight:600;color:#1d1d1f;margin-bottom:0.75rem;border-bottom:1px solid #e5e5e7;padding-bottom:0.5rem;">Changes to be applied:</div>
-                <div class="confirm-changes-list">
-                  \${changesHtml}
-                </div>
-              </div>
-              
-              <div style="background:#f0f9ff;border-radius:8px;padding:0.875rem;margin-top:1.25rem;font-size:0.8125rem;color:#0277bd;">
-                <strong>💡 Note:</strong> This will update the Zoho order with the EDI data. The action will be logged in the Activity Log.
-              </div>
-            </div>
-            <div class="modal-footer" style="border-top:1px solid #e5e5e7;padding:1rem 1.5rem;display:flex;gap:0.75rem;justify-content:flex-end;">
-              <button class="btn btn-secondary" onclick="closeConfirmModal()">Cancel</button>
-              <button id="confirmUpdateBtn" class="btn btn-success" onclick="executeUpdateZohoDraft(\${matchIndex})" style="min-width:180px;">
-                ✓ Confirm & Update Zoho
-              </button>
-            </div>
-          </div>
-        </div>
-        <style>
-          .confirm-change-item { display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0; border-bottom:1px solid #f0f0f0; font-size:0.875rem; flex-wrap:wrap; }
-          .confirm-change-item:last-child { border-bottom:none; }
-          .change-label { font-weight:600; color:#1d1d1f; min-width:110px; }
-          .change-old { color:#c62828; text-decoration:line-through; background:#ffebee; padding:0.125rem 0.5rem; border-radius:4px; }
-          .change-arrow { color:#86868b; font-weight:bold; }
-          .change-new { color:#2e7d32; font-weight:600; background:#e8f5e9; padding:0.125rem 0.5rem; border-radius:4px; }
-          .confirm-warning { display:flex; align-items:center; gap:0.5rem; padding:0.75rem; border-radius:8px; margin-bottom:0.75rem; font-size:0.875rem; }
-          .confirm-changes-list { background:#fafafa; border-radius:8px; padding:0.5rem 1rem; }
-        </style>
-      \`;
-      
-      // Add to a separate container so we can have both modals
-      let confirmContainer = document.getElementById('confirmModalContainer');
-      if (!confirmContainer) {
-        confirmContainer = document.createElement('div');
-        confirmContainer.id = 'confirmModalContainer';
-        document.body.appendChild(confirmContainer);
-      }
-      confirmContainer.innerHTML = html;
-    }
-    
-    function closeConfirmModal() {
-      const container = document.getElementById('confirmModalContainer');
-      if (container) container.innerHTML = '';
-    }
-    
-    // Actually execute the update after confirmation
-    async function executeUpdateZohoDraft(matchIndex) {
-      const match = matchResults.matches[matchIndex];
-      if (!match) return;
-      
-      // Disable button and show loading state
-      const btn = document.getElementById('confirmUpdateBtn');
-      if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<span style="display:inline-flex;align-items:center;gap:0.5rem;"><span class="spinner" style="width:16px;height:16px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;"></span> Updating...</span>';
-      }
-      
-      // Add spinner animation if not exists
-      if (!document.getElementById('spinnerStyle')) {
-        const style = document.createElement('style');
-        style.id = 'spinnerStyle';
-        style.textContent = '@keyframes spin { to { transform: rotate(360deg); } }';
-        document.head.appendChild(style);
-      }
-      
-      try {
-        const res = await fetch('/update-draft', { 
-          method: 'POST', 
-          headers: { 'Content-Type': 'application/json' }, 
-          body: JSON.stringify({ 
-            ediOrderId: match.ediOrder.id, 
-            zohoDraftId: match.zohoDraft.id 
-          }) 
-        });
-        const data = await res.json();
-        
-        if (data.success) { 
-          closeConfirmModal();
-          closeModal();
-          toast('✅ Zoho order updated successfully!'); 
-          loadOrders(); 
-        } else { 
-          // Re-enable button on error
-          if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '✓ Confirm & Update Zoho';
-          }
-          toast('❌ Error: ' + (data.error || 'Unknown error')); 
-        }
-      } catch (e) { 
-        // Re-enable button on error
-        if (btn) {
-          btn.disabled = false;
-          btn.innerHTML = '✓ Confirm & Update Zoho';
-        }
-        toast('❌ Error: ' + e.message); 
-      }
-    }
-
-    // Legacy function - now redirects to confirmation
-    async function updateZohoDraft(matchIndex) {
-      showUpdateConfirmation(matchIndex);
-    }
-    
-    // ============================================================
-    // OTHER TABS
-    // ============================================================
-    
-    var sentOrdersData = [];
-    
-    async function loadSentOrders() {
-      try {
-        sentOrdersData = orders.filter(o => o.status === 'processed' || o.zoho_so_number);
-        
-        // Populate customer filter dropdown
-        const customers = [...new Set(sentOrdersData.map(o => o.edi_customer_name).filter(Boolean))].sort();
-        document.getElementById('sentCustomerFilter').innerHTML = '<option value="">All Customers</option>' + customers.map(c => '<option value="' + c + '">' + c + '</option>').join('');
-        
-        filterSentOrders();
-      } catch (e) { toast('Failed to load sent orders'); }
-    }
-    
-    function filterSentOrders() {
-      const search = (document.getElementById('sentSearchBox')?.value || '').toLowerCase();
-      const customer = document.getElementById('sentCustomerFilter')?.value || '';
-      
-      let filtered = sentOrdersData.filter(o => {
-        if (search && !(o.edi_order_number || '').toLowerCase().includes(search)) return false;
-        if (customer && o.edi_customer_name !== customer) return false;
-        return true;
-      });
-      
-      const tbody = document.getElementById('sentOrdersTable');
-      if (!filtered.length) { 
-        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No orders found</td></tr>'; 
-        document.getElementById('sentOrderCount').textContent = '';
-        return; 
-      }
-      
-      tbody.innerHTML = filtered.map(o => {
-        const items = o.parsed_data?.items || [];
-        const amt = items.reduce((s,i) => s + (i.quantityOrdered||0)*(i.unitPrice||0), 0);
-
-        // Format Zoho SO# as link if available
-        const zohoId = o.zoho_so_id || o.matched_draft_id || '';
-        const zohoNum = o.zoho_so_number || zohoId || 'N/A';
-        const zohoLink = zohoId ?
-          '<a href="https://books.zoho.com/app/677681121#/salesorders/' + zohoId + '" target="_blank" style="color:#0088c2;text-decoration:none;font-weight:500;">' + zohoNum + ' <span style="font-size:0.75rem;">↗</span></a>' :
-          zohoNum;
-
-        // Format timestamp with relative time
-        let sentAtHtml = '-';
-        if (o.processed_at) {
-          const sentDate = new Date(o.processed_at);
-          const sentStr = formatDateWithTime(sentDate);
-          sentAtHtml = '<span style="font-size:0.8125rem;">' + sentStr + '</span>';
-        }
-
-        // Actions column
-        const actionsHtml = '<button class="btn btn-secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem;" onclick="viewOrder(' + o.id + ')">View</button>';
-
-        return \`<tr>
-          <td><strong>\${o.edi_order_number||'N/A'}</strong></td>
-          <td>\${o.edi_customer_name||'Unknown'}</td>
-          <td>\${zohoLink}</td>
-          <td>$\${amt.toLocaleString('en-US',{minimumFractionDigits:2})}</td>
-          <td>\${sentAtHtml}</td>
-          <td>\${actionsHtml}</td>
-        </tr>\`;
-      }).join('');
-      
-      document.getElementById('sentOrderCount').textContent = 'Showing ' + filtered.length + ' of ' + sentOrdersData.length + ' orders';
-    }
-    
-    function exportSentToExcel() {
-      const search = (document.getElementById('sentSearchBox')?.value || '').toLowerCase();
-      const customer = document.getElementById('sentCustomerFilter')?.value || '';
-      
-      // Get filtered data (same filter logic as filterSentOrders)
-      let filtered = sentOrdersData.filter(o => {
-        if (search && !(o.edi_order_number || '').toLowerCase().includes(search)) return false;
-        if (customer && o.edi_customer_name !== customer) return false;
-        return true;
-      });
-      
-      if (!filtered.length) {
-        toast('No orders to export');
-        return;
-      }
-      
-      // Build CSV content
-      const headers = ['PO #', 'Customer', 'Zoho SO#', 'Value', 'Items', 'Units', 'Sent At', 'Matched Draft'];
-      const rows = filtered.map(o => {
-        const items = o.parsed_data?.items || [];
-        const amt = items.reduce((s,i) => s + (i.quantityOrdered||0)*(i.unitPrice||0), 0);
-        const units = items.reduce((s,i) => s + (i.quantityOrdered||0), 0);
-        return [
-          o.edi_order_number || '',
-          o.edi_customer_name || '',
-          o.zoho_so_number || o.zoho_so_id || '',
-          amt.toFixed(2),
-          items.length,
-          units,
-          o.processed_at ? new Date(o.processed_at).toLocaleString() : '',
-          o.matched_draft_id || ''
-        ];
-      });
-      
-      // Create CSV string
-      const csvContent = [headers, ...rows].map(row => 
-        row.map(cell => '"' + String(cell).replace(/"/g, '""') + '"').join(',')
-      ).join('\\n');
-      
-      // Download as file
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      const customerSuffix = customer ? '_' + customer.replace(/[^a-zA-Z0-9]/g, '') : '';
-      link.download = 'sent_to_zoho' + customerSuffix + '_' + new Date().toISOString().split('T')[0] + '.csv';
-      link.click();
-      URL.revokeObjectURL(url);
-      
-      toast('Exported ' + filtered.length + ' orders');
-    }
-    
-    var zohoCustomersCache = [];
-    
-    async function loadMappings() {
-      try {
-        var mappingsRes = await fetch('/customer-mappings');
-        var mappings = await mappingsRes.json();
-        
-        var customers = [];
-        try {
-          var custRes = await fetch('/zoho/customers');
-          var custData = await custRes.json();
-          customers = custData.customers || [];
-          zohoCustomersCache = customers;
-        } catch (err) {
-          console.log('Could not load Zoho customers:', err);
-        }
-        
-        var html = '';
-        
-        if (customers.length > 0) {
-          html += '<div style="background:#f5f5f7;padding:1rem;border-radius:8px;margin-bottom:1.5rem;">';
-          html += '<h4 style="margin:0 0 0.75rem 0;font-size:0.9rem;">Add New Mapping</h4>';
-          html += '<div style="display:flex;gap:0.75rem;flex-wrap:wrap;">';
-          html += '<input type="text" id="newEdiName" placeholder="EDI Customer Name" style="flex:1;min-width:150px;padding:0.5rem;border:1px solid #d2d2d7;border-radius:6px;font-size:0.85rem;">';
-          html += '<select id="newZohoId" style="flex:1;min-width:150px;padding:0.5rem;border:1px solid #d2d2d7;border-radius:6px;font-size:0.85rem;">';
-          html += '<option value="">-- Select Zoho Customer --</option>';
-          for (var i = 0; i < customers.length; i++) {
-            html += '<option value="' + customers[i].contact_id + '">' + (customers[i].contact_name || 'Unknown') + '</option>';
-          }
-          html += '</select>';
-          html += '<button class="btn btn-primary" onclick="addMapping()">Add</button>';
-          html += '</div></div>';
-        }
-        
-        if (mappings.length) {
-          html += '<div class="table-container"><table class="orders-table"><thead><tr><th>EDI Customer</th><th>Zoho Customer</th>';
-          if (customers.length > 0) html += '<th>Edit</th>';
-          html += '</tr></thead><tbody>';
-          for (var j = 0; j < mappings.length; j++) {
-            var m = mappings[j];
-            html += '<tr><td>' + m.edi_customer_name + '</td>';
-            html += '<td>' + (m.zoho_customer_name && m.zoho_customer_name !== 'undefined' ? '<span style="color:#34c759;">✓</span> ' + m.zoho_customer_name : '<span style="color:#ff9500;">⚠ Not linked</span>') + '</td>';
-            if (customers.length > 0) {
-              html += '<td><select onchange="editMapping(this)" data-edi="' + m.edi_customer_name.replace(/"/g, '&quot;') + '" style="padding:0.4rem;border:1px solid #d2d2d7;border-radius:4px;font-size:0.8rem;">';
-              html += '<option value="">-- Change --</option>';
-              for (var k = 0; k < customers.length; k++) {
-                html += '<option value="' + customers[k].contact_id + '">' + (customers[k].contact_name || 'Unknown') + '</option>';
-              }
-              html += '</select></td>';
-            }
-            html += '</tr>';
-          }
-          html += '</tbody></table></div>';
-        } else {
-          html += '<p style="color:#86868b">No mappings configured.</p>';
-        }
-        
-        document.getElementById('mappingsContent').innerHTML = html;
-      } catch (e) {
-        console.error('loadMappings error:', e);
-      }
-    }
-    
-    async function addMapping() {
-      var ediName = document.getElementById('newEdiName').value.trim();
-      var zohoSelect = document.getElementById('newZohoId');
-      var zohoId = zohoSelect.value;
-      var zohoName = zohoSelect.options[zohoSelect.selectedIndex].text;
-      if (!ediName || !zohoId) { toast('Fill in both fields'); return; }
-      try {
-        var res = await fetch('/customer-mappings', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ediCustomerName: ediName, zohoCustomerId: zohoId, zohoCustomerName: zohoName})
-        });
-        var data = await res.json();
-        if (data.success) { toast('Mapping added!'); loadMappings(); }
-        else { toast('Error: ' + (data.error || 'Failed')); }
-      } catch (err) { toast('Error: ' + err.message); }
-    }
-    
-    async function editMapping(selectEl) {
-      var zohoId = selectEl.value;
-      if (!zohoId) return;
-      var ediName = selectEl.getAttribute('data-edi');
-      var zohoName = selectEl.options[selectEl.selectedIndex].text;
-      try {
-        var res = await fetch('/customer-mappings', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ediCustomerName: ediName, zohoCustomerId: zohoId, zohoCustomerName: zohoName})
-        });
-        var data = await res.json();
-        if (data.success) { toast('Mapping updated!'); loadMappings(); }
-        else { toast('Error: ' + (data.error || 'Failed')); }
-      } catch (err) { toast('Error: ' + err.message); }
-    }
-    
-    // ============================================================
-    // ACTIVITY LOG FUNCTIONS
-    // ============================================================
-    
-    let zohoLogData = [];
-    let activityLogData = [];
-    
-    function showActivityTab(tab, el) {
-      document.querySelectorAll('#tabActivity .sub-tab').forEach(t => t.classList.remove('active'));
-      el.classList.add('active');
-      document.getElementById('activityZohoTab').style.display = tab === 'zoho' ? 'block' : 'none';
-      document.getElementById('activityLogTab').style.display = tab === 'activity' ? 'block' : 'none';
-      if (tab === 'zoho') loadZohoLog();
-      if (tab === 'activity') loadActivityLog();
-    }
-    
-    async function loadAuditStats() {
-      try {
-        const res = await fetch('/audit/stats');
-        const data = await res.json();
-        if (data.success && data.stats) {
-          document.getElementById('statAllTimeSent').textContent = data.stats.all_time_zoho_orders || 0;
-          document.getElementById('statAllTimeValue').textContent = '$' + (data.stats.all_time_zoho_value || 0).toLocaleString('en-US', {minimumFractionDigits:0});
-          document.getElementById('stat30DaySent').textContent = data.stats.total_sent || 0;
-          document.getElementById('stat30DayErrors').textContent = data.stats.total_failed || 0;
-        }
-      } catch (e) { console.error('Failed to load audit stats:', e); }
-    }
-    
-    async function loadZohoLog() {
-      try {
-        const res = await fetch('/audit/zoho-orders?limit=500');
-        const data = await res.json();
-        if (data.success) {
-          zohoLogData = data.orders || [];
-          renderZohoLog();
-          updateZohoLogCustomerFilter();
-          loadAuditStats();
-        }
-      } catch (e) {
-        document.getElementById('zohoLogBody').innerHTML = '<tr><td colspan="8" class="empty-state">Failed to load. Audit system may not be initialized.</td></tr>';
-      }
-    }
-    
-    function updateZohoLogCustomerFilter() {
-      const customers = [...new Set(zohoLogData.map(o => o.customer_name).filter(Boolean))].sort();
-      document.getElementById('zohoLogCustomerFilter').innerHTML = '<option value="">All Customers</option>' + customers.map(c => '<option value="' + c + '">' + c + '</option>').join('');
-    }
-    
-    function filterZohoLog() {
-      renderZohoLog();
-    }
-    
-    function renderZohoLog() {
-      const search = (document.getElementById('zohoLogSearchBox')?.value || '').toLowerCase();
-      const customer = document.getElementById('zohoLogCustomerFilter')?.value || '';
-      const fromDate = document.getElementById('zohoLogFromDate')?.value;
-      const toDate = document.getElementById('zohoLogToDate')?.value;
-      
-      let filtered = zohoLogData.filter(o => {
-        if (search && !(o.edi_order_number || '').toLowerCase().includes(search) && !(o.edi_po_number || '').toLowerCase().includes(search)) return false;
-        if (customer && o.customer_name !== customer) return false;
-        if (fromDate && new Date(o.sent_at) < new Date(fromDate)) return false;
-        if (toDate && new Date(o.sent_at) > new Date(toDate + 'T23:59:59')) return false;
-        return true;
-      });
-      
-      const tbody = document.getElementById('zohoLogBody');
-      if (!filtered.length) {
-        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No orders found</td></tr>';
-        document.getElementById('zohoLogCount').textContent = '';
-        return;
-      }
-      
-      tbody.innerHTML = filtered.map(o => {
-        const sentAt = new Date(o.sent_at).toLocaleString();
-        const matchInfo = o.was_new_order ? '<span style="color:#ff9500">New</span>' : (o.match_confidence ? o.match_confidence + '%' : 'Draft');
-        return '<tr>' +
-          '<td style="white-space:nowrap">' + sentAt + '</td>' +
-          '<td><strong>' + (o.edi_order_number || o.edi_po_number || 'N/A') + '</strong></td>' +
-          '<td>' + (o.customer_name || 'Unknown') + '</td>' +
-          '<td><a href="https://books.zoho.com/app/677681121#/salesorders/' + o.zoho_so_id + '" target="_blank">' + (o.zoho_so_number || o.zoho_so_id) + '</a></td>' +
-          '<td>$' + (o.order_amount || 0).toLocaleString('en-US', {minimumFractionDigits:2}) + '</td>' +
-          '<td>' + (o.item_count || 0) + ' items</td>' +
-          '<td>' + matchInfo + '</td>' +
-          '<td><button class="btn btn-secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="viewZohoLogDetails(' + o.id + ')">Details</button></td>' +
-          '</tr>';
-      }).join('');
-      
-      document.getElementById('zohoLogCount').textContent = 'Showing ' + filtered.length + ' of ' + zohoLogData.length + ' orders';
-    }
-    
-    function viewZohoLogDetails(id) {
-      const order = zohoLogData.find(o => o.id === id);
-      if (!order) return;
-      
-      const html = '<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()" style="max-width:600px">' +
-        '<div class="modal-header"><h2>Order Details</h2><button class="modal-close" onclick="closeModal()">×</button></div>' +
-        '<div class="modal-body">' +
-        '<div class="info-grid" style="grid-template-columns:1fr 1fr">' +
-        '<div class="info-box"><div class="info-label">PO Number</div><div class="info-value">' + (order.edi_order_number || 'N/A') + '</div></div>' +
-        '<div class="info-box"><div class="info-label">Customer</div><div class="info-value">' + (order.customer_name || 'N/A') + '</div></div>' +
-        '<div class="info-box"><div class="info-label">Zoho SO#</div><div class="info-value">' + (order.zoho_so_number || order.zoho_so_id) + '</div></div>' +
-        '<div class="info-box"><div class="info-label">Sent At</div><div class="info-value">' + new Date(order.sent_at).toLocaleString() + '</div></div>' +
-        '<div class="info-box"><div class="info-label">Amount</div><div class="info-value">$' + (order.order_amount || 0).toLocaleString('en-US', {minimumFractionDigits:2}) + '</div></div>' +
-        '<div class="info-box"><div class="info-label">Items</div><div class="info-value">' + (order.item_count || 0) + ' items, ' + (order.unit_count || 0) + ' units</div></div>' +
-        '<div class="info-box"><div class="info-label">Match Type</div><div class="info-value">' + (order.was_new_order ? 'New Order' : 'Matched Draft #' + (order.matched_draft_number || order.matched_draft_id || 'N/A')) + '</div></div>' +
-        '<div class="info-box"><div class="info-label">Confidence</div><div class="info-value">' + (order.match_confidence || 'N/A') + '%</div></div>' +
-        '</div></div>' +
-        '<div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
-        '<button class="btn btn-primary" onclick="window.open(\\'https://books.zoho.com/app/677681121#/salesorders/' + order.zoho_so_id + '\\',\\'_blank\\')">Open in Zoho</button></div>' +
-        '</div></div>';
-      
-      document.getElementById('modalContainer').innerHTML = html;
-    }
-    
-    async function loadActivityLog() {
-      try {
-        const action = document.getElementById('activityActionFilter')?.value || '';
-        const severity = document.getElementById('activitySeverityFilter')?.value || '';
-        let url = '/audit/activity?limit=200';
-        if (action) url += '&action=' + action;
-        if (severity) url += '&severity=' + severity;
-        
-        const res = await fetch(url);
-        const data = await res.json();
-        if (data.success) {
-          activityLogData = data.activity || [];
-          renderActivityLog();
-        }
-      } catch (e) {
-        document.getElementById('activityLogBody').innerHTML = '<tr><td colspan="6" class="empty-state">Failed to load activity log</td></tr>';
-      }
-    }
-    
-    function filterActivityLog() {
-      loadActivityLog();
-    }
-    
-    function renderActivityLog() {
-      const tbody = document.getElementById('activityLogBody');
-      if (!activityLogData.length) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No activity found</td></tr>';
-        return;
-      }
-      
-      const severityBadge = (s) => {
-        if (s === 'success') return '<span class="status-badge status-processed">✓ Success</span>';
-        if (s === 'error') return '<span class="status-badge status-failed">❌ Error</span>';
-        if (s === 'warning') return '<span class="status-badge status-pending">⚠️ Warning</span>';
-        return '<span class="status-badge" style="background:#f0f0f0;color:#666">ℹ️ Info</span>';
-      };
-      
-      const actionLabel = (a) => {
-        const labels = {
-          'sent_to_zoho': '✅ Sent to Zoho',
-          'match_found': '🔗 Match Found',
-          'no_match_found': '⚠️ No Match',
-          'order_imported': '📥 Imported',
-          'sftp_fetch_completed': '📡 SFTP Fetch',
-          'zoho_error': '❌ Zoho Error',
-          'draft_updated': '📝 Draft Updated',
-          'new_order_created': '➕ New Order'
-        };
-        return labels[a] || a;
-      };
-      
-      tbody.innerHTML = activityLogData.map((a, idx) => {
-        const time = new Date(a.created_at).toLocaleString();
-        const details = a.zoho_so_number ? 'SO#' + a.zoho_so_number : (a.error_message ? a.error_message.substring(0, 50) : '-');
-        return '<tr>' +
-          '<td style="white-space:nowrap">' + time + '</td>' +
-          '<td>' + actionLabel(a.action) + '</td>' +
-          '<td><strong>' + (a.edi_order_number || a.edi_po_number || '-') + '</strong></td>' +
-          '<td>' + (a.customer_name || '-') + '</td>' +
-          '<td>' + details + '</td>' +
-          '<td>' + severityBadge(a.severity) + '</td>' +
-          '<td><button class="btn btn-secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem;" onclick="viewActivityDetails(' + idx + ')">ℹ️ Info</button></td>' +
-          '</tr>';
-      }).join('');
-    }
-    
-    function viewActivityDetails(idx) {
-      const a = activityLogData[idx];
-      if (!a) return;
-      
-      let detailsHtml = '';
-      if (a.details) {
-        try {
-          const details = typeof a.details === 'string' ? JSON.parse(a.details) : a.details;
-          detailsHtml = '<div style="background:#f5f5f7;padding:1rem;border-radius:8px;margin-top:1rem;"><h4 style="margin:0 0 0.5rem">Details</h4><pre style="margin:0;font-size:0.75rem;overflow-x:auto;">' + JSON.stringify(details, null, 2) + '</pre></div>';
-        } catch (e) {
-          detailsHtml = '<div style="background:#f5f5f7;padding:1rem;border-radius:8px;margin-top:1rem;"><h4 style="margin:0 0 0.5rem">Details</h4><pre style="margin:0;font-size:0.75rem;">' + a.details + '</pre></div>';
-        }
-      }
-      
-      const html = '<div class="modal-overlay" onclick="closeModal()"><div class="modal" onclick="event.stopPropagation()" style="max-width:600px">' +
-        '<div class="modal-header"><h2>Activity Details</h2><button class="modal-close" onclick="closeModal()">×</button></div>' +
-        '<div class="modal-body">' +
-        '<div class="info-grid" style="grid-template-columns:1fr 1fr">' +
-        '<div class="info-box"><div class="info-label">Action</div><div class="info-value">' + (a.action || 'N/A') + '</div></div>' +
-        '<div class="info-box"><div class="info-label">Severity</div><div class="info-value">' + (a.severity || 'info') + '</div></div>' +
-        '<div class="info-box"><div class="info-label">Time</div><div class="info-value">' + new Date(a.created_at).toLocaleString() + '</div></div>' +
-        '<div class="info-box"><div class="info-label">PO Number</div><div class="info-value">' + (a.edi_order_number || a.edi_po_number || 'N/A') + '</div></div>' +
-        '<div class="info-box"><div class="info-label">Customer</div><div class="info-value">' + (a.customer_name || 'N/A') + '</div></div>' +
-        '<div class="info-box"><div class="info-label">Order Amount</div><div class="info-value">' + (a.order_amount ? '$' + parseFloat(a.order_amount).toLocaleString('en-US', {minimumFractionDigits:2}) : 'N/A') + '</div></div>' +
-        (a.zoho_so_id ? '<div class="info-box"><div class="info-label">Zoho SO ID</div><div class="info-value">' + a.zoho_so_id + '</div></div>' : '') +
-        (a.zoho_so_number ? '<div class="info-box"><div class="info-label">Zoho SO#</div><div class="info-value">' + a.zoho_so_number + '</div></div>' : '') +
-        (a.match_confidence ? '<div class="info-box"><div class="info-label">Match Confidence</div><div class="info-value">' + a.match_confidence + '%</div></div>' : '') +
-        (a.error_message ? '<div class="info-box" style="grid-column:span 2"><div class="info-label">Error</div><div class="info-value" style="color:#c62828">' + a.error_message + '</div></div>' : '') +
-        '</div>' +
-        detailsHtml +
-        '</div>' +
-        '<div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
-        (a.zoho_so_id ? '<button class="btn btn-primary" onclick="window.open(\\'https://books.zoho.com/app/677681121#/salesorders/' + a.zoho_so_id + '\\',\\'_blank\\')">Open in Zoho</button>' : '') +
-        '</div></div></div>';
-      
-      document.getElementById('modalContainer').innerHTML = html;
-    }
-    
-    function exportZohoLog() {
-      if (!zohoLogData.length) { toast('No data to export'); return; }
-      
-      const headers = ['Sent At', 'PO Number', 'Customer', 'Zoho SO#', 'Amount', 'Items', 'Units', 'Match Type', 'Confidence'];
-      const rows = zohoLogData.map(o => [
-        new Date(o.sent_at).toISOString(),
-        o.edi_order_number || o.edi_po_number || '',
-        o.customer_name || '',
-        o.zoho_so_number || o.zoho_so_id || '',
-        o.order_amount || 0,
-        o.item_count || 0,
-        o.unit_count || 0,
-        o.was_new_order ? 'New' : 'Matched',
-        o.match_confidence || ''
-      ]);
-      
-      const csv = [headers.join(','), ...rows.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(','))].join('\\n');
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'zoho-orders-' + new Date().toISOString().split('T')[0] + '.csv';
-      a.click();
-      URL.revokeObjectURL(url);
-      toast('Exported ' + zohoLogData.length + ' records');
-    }
-    
-    // ============================================================
-    // SFTP BROWSER FUNCTIONS
-    // ============================================================
-    
-    let sftpIncomingFiles = [];
-    let sftpArchiveFiles = [];
-    let sftpSelectedIncoming = new Set();
-    let sftpSelectedArchive = new Set();
-    
-    function showSftpTab(tab) {
-      document.getElementById('sftpTabIncoming').className = tab === 'incoming' ? 'btn btn-primary sftp-tab-btn active' : 'btn btn-secondary sftp-tab-btn';
-      document.getElementById('sftpTabArchive').className = tab === 'archive' ? 'btn btn-primary sftp-tab-btn active' : 'btn btn-secondary sftp-tab-btn';
-      document.getElementById('sftpIncomingPanel').style.display = tab === 'incoming' ? 'block' : 'none';
-      document.getElementById('sftpArchivePanel').style.display = tab === 'archive' ? 'block' : 'none';
-    }
-    
-    async function refreshSftpStatus() {
-      try {
-        document.getElementById('sftpIncomingCount').textContent = '...';
-        document.getElementById('sftpArchivedCount').textContent = '...';
-        
-        const response = await fetch('/sftp/status');
-        const data = await response.json();
-        
-        if (data.success) {
-          document.getElementById('sftpIncomingCount').textContent = data.incoming.count;
-          document.getElementById('sftpArchivedCount').textContent = data.archived.count;
-          document.getElementById('sftpIncomingBadge').textContent = data.incoming.count;
-          document.getElementById('sftpArchiveBadge').textContent = data.archived.count;
-          document.getElementById('sftpLastCheck').textContent = new Date(data.timestamp).toLocaleTimeString();
-          document.getElementById('sftpOrdersPath').textContent = data.ordersPath;
-          document.getElementById('sftpArchivePath').textContent = data.archivePath;
-          
-          sftpIncomingFiles = data.incoming.files || [];
-          sftpArchiveFiles = data.archived.files || [];
-          
-          renderSftpIncomingFiles();
-          renderSftpArchiveFiles();
-        } else {
-          toast('SFTP Error: ' + data.error);
-        }
-      } catch (error) {
-        console.error('SFTP status error:', error);
-        toast('Failed to get SFTP status');
-      }
-    }
-    
-    function renderSftpIncomingFiles() {
-      const tbody = document.getElementById('sftpIncomingTable');
-      
-      if (sftpIncomingFiles.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">📭 No files waiting in incoming folder</td></tr>';
-        return;
-      }
-      
-      tbody.innerHTML = sftpIncomingFiles.map(file => {
-        const fileType = getSftpFileType(file.name);
-        const typeClass = fileType === '850' ? 'status-matched' : fileType === '860' ? 'status-pending' : 'status-review';
-        const icon = fileType === '860' ? '⚡' : '📄';
-        
-        return '<tr>' +
-          '<td><input type="checkbox" class="checkbox" data-filename="' + file.name + '" onchange="toggleSftpIncoming(\\'' + file.name + '\\')" ' + (sftpSelectedIncoming.has(file.name) ? 'checked' : '') + '></td>' +
-          '<td><strong>' + icon + ' ' + file.name + '</strong></td>' +
-          '<td><span class="status-badge ' + typeClass + '">' + fileType + '</span></td>' +
-          '<td>' + formatSftpFileSize(file.size) + '</td>' +
-          '<td>' + formatSftpDate(file.modifyTime) + '</td>' +
-          '<td><button class="btn btn-primary" style="padding:0.35rem 0.75rem;font-size:0.8125rem" onclick="refetchSingleFile(\\'' + file.name + '\\', \\'incoming\\')">📥 Fetch</button></td>' +
-          '</tr>';
-      }).join('');
-    }
-    
-    function renderSftpArchiveFiles() {
-      const tbody = document.getElementById('sftpArchiveTable');
-      const searchTerm = (document.getElementById('archiveSearchBox')?.value || '').toLowerCase();
-      
-      let filteredFiles = sftpArchiveFiles;
-      if (searchTerm) {
-        filteredFiles = sftpArchiveFiles.filter(f => f.name.toLowerCase().includes(searchTerm));
-      }
-      
-      if (filteredFiles.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">📦 ' + (searchTerm ? 'No files match your search' : 'No archived files found') + '</td></tr>';
-        return;
-      }
-      
-      tbody.innerHTML = filteredFiles.map(file => {
-        const fileType = getSftpFileType(file.name);
-        const typeClass = fileType === '850' ? 'status-matched' : fileType === '860' ? 'status-pending' : 'status-review';
-        const icon = fileType === '860' ? '⚡' : '📄';
-        
-        return '<tr>' +
-          '<td><input type="checkbox" class="checkbox archive-cb" data-filename="' + file.name + '" onchange="toggleSftpArchive(\\'' + file.name + '\\')" ' + (sftpSelectedArchive.has(file.name) ? 'checked' : '') + '></td>' +
-          '<td><strong>' + icon + ' ' + file.name + '</strong></td>' +
-          '<td><span class="status-badge ' + typeClass + '">' + fileType + '</span></td>' +
-          '<td>' + formatSftpFileSize(file.size) + '</td>' +
-          '<td>' + formatSftpDate(file.modifyTime) + '</td>' +
-          '<td><button class="btn btn-primary" style="padding:0.35rem 0.75rem;font-size:0.8125rem" onclick="refetchSingleFile(\\'' + file.name + '\\', \\'archive\\')">📥 Re-fetch</button></td>' +
-          '</tr>';
-      }).join('');
-    }
-    
-    function filterArchiveFiles() { renderSftpArchiveFiles(); }
-    
-    function toggleSftpIncoming(filename) {
-      if (sftpSelectedIncoming.has(filename)) sftpSelectedIncoming.delete(filename);
-      else sftpSelectedIncoming.add(filename);
-      updateSftpIncomingButton();
-    }
-    
-    function toggleSftpArchive(filename) {
-      if (sftpSelectedArchive.has(filename)) sftpSelectedArchive.delete(filename);
-      else sftpSelectedArchive.add(filename);
-      updateSftpArchiveButton();
-    }
-    
-    function toggleAllIncoming() {
-      const checked = document.getElementById('selectAllIncoming')?.checked;
-      sftpSelectedIncoming.clear();
-      if (checked) sftpIncomingFiles.forEach(f => sftpSelectedIncoming.add(f.name));
-      renderSftpIncomingFiles();
-      updateSftpIncomingButton();
-    }
-    
-    function toggleAllArchive() {
-      const checked = document.getElementById('selectAllArchive')?.checked;
-      sftpSelectedArchive.clear();
-      if (checked) {
-        const searchTerm = (document.getElementById('archiveSearchBox')?.value || '').toLowerCase();
-        let filteredFiles = sftpArchiveFiles;
-        if (searchTerm) filteredFiles = sftpArchiveFiles.filter(f => f.name.toLowerCase().includes(searchTerm));
-        filteredFiles.forEach(f => sftpSelectedArchive.add(f.name));
-      }
-      renderSftpArchiveFiles();
-      updateSftpArchiveButton();
-    }
-    
-    function updateSftpIncomingButton() {
-      const btn = document.getElementById('refetchIncomingBtn');
-      btn.disabled = sftpSelectedIncoming.size === 0;
-      btn.textContent = '📥 Re-fetch Selected (' + sftpSelectedIncoming.size + ')';
-    }
-    
-    function updateSftpArchiveButton() {
-      const btn = document.getElementById('refetchArchiveBtn');
-      btn.disabled = sftpSelectedArchive.size === 0;
-      btn.textContent = '📥 Re-fetch Selected (' + sftpSelectedArchive.size + ')';
-    }
-    
-    async function refetchSingleFile(filename, source) {
-      try {
-        toast('Fetching ' + filename + '...');
-        const endpoint = source === 'archive' ? '/sftp/refetch-from-archive' : '/sftp/refetch-from-incoming';
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename })
-        });
-        const data = await response.json();
-        if (data.success) {
-          toast('✅ ' + data.message + ': ' + data.parsed.poNumber);
-          refreshSftpStatus();
-          loadOrders();
-        } else {
-          toast('❌ ' + data.error);
-        }
-      } catch (error) {
-        console.error('Refetch error:', error);
-        toast('Failed to refetch file');
-      }
-    }
-    
-    async function refetchSelectedIncoming() {
-      if (sftpSelectedIncoming.size === 0) return;
-      await bulkSftpRefetch(Array.from(sftpSelectedIncoming), 'incoming');
-    }
-    
-    async function refetchSelectedArchive() {
-      if (sftpSelectedArchive.size === 0) return;
-      await bulkSftpRefetch(Array.from(sftpSelectedArchive), 'archive');
-    }
-    
-    async function bulkSftpRefetch(filenames, source) {
-      try {
-        toast('Fetching ' + filenames.length + ' files...');
-        const response = await fetch('/sftp/bulk-refetch', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filenames, source })
-        });
-        const data = await response.json();
-        if (data.success) {
-          toast('✅ Fetched ' + data.summary.successful + ' of ' + data.summary.total + ' files');
-          if (source === 'incoming') { sftpSelectedIncoming.clear(); updateSftpIncomingButton(); }
-          else { sftpSelectedArchive.clear(); updateSftpArchiveButton(); }
-          refreshSftpStatus();
-          loadOrders();
-        } else {
-          toast('❌ ' + data.error);
-        }
-      } catch (error) {
-        console.error('Bulk refetch error:', error);
-        toast('Failed to refetch files');
-      }
-    }
-    
-    function getSftpFileType(filename) {
-      const upper = filename.toUpperCase();
-      if (upper.includes('860')) return '860';
-      if (upper.includes('850')) return '850';
-      return 'EDI';
-    }
-    
-    function formatSftpFileSize(bytes) {
-      if (bytes < 1024) return bytes + ' B';
-      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    }
-    
-    function formatSftpDate(timestamp) {
-      const date = new Date(timestamp);
-      const now = new Date();
-      const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
-      if (diffDays === 0) return 'Today ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-      if (diffDays === 1) return 'Yesterday';
-      if (diffDays < 7) return diffDays + ' days ago';
-      return date.toLocaleDateString();
-    }
-    
-
-    // ============================================================
-    // TEST SCENARIO FUNCTIONS
-    // ============================================================
-    
-    async function generateTestScenario() {
-      const scenario = document.getElementById('testScenarioType').value;
-      const itemCount = parseInt(document.getElementById('testItemCount').value);
-      const qtyPerItem = parseInt(document.getElementById('testQtyPerItem').value);
-      
-      if (!confirm('This will create:\\n\\n• A Draft Sales Order in Zoho (Hero Test Account)\\n• A matching EDI record in the database\\n\\nScenario: ' + scenario + '\\nItems: ' + itemCount + ' x ' + qtyPerItem + ' units\\n\\nProceed?')) {
-        return;
-      }
-      
-      toast('🧪 Generating test scenario...');
-      
-      try {
-        const res = await fetch('/generate-test-scenario', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ scenario, itemCount, qtyPerItem })
-        });
-        const data = await res.json();
-        
-        if (data.success) {
-          toast('✅ Test scenario created: ' + data.testOrder.poNumber);
-          showTestResultModal(data.testOrder);
-          loadTestOrders();
-          loadOrders(); // Refresh EDI orders list
-        } else {
-          toast('❌ Error: ' + data.error);
-        }
-      } catch (e) {
-        toast('❌ Error: ' + e.message);
-      }
-    }
-    
-    function showTestResultModal(testOrder) {
-      const html = \`
-        <div class="modal-overlay" onclick="closeModal()">
-          <div class="modal" onclick="event.stopPropagation()" style="max-width:500px">
-            <div class="modal-header">
-              <h2>🧪 Test Scenario Created!</h2>
-              <button class="modal-close" onclick="closeModal()">×</button>
-            </div>
-            <div class="modal-body">
-              <div style="background:#e8f5e9;border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;text-align:center;">
-                <div style="font-size:2rem;margin-bottom:0.5rem;">✅</div>
-                <div style="font-size:1.25rem;font-weight:600;color:#2e7d32;">Success!</div>
-              </div>
-              
-              <div class="info-grid" style="grid-template-columns:1fr 1fr;">
-                <div class="info-box">
-                  <div class="info-label">PO Number</div>
-                  <div class="info-value" style="color:#ff9800;font-weight:700;">\${testOrder.poNumber}</div>
-                </div>
-                <div class="info-box">
-                  <div class="info-label">Scenario</div>
-                  <div class="info-value">\${testOrder.scenario}</div>
-                </div>
-                <div class="info-box">
-                  <div class="info-label">Zoho Draft #</div>
-                  <div class="info-value">\${testOrder.zohoDraft.number}</div>
-                </div>
-                <div class="info-box">
-                  <div class="info-label">EDI Order ID</div>
-                  <div class="info-value">\${testOrder.ediOrderId}</div>
-                </div>
-                <div class="info-box">
-                  <div class="info-label">Items</div>
-                  <div class="info-value">\${testOrder.summary.itemCount} items, \${testOrder.summary.totalUnits} units</div>
-                </div>
-                <div class="info-box">
-                  <div class="info-label">Total</div>
-                  <div class="info-value">$\${testOrder.summary.ediTotal.toFixed(2)}</div>
-                </div>
-              </div>
-              
-              <div style="background:#fff3e0;border-radius:8px;padding:1rem;margin-top:1rem;font-size:0.875rem;">
-                <strong>Next Steps:</strong><br>
-                1. Go to <strong>EDI Orders</strong> → Click <strong>Refresh Zoho Data</strong><br>
-                2. Click <strong>Find Matches</strong><br>
-                3. Check <strong>Review Matches</strong> tab for the match
-              </div>
-            </div>
-            <div class="modal-footer">
-              <button class="btn btn-secondary" onclick="closeModal()">Close</button>
-              <button class="btn btn-primary" onclick="closeModal();showTab('orders', document.querySelector('[onclick*=orders]'));">Go to EDI Orders</button>
+            <div class="px-6 py-4 bg-slate-50 border-t">
+              <button onclick="closeModal()" class="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700">Close</button>
             </div>
           </div>
         </div>
       \`;
-      document.getElementById('modalContainer').innerHTML = html;
+
+      document.getElementById('modalContainer').innerHTML = modalHtml;
+    } catch (e) {
+      toast('Error loading order');
     }
-    
-    async function loadTestOrders() {
-      try {
-        const res = await fetch('/test-orders');
-        const data = await res.json();
-        
-        const tbody = document.getElementById('testOrdersTable');
-        
-        if (!data.success || !data.testOrders.length) {
-          tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No test orders found</td></tr>';
-          return;
-        }
-        
-        tbody.innerHTML = data.testOrders.map(order => {
-          const statusClass = order.status === 'pending' ? 'status-pending' : 
-                              order.status === 'processed' ? 'status-processed' : 'status-review';
-          const scenarioLabel = order.scenario === 'perfect' ? '✅ Perfect Match' :
-                                order.scenario === 'qty_mismatch' ? '📦 Qty Mismatch' :
-                                order.scenario === 'price_mismatch' ? '💰 Price Mismatch' : order.scenario;
-          return \`<tr>
-            <td><strong style="color:#ff9800;">🧪 \${order.poNumber}</strong></td>
-            <td>\${scenarioLabel}</td>
-            <td><span class="status-badge \${statusClass}">\${order.status}</span></td>
-            <td>\${new Date(order.createdAt).toLocaleString()}</td>
-            <td>
-              <button class="btn btn-secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem;" onclick="viewOrder(\${order.id})">View</button>
-              <button class="btn btn-secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem;color:#c62828;" onclick="deleteTestOrder(\${order.id})">🗑️</button>
-            </td>
-          </tr>\`;
-        }).join('');
-      } catch (e) {
-        document.getElementById('testOrdersTable').innerHTML = '<tr><td colspan="5" class="empty-state">Error loading test orders</td></tr>';
+  }
+
+  // ============================================================
+  // SETTINGS
+  // ============================================================
+  async function loadMappings() {
+    try {
+      const res = await fetch('/customer-mappings');
+      const data = await res.json();
+
+      if (!data.mappings || data.mappings.length === 0) {
+        document.getElementById('mappingsContent').innerHTML = '<p class="text-slate-500">No customer mappings configured.</p>';
+        return;
       }
+
+      document.getElementById('mappingsContent').innerHTML = \`
+        <div class="border border-slate-200 rounded-lg overflow-hidden">
+          <table class="w-full text-sm">
+            <thead class="bg-slate-50">
+              <tr>
+                <th class="text-left px-3 py-2 text-slate-500">EDI Customer</th>
+                <th class="text-left px-3 py-2 text-slate-500">Zoho Customer</th>
+              </tr>
+            </thead>
+            <tbody>
+              \${data.mappings.map(m => \`
+                <tr class="border-t border-slate-100">
+                  <td class="px-3 py-2">\${m.edi_customer_name}</td>
+                  <td class="px-3 py-2">\${m.zoho_account_name || '-'}</td>
+                </tr>
+              \`).join('')}
+            </tbody>
+          </table>
+        </div>
+      \`;
+    } catch (e) {
+      document.getElementById('mappingsContent').innerHTML = '<p class="text-red-500">Failed to load mappings</p>';
     }
-    
-    async function deleteTestOrder(id) {
-      if (!confirm('Delete this test order from the database?\\n\\nNote: This does NOT delete the Zoho draft - do that manually in Zoho Books.')) return;
-      
-      try {
-        const res = await fetch('/test-orders/' + id, { method: 'DELETE' });
-        const data = await res.json();
-        
-        if (data.success) {
-          toast('Test order deleted');
-          loadTestOrders();
-          loadOrders();
-        } else {
-          toast('Error: ' + data.error);
-        }
-      } catch (e) {
-        toast('Error: ' + e.message);
-      }
+  }
+
+  async function refreshSftpStatus() {
+    document.getElementById('sftpContent').innerHTML = '<p class="text-slate-500">Loading...</p>';
+    try {
+      const res = await fetch('/sftp/status');
+      const data = await res.json();
+      document.getElementById('sftpContent').innerHTML = \`
+        <div class="text-sm">
+          <p><strong>Status:</strong> \${data.connected ? '🟢 Connected' : '🔴 Disconnected'}</p>
+          <p><strong>Host:</strong> \${data.host || 'N/A'}</p>
+          <p><strong>Files in Inbox:</strong> \${data.inboxCount || 0}</p>
+        </div>
+      \`;
+    } catch (e) {
+      document.getElementById('sftpContent').innerHTML = '<p class="text-red-500">Failed to check SFTP status</p>';
     }
-    
-    async function cleanupAllTestOrders() {
-      if (!confirm('Delete ALL test orders from the database?\\n\\n⚠️ This will remove all EDI records with PO# starting with TEST-\\n\\nNote: Zoho drafts must be deleted manually.')) return;
-      
-      try {
-        const res = await fetch('/test-orders/cleanup/all', { method: 'DELETE' });
-        const data = await res.json();
-        
-        if (data.success) {
-          toast('Cleaned up ' + data.deletedCount + ' test orders');
-          loadTestOrders();
-          loadOrders();
-        } else {
-          toast('Error: ' + data.error);
-        }
-      } catch (e) {
-        toast('Error: ' + e.message);
-      }
-    }
-    
-    function toast(msg) {
-      document.getElementById('toastMsg').textContent = msg;
-      document.getElementById('toast').classList.add('show');
-      setTimeout(() => document.getElementById('toast').classList.remove('show'), 3000);
-    }
-  </script>
+  }
+
+</script>
 </body>
 </html>
 `;
