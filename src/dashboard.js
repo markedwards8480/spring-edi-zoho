@@ -1348,12 +1348,12 @@ const dashboardHTML = `
           </table>
         </div>
 
-        <!-- Line Items Comparison (collapsible) -->
+        <!-- Line Items Comparison (expanded by default) -->
         <div class="px-5 pb-4">
           <button onclick="toggleLineItems()" class="text-sm text-slate-600 hover:text-slate-800 flex items-center gap-2">
-            <span id="lineItemsToggle">▶</span> View line items (\${ediItems.length} EDI → \${zohoItems.length} Zoho)
+            <span id="lineItemsToggle">▼</span> View line items (\${ediItems.length} EDI → \${zohoItems.length} Zoho)
           </button>
-          <div id="lineItemsContainer" class="hidden mt-4">
+          <div id="lineItemsContainer" class="mt-4">
             <div class="grid grid-cols-2 gap-4">
               <!-- EDI Items -->
               <div>
