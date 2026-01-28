@@ -1809,6 +1809,138 @@ app.delete('/test-orders/cleanup/all', async (req, res) => {
 });
 
 // ============================================================
+// RE-PARSE ORDERS
+// ============================================================
+
+// Re-parse existing orders with updated CSV parser logic
+app.post('/reparse-orders', async (req, res) => {
+  try {
+    const { orderIds } = req.body;
+
+    logger.info('Re-parsing orders with updated logic', {
+      specificOrders: orderIds ? orderIds.length : 'all'
+    });
+
+    // Get orders to re-parse
+    let ordersResult;
+    if (orderIds && orderIds.length > 0) {
+      ordersResult = await pool.query(
+        'SELECT id, edi_order_number, raw_edi, filename FROM edi_orders WHERE id = ANY($1)',
+        [orderIds]
+      );
+    } else {
+      // Re-parse all orders that have raw_edi content (CSV data)
+      ordersResult = await pool.query(
+        'SELECT id, edi_order_number, raw_edi, filename FROM edi_orders WHERE raw_edi IS NOT NULL AND raw_edi != \'\''
+      );
+    }
+
+    const orders = ordersResult.rows;
+    logger.info('Found orders to re-parse', { count: orders.length });
+
+    if (orders.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No orders found to re-parse',
+        summary: { total: 0, success: 0, failed: 0 }
+      });
+    }
+
+    const { parseSpringCSV } = require('./csv-parser');
+
+    let successCount = 0;
+    let failedCount = 0;
+    const results = [];
+
+    for (const order of orders) {
+      try {
+        // Skip test orders or orders without CSV content
+        if (!order.raw_edi || order.raw_edi.startsWith('🧪')) {
+          results.push({
+            id: order.id,
+            poNumber: order.edi_order_number,
+            success: false,
+            reason: 'No CSV data or test order'
+          });
+          failedCount++;
+          continue;
+        }
+
+        // Re-parse the CSV with updated logic
+        const newParsed = parseSpringCSV(order.raw_edi, order.filename || 'reparse');
+
+        // Update the database with new parsed_data
+        await pool.query(
+          'UPDATE edi_orders SET parsed_data = $1, updated_at = NOW() WHERE id = $2',
+          [JSON.stringify(newParsed), order.id]
+        );
+
+        // Log what changed (for audit trail)
+        const sampleItem = newParsed.items[0];
+        results.push({
+          id: order.id,
+          poNumber: order.edi_order_number,
+          success: true,
+          itemCount: newParsed.items.length,
+          sampleItem: sampleItem ? {
+            sku: sampleItem.productIds?.sku,
+            packQty: sampleItem.packQty,
+            packPrice: sampleItem.packPrice,
+            eachPrice: sampleItem.eachPrice,
+            unitPrice: sampleItem.unitPrice,
+            isPrepack: sampleItem.isPrepack
+          } : null
+        });
+
+        successCount++;
+
+      } catch (parseError) {
+        logger.error('Failed to re-parse order', {
+          orderId: order.id,
+          poNumber: order.edi_order_number,
+          error: parseError.message
+        });
+        results.push({
+          id: order.id,
+          poNumber: order.edi_order_number,
+          success: false,
+          error: parseError.message
+        });
+        failedCount++;
+      }
+    }
+
+    // Log to audit trail
+    await auditLogger.log('orders_reparsed', {
+      severity: failedCount === 0 ? SEVERITY.SUCCESS : SEVERITY.WARNING,
+      details: {
+        totalOrders: orders.length,
+        successCount,
+        failedCount,
+        trigger: 'manual'
+      }
+    });
+
+    logger.info('Re-parse completed', { successCount, failedCount });
+
+    res.json({
+      success: true,
+      message: `Re-parsed ${successCount} orders successfully` + (failedCount > 0 ? `, ${failedCount} failed` : ''),
+      summary: {
+        total: orders.length,
+        success: successCount,
+        failed: failedCount
+      },
+      results
+    });
+
+  } catch (error) {
+    logger.error('Re-parse orders failed', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================
 // RESET UTILITIES
 // ============================================================
 

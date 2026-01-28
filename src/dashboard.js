@@ -334,13 +334,30 @@ const dashboardHTML = `
         </div>
 
         <!-- SFTP Browser -->
-        <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
           <h3 class="text-lg font-semibold text-slate-800 mb-4">SFTP Browser</h3>
           <p class="text-slate-500 mb-4">Browse and manage files on the SFTP server</p>
           <button onclick="refreshSftpStatus()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
             🔄 Refresh SFTP
           </button>
           <div id="sftpContent" class="mt-4"></div>
+        </div>
+
+        <!-- Re-parse Orders -->
+        <div class="bg-white rounded-xl border border-slate-200 p-6">
+          <h3 class="text-lg font-semibold text-slate-800 mb-2">Re-parse Orders</h3>
+          <p class="text-slate-500 mb-4">Re-process existing orders with updated CSV parsing logic (e.g., pack qty calculation from prices)</p>
+          <div class="flex items-center gap-3">
+            <button onclick="reparseAllOrders()" id="reparseBtn" class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition flex items-center gap-2">
+              🔄 Re-parse All Orders
+            </button>
+            <span id="reparseStatus" class="text-sm text-slate-500"></span>
+          </div>
+          <div id="reparseResults" class="mt-4 hidden">
+            <div class="bg-slate-50 rounded-lg p-4 max-h-64 overflow-y-auto">
+              <pre id="reparseResultsContent" class="text-sm text-slate-600 whitespace-pre-wrap"></pre>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2739,6 +2756,68 @@ const dashboardHTML = `
         </div>
       \`;
     }
+  }
+
+  // Re-parse all orders with updated CSV logic
+  async function reparseAllOrders() {
+    const btn = document.getElementById('reparseBtn');
+    const statusEl = document.getElementById('reparseStatus');
+    const resultsEl = document.getElementById('reparseResults');
+    const resultsContent = document.getElementById('reparseResultsContent');
+
+    if (!confirm('This will re-process all existing orders with the updated CSV parsing logic.\\n\\nThis is useful after updates to pack qty calculation, pricing logic, etc.\\n\\nContinue?')) {
+      return;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Re-parsing...';
+    statusEl.textContent = 'Processing orders...';
+    resultsEl.classList.add('hidden');
+
+    try {
+      const res = await fetch('/reparse-orders', { method: 'POST' });
+      const data = await res.json();
+
+      if (data.success) {
+        statusEl.innerHTML = '✅ <span class="text-green-600">' + data.message + '</span>';
+
+        // Show detailed results
+        let detailText = 'Summary: ' + data.summary.success + ' successful, ' + data.summary.failed + ' failed\\n\\n';
+
+        if (data.results && data.results.length > 0) {
+          detailText += 'Details:\\n';
+          data.results.forEach(r => {
+            if (r.success) {
+              detailText += '✓ PO#' + r.poNumber + ' - ' + r.itemCount + ' items';
+              if (r.sampleItem && r.sampleItem.packQty > 1) {
+                detailText += ' (pack qty: ' + r.sampleItem.packQty + ', unit price: $' + r.sampleItem.unitPrice?.toFixed(2) + ')';
+              }
+              detailText += '\\n';
+            } else {
+              detailText += '✗ PO#' + r.poNumber + ' - ' + (r.error || r.reason) + '\\n';
+            }
+          });
+        }
+
+        resultsContent.textContent = detailText;
+        resultsEl.classList.remove('hidden');
+
+        // Reload orders to show updated data
+        loadOrders();
+        toast('Re-parsed ' + data.summary.success + ' orders successfully');
+
+      } else {
+        statusEl.innerHTML = '❌ <span class="text-red-600">Error: ' + (data.error || 'Unknown error') + '</span>';
+        toast('Re-parse failed: ' + (data.error || 'Unknown error'));
+      }
+
+    } catch (e) {
+      statusEl.innerHTML = '❌ <span class="text-red-600">Error: ' + e.message + '</span>';
+      toast('Error: ' + e.message);
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '🔄 Re-parse All Orders';
   }
 
 </script>
