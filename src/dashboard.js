@@ -864,7 +864,7 @@ const dashboardHTML = `
 
     try {
       // Check if cache is stale - if so, show "Refreshing Zoho..." message
-      const cacheRes = await fetch('/zoho-cache-status');
+      const cacheRes = await fetch('/cache/status');
       const cacheStatus = await cacheRes.json();
 
       if (cacheStatus.isStale || cacheStatus.draftsCount === 0) {
