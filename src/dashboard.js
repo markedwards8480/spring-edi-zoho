@@ -488,105 +488,94 @@ const dashboardHTML = `
         if (/^\\d{4}-\\d{2}-\\d{2}/.test(val)) {
           return '<span class="text-purple-600">' + escapeHtml(val) + '</span>';
         }
-        // Truncate long strings
-        if (val.length > 100) {
-          return '<span class="text-slate-700">' + escapeHtml(val.substring(0, 100)) + '...</span>';
-        }
         return '<span class="text-slate-700">' + escapeHtml(val) + '</span>';
       }
       return '<span class="text-slate-500">' + escapeHtml(String(val)) + '</span>';
     };
 
-    // Helper to create a section
-    const createSection = (title, obj, icon = '📋') => {
-      if (!obj || typeof obj !== 'object') return '';
-      const entries = Object.entries(obj).filter(([k, v]) => v !== null && v !== undefined && v !== '');
-      if (entries.length === 0) return '';
+    // Recursive function to render any object/array structure
+    const renderObject = (obj, depth = 0) => {
+      if (!obj || typeof obj !== 'object') return formatValue(obj);
 
-      let sectionHtml = '<div class="mb-4">';
-      sectionHtml += '<div class="text-sm font-semibold text-slate-600 mb-2 flex items-center gap-2">' + icon + ' ' + title + '</div>';
-      sectionHtml += '<div class="bg-white border border-slate-200 rounded-lg overflow-hidden">';
-      sectionHtml += '<table class="w-full text-sm">';
+      if (Array.isArray(obj)) {
+        if (obj.length === 0) return '<span class="text-slate-400 italic">empty array</span>';
 
+        // For arrays of objects (like items), render as expandable sections
+        let arrayHtml = '';
+        obj.forEach((item, idx) => {
+          if (typeof item === 'object' && item !== null) {
+            arrayHtml += '<div class="border border-slate-200 rounded mb-2 overflow-hidden">';
+            arrayHtml += '<div class="bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-600">Item ' + (idx + 1) + '</div>';
+            arrayHtml += '<div class="p-2">' + renderObject(item, depth + 1) + '</div>';
+            arrayHtml += '</div>';
+          } else {
+            arrayHtml += '<div class="py-1">' + formatValue(item) + '</div>';
+          }
+        });
+        return arrayHtml;
+      }
+
+      // Regular object - render as table
+      const entries = Object.entries(obj);
+      if (entries.length === 0) return '<span class="text-slate-400 italic">empty</span>';
+
+      let tableHtml = '<table class="w-full text-sm">';
       entries.forEach(([key, value], idx) => {
         const bgClass = idx % 2 === 0 ? 'bg-slate-50' : 'bg-white';
         // Format the key name nicely
         const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).replace(/_/g, ' ');
 
-        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-          // Nested object - show inline
-          sectionHtml += '<tr class="' + bgClass + '">';
-          sectionHtml += '<td class="px-3 py-2 text-slate-500 font-medium w-1/3 align-top">' + escapeHtml(formattedKey) + '</td>';
-          sectionHtml += '<td class="px-3 py-2">';
-          Object.entries(value).forEach(([subKey, subVal]) => {
-            if (subVal !== null && subVal !== undefined && subVal !== '') {
-              const subKeyFormatted = subKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-              sectionHtml += '<div class="flex gap-2"><span class="text-slate-400">' + subKeyFormatted + ':</span> ' + formatValue(subVal) + '</div>';
-            }
-          });
-          sectionHtml += '</td>';
-          sectionHtml += '</tr>';
-        } else {
-          sectionHtml += '<tr class="' + bgClass + '">';
-          sectionHtml += '<td class="px-3 py-2 text-slate-500 font-medium w-1/3">' + escapeHtml(formattedKey) + '</td>';
-          sectionHtml += '<td class="px-3 py-2">' + formatValue(value) + '</td>';
-          sectionHtml += '</tr>';
-        }
-      });
+        tableHtml += '<tr class="' + bgClass + ' border-b border-slate-100">';
+        tableHtml += '<td class="px-3 py-2 text-slate-500 font-medium align-top" style="width: 200px;">' + escapeHtml(formattedKey) + '</td>';
 
-      sectionHtml += '</table>';
-      sectionHtml += '</div></div>';
-      return sectionHtml;
+        if (typeof value === 'object' && value !== null) {
+          if (Array.isArray(value)) {
+            tableHtml += '<td class="px-3 py-2">';
+            if (value.length === 0) {
+              tableHtml += '<span class="text-slate-400 italic">empty array</span>';
+            } else if (typeof value[0] === 'object') {
+              // Array of objects - show count and expandable
+              tableHtml += '<details class="cursor-pointer"><summary class="text-blue-600 hover:text-blue-800">' + value.length + ' items (click to expand)</summary>';
+              tableHtml += '<div class="mt-2">' + renderObject(value, depth + 1) + '</div></details>';
+            } else {
+              // Array of primitives - show inline
+              tableHtml += value.map(v => formatValue(v)).join(', ');
+            }
+            tableHtml += '</td>';
+          } else {
+            // Nested object - show inline or expand
+            const nestedEntries = Object.entries(value).filter(([k, v]) => v !== null && v !== undefined && v !== '');
+            if (nestedEntries.length <= 4) {
+              // Small object - show inline
+              tableHtml += '<td class="px-3 py-2">';
+              nestedEntries.forEach(([subKey, subVal]) => {
+                const subKeyFormatted = subKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).replace(/_/g, ' ');
+                tableHtml += '<div class="flex gap-2"><span class="text-slate-400">' + subKeyFormatted + ':</span> ' + formatValue(subVal) + '</div>';
+              });
+              tableHtml += '</td>';
+            } else {
+              // Large object - make expandable
+              tableHtml += '<td class="px-3 py-2">';
+              tableHtml += '<details class="cursor-pointer"><summary class="text-blue-600 hover:text-blue-800">' + nestedEntries.length + ' fields (click to expand)</summary>';
+              tableHtml += '<div class="mt-2 pl-2 border-l-2 border-slate-200">' + renderObject(value, depth + 1) + '</div></details>';
+              tableHtml += '</td>';
+            }
+          }
+        } else {
+          tableHtml += '<td class="px-3 py-2">' + formatValue(value) + '</td>';
+        }
+        tableHtml += '</tr>';
+      });
+      tableHtml += '</table>';
+      return tableHtml;
     };
 
-    // Create sections for the EDI data
-    if (data.header) html += createSection('Header', data.header, '📄');
-    if (data.dates) html += createSection('Dates', data.dates, '📅');
-    if (data.parties) {
-      if (data.parties.buyer) html += createSection('Buyer', data.parties.buyer, '🏢');
-      if (data.parties.shipTo) html += createSection('Ship To', data.parties.shipTo, '📦');
-    }
+    // Render all the data
+    html += '<div class="bg-white border border-slate-200 rounded-lg overflow-hidden">';
+    html += renderObject(data);
+    html += '</div>';
 
-    // Items summary
-    if (data.items && data.items.length > 0) {
-      html += '<div class="mb-4">';
-      html += '<div class="text-sm font-semibold text-slate-600 mb-2 flex items-center gap-2">📦 Line Items (' + data.items.length + ' items)</div>';
-      html += '<div class="bg-white border border-slate-200 rounded-lg overflow-hidden">';
-      html += '<table class="w-full text-xs">';
-      html += '<thead class="bg-slate-100"><tr>';
-      html += '<th class="px-2 py-1.5 text-left text-slate-600">#</th>';
-      html += '<th class="px-2 py-1.5 text-left text-slate-600">SKU</th>';
-      html += '<th class="px-2 py-1.5 text-left text-slate-600">Color</th>';
-      html += '<th class="px-2 py-1.5 text-left text-slate-600">Size</th>';
-      html += '<th class="px-2 py-1.5 text-center text-slate-600">UOM</th>';
-      html += '<th class="px-2 py-1.5 text-right text-slate-600">Qty</th>';
-      html += '<th class="px-2 py-1.5 text-right text-slate-600">Pack $</th>';
-      html += '<th class="px-2 py-1.5 text-right text-slate-600">Each $</th>';
-      html += '<th class="px-2 py-1.5 text-right text-slate-600">Amount</th>';
-      html += '</tr></thead><tbody>';
-
-      data.items.forEach((item, idx) => {
-        const bgClass = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50';
-        const sku = item.productIds?.sku || item.productIds?.vendorItemNumber || '-';
-        const uom = item.unitOfMeasure || 'EA';
-        const isPrepack = item.isPrepack || uom === 'AS' || uom === 'ST';
-        html += '<tr class="' + bgClass + ' border-t border-slate-100">';
-        html += '<td class="px-2 py-1 text-slate-400">' + (idx + 1) + '</td>';
-        html += '<td class="px-2 py-1 font-medium">' + escapeHtml(sku) + '</td>';
-        html += '<td class="px-2 py-1">' + escapeHtml(item.color || '-') + '</td>';
-        html += '<td class="px-2 py-1">' + escapeHtml(item.size || '-') + '</td>';
-        html += '<td class="px-2 py-1 text-center"><span class="' + (isPrepack ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600') + ' px-1.5 py-0.5 rounded text-xs">' + uom + '</span></td>';
-        html += '<td class="px-2 py-1 text-right">' + (item.quantityOrdered || 0).toLocaleString() + '</td>';
-        html += '<td class="px-2 py-1 text-right">$' + (item.packPrice || item.unitPrice || 0).toFixed(2) + '</td>';
-        html += '<td class="px-2 py-1 text-right">$' + (item.eachPrice || item.unitPrice || 0).toFixed(2) + '</td>';
-        html += '<td class="px-2 py-1 text-right font-medium">$' + (item.amount || 0).toFixed(2) + '</td>';
-        html += '</tr>';
-      });
-
-      html += '</tbody></table></div></div>';
-    }
-
-    return html || '<div class="text-slate-400">No structured data available</div>';
+    return html || '<div class="text-slate-400">No data available</div>';
   }
 
   function escapeHtml(str) {
