@@ -1344,6 +1344,14 @@ const dashboardHTML = `
                 </td>
                 <td class="py-2.5 text-center">\${details.baseStyle ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
               </tr>
+              \${details.upcMatch ? \`
+              <tr class="border-b border-slate-100 bg-green-50/50">
+                <td class="py-2.5 text-slate-500">UPC Match</td>
+                <td class="py-2.5 px-3 text-xs font-mono">\${details.ediUpcCount || 0} UPCs</td>
+                <td class="py-2.5 px-3 text-xs font-mono">\${details.zohoUpcCount || 0} UPCs</td>
+                <td class="py-2.5 text-center"><span class="text-green-600 font-medium">✓ \${details.upcMatchCount || 0} matched</span></td>
+              </tr>
+              \` : ''}
               <tr class="border-b border-slate-100">
                 <td class="py-2.5 text-slate-500">Suffix</td>
                 <td class="py-2.5 bg-blue-50/30 px-3 text-xs text-slate-600">\${details.ediSuffixes || '-'}</td>
@@ -1368,8 +1376,8 @@ const dashboardHTML = `
                   <thead class="bg-blue-50">
                     <tr>
                       <th class="text-left px-2 py-1">Style</th>
+                      <th class="text-left px-2 py-1">UPC</th>
                       <th class="text-left px-2 py-1">Color</th>
-                      <th class="text-center px-2 py-1">UOM</th>
                       <th class="text-right px-2 py-1">Qty</th>
                       <th class="text-right px-2 py-1">Price</th>
                     </tr>
@@ -1381,11 +1389,15 @@ const dashboardHTML = `
                       const priceDisplay = isPrepack && item.packPrice ?
                         '$' + (item.packPrice || 0).toFixed(2) + '/' + uom + (item.packQty > 1 ? ' → $' + (item.unitPrice || 0).toFixed(2) + '/ea' : '') :
                         '$' + (item.unitPrice || 0).toFixed(2);
+                      const upc = item.productIds?.upc || item.productIds?.gtin || '';
+                      const sku = item.productIds?.sku || item.productIds?.vendorItemNumber || item.style || '';
+                      // Check if SKU looks like a UPC (all digits, 10+ chars)
+                      const skuIsUpc = sku && /^\\d{10,14}$/.test(sku);
                       return \`
                       <tr class="border-t border-slate-100">
-                        <td class="px-2 py-1">\${item.productIds?.sku || item.productIds?.vendorItemNumber || item.style || '-'}</td>
+                        <td class="px-2 py-1">\${skuIsUpc ? '<span class="text-slate-400 text-xs">see UPC</span>' : (sku || '-')}</td>
+                        <td class="px-2 py-1 font-mono text-xs">\${skuIsUpc ? sku : (upc || '-')}</td>
                         <td class="px-2 py-1">\${item.color || '-'}</td>
-                        <td class="px-2 py-1 text-center"><span class="\${isPrepack ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'} px-1.5 py-0.5 rounded text-xs">\${uom}</span></td>
                         <td class="px-2 py-1 text-right">\${item.quantityOrdered || 0}\${isPrepack && item.packQty > 1 ? ' <span class="text-slate-400">(' + (item.totalUnits || item.quantityOrdered * item.packQty) + ' units)</span>' : ''}</td>
                         <td class="px-2 py-1 text-right">\${priceDisplay}</td>
                       </tr>
@@ -1401,19 +1413,23 @@ const dashboardHTML = `
                   <thead class="bg-green-50">
                     <tr>
                       <th class="text-left px-2 py-1">Item</th>
+                      <th class="text-left px-2 py-1">UPC</th>
                       <th class="text-right px-2 py-1">Qty</th>
                       <th class="text-right px-2 py-1">Rate</th>
                     </tr>
                   </thead>
                   <tbody>
-                    \${zohoItems.slice(0, 10).map(item => \`
+                    \${zohoItems.slice(0, 10).map(item => {
+                      const zohoUpc = item.cf_upc || item.upc || item.item?.upc || '';
+                      return \`
                       <tr class="border-t border-slate-100">
                         <td class="px-2 py-1">\${item.name || item.sku || '-'}</td>
+                        <td class="px-2 py-1 font-mono text-xs">\${zohoUpc || '-'}</td>
                         <td class="px-2 py-1 text-right">\${item.quantity || 0}</td>
                         <td class="px-2 py-1 text-right">$\${(item.rate || 0).toFixed(2)}</td>
                       </tr>
-                    \`).join('')}
-                    \${zohoItems.length > 10 ? '<tr><td colspan="3" class="px-2 py-1 text-center text-slate-400">... and ' + (zohoItems.length - 10) + ' more</td></tr>' : ''}
+                    \`}).join('')}
+                    \${zohoItems.length > 10 ? '<tr><td colspan="4" class="px-2 py-1 text-center text-slate-400">... and ' + (zohoItems.length - 10) + ' more</td></tr>' : ''}
                   </tbody>
                 </table>
               </div>
