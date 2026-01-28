@@ -463,6 +463,78 @@ const dashboardHTML = `
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
+  // Format raw data for clean display
+  function formatRawDataDisplay(data, depth = 0) {
+    if (data === null) return '<span class="text-slate-400 italic">null</span>';
+    if (data === undefined) return '<span class="text-slate-400 italic">undefined</span>';
+
+    const indent = '  '.repeat(depth);
+    const type = Array.isArray(data) ? 'array' : typeof data;
+
+    if (type === 'string') {
+      // Format dates nicely
+      if (/^\\d{4}-\\d{2}-\\d{2}/.test(data) || /^\\d{8}$/.test(data)) {
+        return '<span class="text-purple-600">"' + escapeHtml(data) + '"</span>';
+      }
+      return '<span class="text-green-600">"' + escapeHtml(data) + '"</span>';
+    }
+    if (type === 'number') {
+      return '<span class="text-blue-600">' + data + '</span>';
+    }
+    if (type === 'boolean') {
+      return '<span class="text-orange-600">' + data + '</span>';
+    }
+
+    if (type === 'array') {
+      if (data.length === 0) return '<span class="text-slate-400">[]</span>';
+
+      let html = '<div class="ml-4 border-l-2 border-slate-200 pl-3">';
+      data.forEach((item, idx) => {
+        html += '<div class="py-1">';
+        html += '<span class="text-slate-400 text-xs mr-2">[' + idx + ']</span>';
+        html += formatRawDataDisplay(item, depth + 1);
+        html += '</div>';
+      });
+      html += '</div>';
+      return html;
+    }
+
+    if (type === 'object') {
+      const keys = Object.keys(data);
+      if (keys.length === 0) return '<span class="text-slate-400">{}</span>';
+
+      let html = '<div class="' + (depth > 0 ? 'ml-4 border-l-2 border-slate-200 pl-3' : '') + '">';
+      keys.forEach(key => {
+        const value = data[key];
+        const isExpandable = (typeof value === 'object' && value !== null);
+
+        html += '<div class="py-1">';
+        html += '<span class="font-medium text-slate-700">' + escapeHtml(key) + '</span>';
+        html += '<span class="text-slate-400">: </span>';
+
+        if (isExpandable) {
+          const itemCount = Array.isArray(value) ? value.length : Object.keys(value).length;
+          const label = Array.isArray(value) ? '[' + itemCount + ' items]' : '{' + itemCount + ' fields}';
+          html += '<span class="text-slate-400 text-xs">' + label + '</span>';
+          html += formatRawDataDisplay(value, depth + 1);
+        } else {
+          html += formatRawDataDisplay(value, depth + 1);
+        }
+
+        html += '</div>';
+      });
+      html += '</div>';
+      return html;
+    }
+
+    return '<span class="text-slate-500">' + String(data) + '</span>';
+  }
+
+  function escapeHtml(str) {
+    if (typeof str !== 'string') return str;
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
   // ============================================================
   // SESSION PERSISTENCE
   // ============================================================
@@ -1691,7 +1763,9 @@ const dashboardHTML = `
 
               <!-- Raw Data Tab -->
               <div id="edi-tab-raw" class="edi-tab-content hidden">
-                <pre class="bg-slate-800 text-green-400 p-4 rounded-lg text-xs overflow-auto max-h-96">\${JSON.stringify(order.parsed_data, null, 2)}</pre>
+                <div class="bg-slate-50 rounded-lg border max-h-96 overflow-auto">
+                  \${formatRawDataDisplay(order.parsed_data)}
+                </div>
               </div>
             </div>
 
