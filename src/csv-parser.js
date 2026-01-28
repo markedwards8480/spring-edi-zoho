@@ -142,32 +142,71 @@ function parseSpringCSV(content, filename) {
 
   // Parse each row as a line item
   rows.forEach((row, index) => {
-    // Get unit price - the key field!
-    // Primary: product_pack_product_pack_unit_price (column 48) has the actual selling price
-    // Fallback: po_item_po_item_unit_price (column 33) for older formats
-    const unitPriceRaw = getField(row, 
-      'product_pack_product_pack_unit_price',
-      'product_pack.product_pack_unit_price',
+    // Get Unit of Measure (AS = Assortment/Prepack, EA = Each, ST = Set)
+    const uom = getField(row, 'po_item_po_item_uom', 'po_item.po_item_uom') || 'EA';
+    const isPrepack = uom === 'AS' || uom === 'ST';
+
+    // Get pack quantity (items per pack)
+    const packQtyRaw = getField(row,
+      'product_pack_product_pack_product_qty',
+      'product_pack.product_pack_product_qty'
+    );
+    const packQty = parseInt(packQtyRaw) || 1;
+
+    // Get BOTH prices:
+    // 1. Pack price (po_item_po_item_unit_price) - price for the whole pack/assortment
+    // 2. Each price (product_pack_product_pack_unit_price) - price per individual item
+    const packPriceRaw = getField(row,
       'po_item_po_item_unit_price',
       'po_item.po_item_unit_price'
     );
-    const unitPrice = parseFloat(unitPriceRaw) || 0;
+    const packPrice = parseFloat(packPriceRaw) || 0;
 
-    // Get quantity
+    const eachPriceRaw = getField(row,
+      'product_pack_product_pack_unit_price',
+      'product_pack.product_pack_unit_price'
+    );
+    const eachPrice = parseFloat(eachPriceRaw) || 0;
+
+    // Determine the unit price to use:
+    // - If eachPrice is available, use it (most accurate)
+    // - Otherwise calculate from packPrice / packQty
+    // - If packQty is 1 or unknown, packPrice = eachPrice
+    let unitPrice = eachPrice;
+    let unitPriceCalculated = false;
+    if (!unitPrice && packPrice > 0) {
+      if (packQty > 1) {
+        unitPrice = packPrice / packQty;
+        unitPriceCalculated = true;
+      } else {
+        unitPrice = packPrice;
+      }
+    }
+
+    // Get quantity ordered (number of packs/units ordered)
     const quantityRaw = getField(row,
       'po_item_po_item_qty_ordered',
       'po_item.po_item_qty_ordered'
     );
     const quantityOrdered = parseInt(quantityRaw) || 0;
 
-    // Calculate amount
-    const amount = quantityOrdered * unitPrice;
+    // Calculate total units (for prepacks: qty × packQty)
+    const totalUnits = isPrepack && packQty > 1 ? quantityOrdered * packQty : quantityOrdered;
+
+    // Calculate amount (qty × packPrice for prepacks, qty × unitPrice for eaches)
+    const amount = isPrepack ? quantityOrdered * packPrice : quantityOrdered * unitPrice;
 
     const item = {
       lineNumber: getField(row, 'po_item_po_item_line_num', 'po_item.po_item_line_num') || (index + 1).toString(),
       quantityOrdered: quantityOrdered,
-      unitOfMeasure: getField(row, 'po_item_po_item_uom', 'po_item.po_item_uom') || 'EA',
+      totalUnits: totalUnits,
+      unitOfMeasure: uom,
+      isPrepack: isPrepack,
+      packQty: packQty,
+      packPrice: packPrice,
+      eachPrice: eachPrice,
       unitPrice: unitPrice,
+      unitPriceCalculated: unitPriceCalculated,
       amount: amount,
       retailPrice: parseFloat(getField(row, 'po_item_attributes_retail_price', 'po_item.attributes.retail_price')) || 0,
       productIds: {
@@ -175,7 +214,7 @@ function parseSpringCSV(content, filename) {
         upc: getField(row, 'product_product_gtin', 'product.product_gtin') || '',
         buyerItemNumber: getField(row, 'po_item_po_item_buyer_item_num', 'po_item.po_item_buyer_item_num') || '',
         vendorItemNumber: getField(row, 'product_product_vendor_item_num', 'product.product_vendor_item_num') || '',
-        sku: getField(row, 'product_product_vendor_item_num', 'product.product_vendor_item_num') || 
+        sku: getField(row, 'product_product_vendor_item_num', 'product.product_vendor_item_num') ||
              getField(row, 'po_item_po_item_buyer_item_num', 'po_item.po_item_buyer_item_num') || ''
       },
       color: getField(row, 'product_attributes_color', 'product.attributes.color') || '',
