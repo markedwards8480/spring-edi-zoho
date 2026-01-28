@@ -2085,18 +2085,20 @@ const dashboardHTML = `
 
               <!-- Line Items Tab -->
               <div id="edi-tab-lineitems" class="edi-tab-content hidden">
-                <div class="border border-slate-200 rounded-lg overflow-hidden">
+                <div class="border border-slate-200 rounded-lg overflow-hidden overflow-x-auto">
                   <table class="w-full text-sm">
                     <thead class="bg-slate-50">
                       <tr>
-                        <th class="text-left px-3 py-2 text-slate-500">Style</th>
+                        <th class="text-left px-3 py-2 text-slate-500">Style/SKU</th>
+                        <th class="text-left px-3 py-2 text-slate-500">UPC</th>
                         <th class="text-left px-3 py-2 text-slate-500">Color</th>
                         <th class="text-left px-3 py-2 text-slate-500">Size</th>
                         <th class="text-center px-3 py-2 text-slate-500">UOM</th>
                         <th class="text-right px-3 py-2 text-slate-500">Qty</th>
                         <th class="text-right px-3 py-2 text-slate-500">Pack Price</th>
                         <th class="text-right px-3 py-2 text-slate-500">Each Price</th>
-                        <th class="text-right px-3 py-2 text-slate-500">Total</th>
+                        <th class="text-right px-3 py-2 text-slate-500">Retail</th>
+                        <th class="text-right px-3 py-2 text-slate-500">Line Total</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2108,34 +2110,40 @@ const dashboardHTML = `
                         const eachPrice = item.eachPrice || item.unitPrice || (packQty > 1 ? packPrice / packQty : packPrice);
                         const lineTotal = item.amount || ((item.quantityOrdered || 0) * packPrice);
                         const totalUnitsLine = item.totalUnits || (isPrepack && packQty > 1 ? (item.quantityOrdered || 0) * packQty : item.quantityOrdered || 0);
+                        const upc = item.productIds?.upc || item.productIds?.gtin || '';
+                        const sku = item.productIds?.sku || item.productIds?.vendorItemNumber || item.style || '';
+                        const skuIsUpc = sku && /^\\d{10,14}$/.test(sku);
+                        const retailPrice = item.retailPrice || 0;
                         return \`
-                        <tr class="border-t border-slate-100">
-                          <td class="px-3 py-2 font-medium">\${item.productIds?.sku || item.productIds?.vendorItemNumber || item.style || '-'}</td>
+                        <tr class="border-t border-slate-100 hover:bg-slate-50">
+                          <td class="px-3 py-2 font-medium">\${skuIsUpc ? '<span class="text-slate-400 text-xs">see UPC</span>' : sku || '-'}</td>
+                          <td class="px-3 py-2 font-mono text-xs text-slate-600">\${skuIsUpc ? sku : (upc || '-')}</td>
                           <td class="px-3 py-2">\${item.color || '-'}</td>
                           <td class="px-3 py-2">\${item.size || '-'}</td>
                           <td class="px-3 py-2 text-center">
                             <span class="\${isPrepack ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'} px-2 py-0.5 rounded text-xs font-medium">\${uom}</span>
-                            \${isPrepack && packQty > 1 ? '<div class="text-xs text-slate-400 mt-0.5">' + packQty + ' per pack</div>' : ''}
+                            \${isPrepack && packQty > 1 ? '<div class="text-xs text-slate-400 mt-0.5">' + packQty + '/pk</div>' : ''}
                           </td>
                           <td class="px-3 py-2 text-right">
                             \${item.quantityOrdered || 0}
-                            \${isPrepack && packQty > 1 ? '<div class="text-xs text-slate-400">(' + totalUnitsLine + ' units)</div>' : ''}
+                            \${isPrepack && packQty > 1 ? '<div class="text-xs text-slate-400">(' + totalUnitsLine + ' ea)</div>' : ''}
                           </td>
                           <td class="px-3 py-2 text-right \${isPrepack ? 'font-medium' : 'text-slate-400'}">$\${packPrice.toFixed(2)}</td>
                           <td class="px-3 py-2 text-right \${!isPrepack ? 'font-medium' : ''}\${item.unitPriceCalculated ? ' text-blue-600' : ''}">
                             $\${eachPrice.toFixed(2)}
-                            \${item.unitPriceCalculated ? '<div class="text-xs text-blue-500">calculated</div>' : ''}
+                            \${item.unitPriceCalculated ? '<span class="text-xs text-blue-500 ml-1">*</span>' : ''}
                           </td>
-                          <td class="px-3 py-2 text-right font-medium">$\${lineTotal.toFixed(2)}</td>
+                          <td class="px-3 py-2 text-right text-slate-500">\${retailPrice > 0 ? '$' + retailPrice.toFixed(2) : '-'}</td>
+                          <td class="px-3 py-2 text-right font-medium text-green-700">$\${lineTotal.toFixed(2)}</td>
                         </tr>
                       \`}).join('')}
                     </tbody>
                     <tfoot class="bg-slate-50 font-semibold">
                       <tr class="border-t border-slate-200">
-                        <td colspan="4" class="px-3 py-2 text-right">Totals:</td>
+                        <td colspan="5" class="px-3 py-2 text-right">Totals:</td>
                         <td class="px-3 py-2 text-right">\${totalUnits.toLocaleString()} units</td>
-                        <td colspan="2" class="px-3 py-2"></td>
-                        <td class="px-3 py-2 text-right">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                        <td colspan="3" class="px-3 py-2"></td>
+                        <td class="px-3 py-2 text-right text-green-700">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
                       </tr>
                     </tfoot>
                   </table>
