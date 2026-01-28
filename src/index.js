@@ -52,6 +52,91 @@ app.get('/status', async (req, res) => {
 });
 
 // ============================================================
+// SESSION PERSISTENCE
+// ============================================================
+
+// Get current session state
+app.get('/session', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT match_results, selected_match_ids, flagged_match_ids,
+              selected_match_drafts, focus_mode_index, updated_at
+       FROM ui_session WHERE session_key = 'default'`
+    );
+    if (result.rows.length === 0) {
+      return res.json({
+        matchResults: null,
+        selectedMatchIds: [],
+        flaggedMatchIds: [],
+        selectedMatchDrafts: {},
+        focusModeIndex: 0
+      });
+    }
+    const row = result.rows[0];
+    res.json({
+      matchResults: row.match_results,
+      selectedMatchIds: row.selected_match_ids || [],
+      flaggedMatchIds: row.flagged_match_ids || [],
+      selectedMatchDrafts: row.selected_match_drafts || {},
+      focusModeIndex: row.focus_mode_index || 0,
+      updatedAt: row.updated_at
+    });
+  } catch (error) {
+    logger.error('Failed to get session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Save session state
+app.post('/session', async (req, res) => {
+  try {
+    const { matchResults, selectedMatchIds, flaggedMatchIds, selectedMatchDrafts, focusModeIndex } = req.body;
+    await pool.query(
+      `INSERT INTO ui_session (session_key, match_results, selected_match_ids, flagged_match_ids, selected_match_drafts, focus_mode_index, updated_at)
+       VALUES ('default', $1, $2, $3, $4, $5, NOW())
+       ON CONFLICT (session_key) DO UPDATE SET
+         match_results = $1,
+         selected_match_ids = $2,
+         flagged_match_ids = $3,
+         selected_match_drafts = $4,
+         focus_mode_index = $5,
+         updated_at = NOW()`,
+      [
+        matchResults ? JSON.stringify(matchResults) : null,
+        JSON.stringify(selectedMatchIds || []),
+        JSON.stringify(flaggedMatchIds || []),
+        JSON.stringify(selectedMatchDrafts || {}),
+        focusModeIndex || 0
+      ]
+    );
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Failed to save session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Clear session state
+app.delete('/session', async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE ui_session SET
+         match_results = NULL,
+         selected_match_ids = '[]',
+         flagged_match_ids = '[]',
+         selected_match_drafts = '{}',
+         focus_mode_index = 0,
+         updated_at = NOW()
+       WHERE session_key = 'default'`
+    );
+    res.json({ success: true });
+  } catch (error) {
+    logger.error('Failed to clear session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================
 // ORDERS CRUD
 // ============================================================
 

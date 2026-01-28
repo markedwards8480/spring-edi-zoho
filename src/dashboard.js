@@ -230,6 +230,23 @@ const dashboardHTML = `
     
     @media (max-width: 1200px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .info-grid { grid-template-columns: repeat(2, 1fr); } }
     @media (max-width: 768px) { .sidebar { display: none; } }
+
+    /* Workflow Progress Bar */
+    .workflow-bar { background: white; border-bottom: 1px solid rgba(0,0,0,0.08); padding: 1rem 2rem; }
+    .workflow-stages { display: flex; align-items: center; justify-content: center; gap: 1rem; }
+    .workflow-stage { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 1.25rem; border-radius: 12px; cursor: pointer; transition: all 0.2s; border: 2px solid transparent; }
+    .workflow-stage:hover { background: #f5f5f7; }
+    .workflow-stage.active { border-color: currentColor; }
+    .workflow-stage.stage-inbox { background: rgba(255,149,0,0.1); color: #ff9500; }
+    .workflow-stage.stage-inbox.active { background: #ff9500; color: white; box-shadow: 0 4px 12px rgba(255,149,0,0.3); }
+    .workflow-stage.stage-review { background: rgba(0,136,194,0.1); color: #0088c2; }
+    .workflow-stage.stage-review.active { background: #0088c2; color: white; box-shadow: 0 4px 12px rgba(0,136,194,0.3); }
+    .workflow-stage.stage-done { background: rgba(52,199,89,0.1); color: #34c759; }
+    .workflow-stage.stage-done.active { background: #34c759; color: white; box-shadow: 0 4px 12px rgba(52,199,89,0.3); }
+    .workflow-stage-icon { font-size: 1.25rem; }
+    .workflow-stage-label { font-weight: 600; font-size: 0.9375rem; }
+    .workflow-stage-count { font-size: 0.8125rem; opacity: 0.8; }
+    .workflow-arrow { color: #d2d2d7; font-size: 1.25rem; }
   </style>
 </head>
 <body>
@@ -246,19 +263,48 @@ const dashboardHTML = `
       System Online
     </div>
   </div>
-  
+
+  <!-- Workflow Progress Bar -->
+  <div class="workflow-bar">
+    <div class="workflow-stages">
+      <div class="workflow-stage stage-inbox active" onclick="showTab('orders', this); updateWorkflowStage('inbox');" id="workflowInbox">
+        <span class="workflow-stage-icon">📥</span>
+        <div>
+          <div class="workflow-stage-label">New Orders</div>
+          <div class="workflow-stage-count"><span id="workflowInboxCount">0</span> to process</div>
+        </div>
+      </div>
+      <span class="workflow-arrow">→</span>
+      <div class="workflow-stage stage-review" onclick="goToReviewMatches()" id="workflowReview">
+        <span class="workflow-stage-icon">🔍</span>
+        <div>
+          <div class="workflow-stage-label">Review Matches</div>
+          <div class="workflow-stage-count"><span id="workflowReviewCount">0</span> to review</div>
+        </div>
+      </div>
+      <span class="workflow-arrow">→</span>
+      <div class="workflow-stage stage-done" onclick="showTab('sent', this); updateWorkflowStage('done');" id="workflowDone">
+        <span class="workflow-stage-icon">✅</span>
+        <div>
+          <div class="workflow-stage-label">Sent to Zoho</div>
+          <div class="workflow-stage-count"><span id="workflowDoneCount">0</span> today</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="main-container">
     <div class="sidebar">
       <div class="nav-title">Workflow</div>
       <div class="nav-item active" onclick="showTab('orders', this)">
         📥 EDI Orders <span class="nav-badge" id="pendingBadge">0</span>
       </div>
-      <div class="nav-item" id="navReview" onclick="showTab('review', this)">🔍 Review Matches <span class="nav-badge" id="reviewBadge" style="display:none;background:#0088c2">0</span></div>
+      <div class="nav-item" id="navReview" onclick="goToReviewMatches()">🔍 Review Matches <span class="nav-badge" id="reviewBadge" style="display:none;background:#0088c2">0</span></div>
       <div class="nav-item" onclick="showTab('sent', this)">✅ Sent to Zoho <span class="nav-badge" id="sentBadge" style="background:#34c759">0</span></div>
       <div class="nav-title">Settings</div>
       <div class="nav-item" onclick="showTab('mappings', this)">🔗 Customer Mappings</div>
       <div class="nav-title">History</div>
-      <div class="nav-item" onclick="showTab('activity', this)">📊 Activity Log</div>
+      <div class="nav-item" onclick="showTab('activity', this)">📊 Activity & Logs</div>
       <div class="nav-title">Tools</div>
       <div class="nav-item" onclick="showTab('sftp', this)">📁 SFTP Browser</div>
 
@@ -319,7 +365,8 @@ const dashboardHTML = `
                 <th>Items</th>
                 <th>Value</th>
                 <th>Status</th>
-                <th>Date</th>
+                <th>Imported</th>
+                <th>EDI Date</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -372,7 +419,7 @@ const dashboardHTML = `
         </div>
         <div class="table-container">
           <table class="orders-table">
-            <thead><tr><th>PO #</th><th>Customer</th><th>Zoho SO#</th><th>Value</th><th>Sent At</th><th>Matched Draft</th></tr></thead>
+            <thead><tr><th>PO #</th><th>Customer</th><th>Zoho SO#</th><th>Value</th><th>Sent At</th><th>Actions</th></tr></thead>
             <tbody id="sentOrdersTable"><tr><td colspan="6" class="empty-state">No orders sent yet</td></tr></tbody>
           </table>
         </div>
@@ -386,6 +433,7 @@ const dashboardHTML = `
       
       <!-- Activity Tab -->
       <div id="tabActivity" style="display:none">
+        <h2 style="margin-bottom:1rem;font-weight:600">Activity & Logs</h2>
         <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom:1.5rem;">
           <div class="stat-card">
             <div class="stat-label">📊 All-Time Orders Sent</div>
@@ -404,97 +452,66 @@ const dashboardHTML = `
             <div class="stat-value" id="stat30DayErrors">-</div>
           </div>
         </div>
-        
-        <div class="sub-tabs" style="margin-bottom:1.5rem">
-          <div class="sub-tab active" onclick="showActivityTab('zoho', this)">✅ Sent to Zoho</div>
-          <div class="sub-tab" onclick="showActivityTab('activity', this)">📋 Activity Log</div>
+
+        <!-- Unified Activity Log -->
+        <div class="toolbar">
+          <select class="filter-select" id="activityActionFilter" onchange="filterActivityLog()">
+            <option value="">All Actions</option>
+            <optgroup label="Zoho Operations">
+              <option value="sent_to_zoho">Sent to Zoho</option>
+              <option value="draft_updated">Draft Updated</option>
+              <option value="new_order_created">New Order Created</option>
+            </optgroup>
+            <optgroup label="Matching">
+              <option value="match_found">Match Found</option>
+              <option value="no_match_found">No Match</option>
+              <option value="user_confirmed_match">User Confirmed Match</option>
+              <option value="user_flagged_match">User Flagged Match</option>
+            </optgroup>
+            <optgroup label="System">
+              <option value="order_imported">Order Imported</option>
+              <option value="sftp_fetch_completed">SFTP Fetch</option>
+              <option value="zoho_error">Errors</option>
+            </optgroup>
+          </select>
+          <select class="filter-select" id="activitySeverityFilter" onchange="filterActivityLog()">
+            <option value="">All Severity</option>
+            <option value="success">✓ Success</option>
+            <option value="info">ℹ️ Info</option>
+            <option value="warning">⚠️ Warning</option>
+            <option value="error">❌ Error</option>
+          </select>
+          <div style="flex:1"></div>
+          <span id="activityLogCount" style="color:#86868b;font-size:0.875rem;margin-right:1rem;"></span>
+          <button class="btn btn-primary" onclick="loadActivityLog()">🔄 Refresh</button>
         </div>
-        
-        <!-- Sent to Zoho Sub-tab -->
-        <div id="activityZohoTab">
-          <div class="toolbar">
-            <input type="text" class="search-box" placeholder="Search PO#..." id="zohoLogSearchBox" onkeyup="filterZohoLog()">
-            <select class="filter-select" id="zohoLogCustomerFilter" onchange="filterZohoLog()"><option value="">All Customers</option></select>
-            <input type="date" class="search-box" style="width:150px" id="zohoLogFromDate" onchange="filterZohoLog()">
-            <span style="color:#86868b">to</span>
-            <input type="date" class="search-box" style="width:150px" id="zohoLogToDate" onchange="filterZohoLog()">
-            <div style="flex:1"></div>
-            <button class="btn btn-secondary" onclick="exportZohoLog()">📥 Export CSV</button>
-            <button class="btn btn-primary" onclick="loadZohoLog()">🔄 Refresh</button>
-          </div>
-          <div class="table-container" style="margin-top:1rem">
-            <table class="orders-table" id="zohoLogTable">
-              <thead>
-                <tr>
-                  <th>Sent At</th>
-                  <th>PO #</th>
-                  <th>Customer</th>
-                  <th>Zoho SO#</th>
-                  <th>Amount</th>
-                  <th>Items</th>
-                  <th>Match</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="zohoLogBody">
-                <tr><td colspan="8" class="empty-state">Loading...</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div style="margin-top:1rem;color:#86868b;font-size:0.8125rem" id="zohoLogCount"></div>
+        <div class="table-container" style="margin-top:1rem">
+          <table class="orders-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Action</th>
+                <th>PO #</th>
+                <th>Customer</th>
+                <th>Details</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="activityLogBody">
+              <tr><td colspan="6" class="empty-state">Loading...</td></tr>
+            </tbody>
+          </table>
         </div>
-        
-        <!-- Activity Log Sub-tab -->
-        <div id="activityLogTab" style="display:none">
-          <div class="toolbar">
-            <select class="filter-select" id="activityActionFilter" onchange="filterActivityLog()">
-              <option value="">All Actions</option>
-              <optgroup label="Zoho Operations">
-                <option value="sent_to_zoho">Sent to Zoho</option>
-                <option value="draft_updated">Draft Updated</option>
-                <option value="new_order_created">New Order Created</option>
-              </optgroup>
-              <optgroup label="Matching">
-                <option value="match_found">Match Found</option>
-                <option value="no_match_found">No Match</option>
-                <option value="user_confirmed_match">User Confirmed Match</option>
-                <option value="user_flagged_match">User Flagged Match</option>
-              </optgroup>
-              <optgroup label="System">
-                <option value="order_imported">Order Imported</option>
-                <option value="sftp_fetch_completed">SFTP Fetch</option>
-                <option value="zoho_error">Errors</option>
-              </optgroup>
-            </select>
-            <select class="filter-select" id="activitySeverityFilter" onchange="filterActivityLog()">
-              <option value="">All Severity</option>
-              <option value="success">✓ Success</option>
-              <option value="info">ℹ️ Info</option>
-              <option value="warning">⚠️ Warning</option>
-              <option value="error">❌ Error</option>
-            </select>
-            <div style="flex:1"></div>
-            <button class="btn btn-primary" onclick="loadActivityLog()">🔄 Refresh</button>
-          </div>
-          <div class="table-container" style="margin-top:1rem">
-            <table class="orders-table">
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Action</th>
-                  <th>PO #</th>
-                  <th>Customer</th>
-                  <th>Details</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="activityLogBody">
-                <tr><td colspan="7" class="empty-state">Loading...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+
+        <!-- Hidden elements for backward compatibility with Zoho log functions -->
+        <div id="activityZohoTab" style="display:none"></div>
+        <div id="activityLogTab" style="display:none"></div>
+        <div id="zohoLogBody" style="display:none"></div>
+        <div id="zohoLogCount" style="display:none"></div>
+        <input type="hidden" id="zohoLogSearchBox">
+        <select id="zohoLogCustomerFilter" style="display:none"><option value="">All</option></select>
+        <input type="hidden" id="zohoLogFromDate">
+        <input type="hidden" id="zohoLogToDate">
       </div>
       
       <!-- SFTP Browser Tab -->
@@ -719,27 +736,70 @@ const dashboardHTML = `
     let focusModeIndex = 0; // Current index in Focus Mode
     let flaggedMatchIds = new Set(); // Track flagged matches for review
     
-    document.addEventListener('DOMContentLoaded', () => { 
-      loadOrders(); 
-      loadStats(); 
-      loadMatchSession(); // Load saved match results
+    document.addEventListener('DOMContentLoaded', () => {
+      loadOrders();
+      loadStats();
+      loadSession(); // Load saved session state
     });
-    
-    // Load saved match session from server
-    async function loadMatchSession() {
+
+    // Load saved session state from server
+    async function loadSession() {
       try {
-        const res = await fetch('/match-session');
+        const res = await fetch('/session');
         const data = await res.json();
-        if (data.success && data.hasSession && (data.matches?.length > 0 || data.noMatches?.length > 0)) {
-          matchResults = {
-            matches: data.matches || [],
-            noMatches: data.noMatches || []
-          };
+        if (data.matchResults && (data.matchResults.matches?.length > 0 || data.matchResults.noMatches?.length > 0)) {
+          matchResults = data.matchResults;
+          selectedMatchIds = new Set(data.selectedMatchIds || []);
+          flaggedMatchIds = new Set(data.flaggedMatchIds || []);
+          selectedMatchDrafts = new Map(Object.entries(data.selectedMatchDrafts || {}).map(([k, v]) => [parseInt(k), v]));
+          focusModeIndex = data.focusModeIndex || 0;
           showMatchReview(matchResults);
-          toast('Loaded ' + (data.matches?.length || 0) + ' saved matches');
+          updateWorkflowCounts();
+          const matchCount = matchResults.matches?.length || 0;
+          if (matchCount > 0) {
+            toast('Restored ' + matchCount + ' matches from previous session');
+          }
         }
       } catch (e) {
-        console.log('No saved match session');
+        console.log('No saved session');
+      }
+    }
+
+    // Save session state to server (debounced)
+    let saveSessionTimeout = null;
+    function saveSession() {
+      // Debounce save calls
+      if (saveSessionTimeout) clearTimeout(saveSessionTimeout);
+      saveSessionTimeout = setTimeout(async () => {
+        try {
+          await fetch('/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              matchResults: matchResults,
+              selectedMatchIds: Array.from(selectedMatchIds),
+              flaggedMatchIds: Array.from(flaggedMatchIds),
+              selectedMatchDrafts: Object.fromEntries(selectedMatchDrafts),
+              focusModeIndex: focusModeIndex
+            })
+          });
+        } catch (e) {
+          console.error('Failed to save session:', e);
+        }
+      }, 500); // Save after 500ms of inactivity
+    }
+
+    // Clear session state
+    async function clearSession() {
+      try {
+        await fetch('/session', { method: 'DELETE' });
+        matchResults = null;
+        selectedMatchIds.clear();
+        flaggedMatchIds.clear();
+        selectedMatchDrafts.clear();
+        focusModeIndex = 0;
+      } catch (e) {
+        console.error('Failed to clear session:', e);
       }
     }
     
@@ -754,11 +814,51 @@ const dashboardHTML = `
       document.getElementById(tabId).style.display = 'block';
       if (tab === 'sent') loadSentOrders();
       if (tab === 'mappings') loadMappings();
-      if (tab === 'activity') { loadZohoLog(); loadAuditStats(); }
+      if (tab === 'activity') { loadActivityLog(); loadAuditStats(); }
       if (tab === 'sftp') refreshSftpStatus();
       if (tab === 'testing') loadTestOrders();
+
+      // Sync workflow bar with tab
+      if (tab === 'orders') updateWorkflowStage('inbox');
+      else if (tab === 'review') updateWorkflowStage('review');
+      else if (tab === 'sent') updateWorkflowStage('done');
     }
-    
+
+    function updateWorkflowStage(stage) {
+      // Remove active from all stages
+      document.querySelectorAll('.workflow-stage').forEach(s => s.classList.remove('active'));
+      // Add active to current stage
+      const stageMap = { inbox: 'workflowInbox', review: 'workflowReview', done: 'workflowDone' };
+      const stageEl = document.getElementById(stageMap[stage]);
+      if (stageEl) stageEl.classList.add('active');
+    }
+
+    function updateWorkflowCounts() {
+      // Count pending orders (inbox)
+      const pendingCount = orders.filter(o => o.status === 'pending').length;
+      document.getElementById('workflowInboxCount').textContent = pendingCount;
+
+      // Count orders to review (matched but not sent)
+      const reviewCount = matchResults ? (matchResults.matches?.length || 0) + (matchResults.noMatches?.length || 0) : 0;
+      document.getElementById('workflowReviewCount').textContent = reviewCount;
+
+      // Count sent today
+      const sentCount = orders.filter(o => o.status === 'processed' || o.zoho_so_number).length;
+      document.getElementById('workflowDoneCount').textContent = sentCount;
+    }
+
+    function goToReviewMatches() {
+      showTab('review', document.getElementById('navReview'));
+      updateWorkflowStage('review');
+      // If we have matches and Focus Mode is not already active, auto-start it
+      if (matchResults && matchResults.matches && matchResults.matches.length > 0 && !focusModeActive) {
+        focusModeActive = true;
+        focusModeIndex = 0;
+        document.addEventListener('keydown', focusModeKeyHandler);
+        showFocusMode();
+      }
+    }
+
     async function loadOrders() {
       try {
         const res = await fetch('/orders');
@@ -766,6 +866,7 @@ const dashboardHTML = `
         renderOrders();
         updateCustomerFilter();
         loadStats();
+        updateWorkflowCounts();
       } catch (e) { toast('Failed to load orders'); }
     }
     
@@ -790,10 +891,10 @@ const dashboardHTML = `
       
       const tbody = document.getElementById('ordersTable');
       if (!filtered.length) {
-        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No orders found.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No orders found.</td></tr>';
         return;
       }
-      
+
       tbody.innerHTML = filtered.map(o => {
         const items = o.parsed_data?.items || [];
         const amt = items.reduce((s,i) => s + (i.quantityOrdered||0)*(i.unitPrice||0), 0);
@@ -812,14 +913,33 @@ const dashboardHTML = `
           statusClass = 'review';
           statusText = '📋 Review';
         }
-        return \`<tr>
+
+        // Calculate days since import
+        const importDate = new Date(o.created_at);
+        const now = new Date();
+        const daysSinceImport = Math.floor((now - importDate) / (1000 * 60 * 60 * 24));
+        const isOld = daysSinceImport >= 3 && o.status === 'pending';
+        const oldBadge = isOld ? '<span style="background:#fff3e0;color:#f57c00;font-size:0.7rem;padding:0.15rem 0.4rem;border-radius:4px;margin-left:0.5rem;">' + daysSinceImport + ' days</span>' : '';
+
+        // Format imported date with time
+        const importedStr = formatDateWithTime(importDate);
+
+        // Get EDI order date from parsed data
+        const ediDate = o.parsed_data?.dates?.orderDate || o.parsed_data?.dates?.poDate || '';
+        const ediDateStr = ediDate ? new Date(ediDate).toLocaleDateString() : 'N/A';
+
+        // Row style for old orders
+        const rowStyle = isOld ? 'background:rgba(255,243,224,0.5);' : '';
+
+        return \`<tr style="\${rowStyle}">
           <td><input type="checkbox" class="checkbox" \${selectedIds.has(o.id)?'checked':''} onchange="toggleSelect(\${o.id})"></td>
-          <td><strong>\${o.edi_order_number||'N/A'}</strong></td>
+          <td><strong>\${o.edi_order_number||'N/A'}</strong>\${oldBadge}</td>
           <td>\${o.edi_customer_name||'Unknown'}</td>
           <td>\${items.length} items</td>
           <td>$\${amt.toLocaleString('en-US',{minimumFractionDigits:2})}</td>
           <td><span class="status-badge status-\${statusClass}">\${statusText}</span></td>
-          <td>\${new Date(o.created_at).toLocaleDateString()}</td>
+          <td style="font-size:0.8125rem;\${isOld?'color:#f57c00;font-weight:500;':''}">\${importedStr}</td>
+          <td style="font-size:0.8125rem;">\${ediDateStr}</td>
           <td><button class="btn btn-secondary" style="padding:0.35rem 0.75rem;font-size:0.8125rem" onclick="viewOrder(\${o.id})">View</button></td>
         </tr>\`;
       }).join('');
@@ -830,6 +950,23 @@ const dashboardHTML = `
     function filterOrders() { renderOrders(); }
     function toggleSelect(id) { selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id); renderOrders(); }
     function toggleAll() { const c = document.getElementById('selectAll')?.checked; orders.forEach(o => c ? selectedIds.add(o.id) : selectedIds.delete(o.id)); renderOrders(); }
+
+    function formatDateWithTime(date) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+      const inputDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+      const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+      if (inputDate.getTime() === today.getTime()) {
+        return 'Today, ' + timeStr;
+      } else if (inputDate.getTime() === yesterday.getTime()) {
+        return 'Yesterday, ' + timeStr;
+      } else {
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + timeStr;
+      }
+    }
     
     function updateCustomerFilter() {
       const customers = [...new Set(orders.map(o => o.edi_customer_name).filter(Boolean))].sort();
@@ -1338,8 +1475,10 @@ const dashboardHTML = `
         btn.innerHTML = originalText;
         if (data.success) {
           matchResults = data;
-          showMatchReview(data);
+          showMatchReview(data, true); // Auto-start Focus Mode
           showTab('review', document.getElementById('navReview'));
+          updateWorkflowCounts();
+          saveSession(); // Persist match results
           toast('Found ' + (data.matches?.length || 0) + ' matches');
         } else { toast('Error: ' + (data.error || 'Unknown')); }
       } catch (e) { 
@@ -1349,10 +1488,23 @@ const dashboardHTML = `
       }
     }
     
-    function showMatchReview(data) {
+    function showMatchReview(data, autoStartFocusMode = false) {
       const allMatches = data.matches || [];
       const noMatches = data.noMatches || [];
-      
+
+      // Auto-start Focus Mode if requested and there are matches
+      if (autoStartFocusMode && allMatches.length > 0) {
+        focusModeActive = true;
+        focusModeIndex = 0;
+        document.addEventListener('keydown', focusModeKeyHandler);
+        showFocusMode();
+        // Update badge
+        const reviewBadge = document.getElementById('reviewBadge');
+        reviewBadge.textContent = allMatches.length;
+        reviewBadge.style.display = 'inline';
+        return;
+      }
+
       // Show toolbar and update badge
       document.getElementById('reviewToolbar').style.display = 'flex';
       const reviewBadge = document.getElementById('reviewBadge');
@@ -1711,18 +1863,14 @@ const dashboardHTML = `
     
     async function clearMatchResults() {
       if (!confirm('Clear all match results? You will need to run Find Matches again.')) return;
-      
-      // Clear on server
-      try {
-        await fetch('/match-session/clear', { method: 'POST' });
-      } catch (e) { console.error('Failed to clear server session'); }
-      
-      matchResults = null;
-      selectedMatchIds.clear();
-      selectedMatchDrafts.clear();
+
+      // Clear session on server
+      await clearSession();
+
       document.getElementById('reviewToolbar').style.display = 'none';
       document.getElementById('reviewBadge').style.display = 'none';
       document.getElementById('matchReviewContent').innerHTML = '<div class="empty-state"><p style="font-size:1.25rem;margin-bottom:1rem;">No matches to review</p><p>Go to <strong>EDI Orders</strong> and click <strong>"Find Matches"</strong> to search for matching Zoho drafts.</p></div>';
+      updateWorkflowCounts();
     }
     
     // Confidence tile click handler
@@ -1775,7 +1923,14 @@ const dashboardHTML = `
       document.removeEventListener('keydown', focusModeKeyHandler);
       showMatchReview(matchResults);
     }
-    
+
+    function showListView() {
+      // Exit Focus Mode and show list view
+      focusModeActive = false;
+      document.removeEventListener('keydown', focusModeKeyHandler);
+      showMatchReview(matchResults, false); // Show list view, not focus mode
+    }
+
     function focusModeKeyHandler(e) {
       if (!focusModeActive) return;
       // Don't trigger if typing in an input
@@ -1944,6 +2099,7 @@ const dashboardHTML = `
             </div>
             <div style="display:flex;gap:0.5rem;">
               \${selectedCount > 0 ? '<button class="btn btn-success" onclick="showFocusModeFinish()" style="font-size:0.8125rem;">Finish & Review →</button>' : ''}
+              <button class="btn btn-secondary" onclick="showListView()" title="Switch to list view">☰ List View</button>
               <button class="btn btn-secondary" onclick="exitFocusMode()">← Exit</button>
             </div>
           </div>
@@ -2073,6 +2229,8 @@ const dashboardHTML = `
               <div class="focus-actions-left">
                 <button class="btn btn-secondary" onclick="focusModeSkip()">Skip</button>
                 <button class="btn focus-btn-flag \${flaggedMatchIds.has(edi.id) ? 'active' : ''}" onclick="focusModeFlag()">\${flaggedMatchIds.has(edi.id) ? '🚩 Flagged' : 'Flag'}</button>
+                <button class="btn btn-secondary" onclick="viewOrder(\${edi.id})" title="View full EDI order details">📄 EDI Details</button>
+                <button class="btn btn-secondary" onclick="window.open('https://books.zoho.com/app/677681121#/salesorders/\${zoho.id}','_blank')" title="Open in Zoho">🔗 Zoho</button>
               </div>
               <button class="btn focus-btn-approve \${selectedMatchIds.has(edi.id) ? 'selected' : ''}" onclick="focusModeApprove()">
                 \${selectedMatchIds.has(edi.id) ? '✓ Selected' : 'Select & Next →'}
@@ -2256,51 +2414,55 @@ const dashboardHTML = `
     function focusModeApprove() {
       const allMatches = matchResults.matches || [];
       if (focusModeIndex >= allMatches.length) return;
-      
+
       const match = allMatches[focusModeIndex];
       const ediId = match.ediOrder.id;
       const draftId = match.zohoDraft.id;
-      
+
       // Add to selection (remove from flagged if it was there)
       selectedMatchIds.add(ediId);
       selectedMatchDrafts.set(ediId, draftId);
       flaggedMatchIds.delete(ediId);
       updateSendSelectedButton();
-      
+      saveSession(); // Persist state
+
       // Move to next
       focusModeNext();
     }
-    
+
     function focusModeSkip() {
       focusModeNext();
     }
-    
+
     function focusModeFlag() {
       const allMatches = matchResults.matches || [];
       if (focusModeIndex >= allMatches.length) return;
-      
+
       const match = allMatches[focusModeIndex];
       const ediId = match.ediOrder.id;
-      
+
       // Add to flagged (remove from selected if it was there)
       flaggedMatchIds.add(ediId);
       selectedMatchIds.delete(ediId);
       selectedMatchDrafts.delete(ediId);
       updateSendSelectedButton();
-      
+      saveSession(); // Persist state
+
       toast('Flagged for review');
       focusModeNext();
     }
-    
+
     function focusModeRemoveFromSelected(ediId) {
       selectedMatchIds.delete(ediId);
       selectedMatchDrafts.delete(ediId);
       updateSendSelectedButton();
+      saveSession(); // Persist state
       showFocusMode();
     }
-    
+
     function focusModeRemoveFromFlagged(ediId) {
       flaggedMatchIds.delete(ediId);
+      saveSession(); // Persist state
       showFocusMode();
     }
     
@@ -2313,16 +2475,18 @@ const dashboardHTML = `
       const allMatches = matchResults.matches || [];
       if (focusModeIndex < allMatches.length - 1) {
         focusModeIndex++;
+        saveSession(); // Persist position
         showFocusMode();
       } else {
         // End of list - show finish summary
         showFocusModeFinish();
       }
     }
-    
+
     function focusModePrev() {
       if (focusModeIndex > 0) {
         focusModeIndex--;
+        saveSession(); // Persist position
         showFocusMode();
       }
     }
@@ -2437,6 +2601,7 @@ const dashboardHTML = `
       // Update card visual
       const card = document.querySelector('[data-match-id="' + ediOrderId + '"]');
       if (card) card.classList.toggle('selected', checked);
+      saveSession(); // Persist selection state
     }
     
     function selectAllMatches() {
@@ -2480,88 +2645,173 @@ const dashboardHTML = `
         toast('No matches selected');
         return;
       }
-      
+
       // Build summary of what's being sent
       const selectedMatches = matchResults.matches.filter(m => selectedMatchIds.has(m.ediOrder.id));
-      
-      let rowsHtml = '';
+
+      let ordersHtml = '';
+      let totalChanges = 0;
       let warningCount = 0;
-      
-      selectedMatches.forEach(match => {
+
+      selectedMatches.forEach((match, idx) => {
         const edi = match.ediOrder;
         const zoho = match.zohoDraft;
+
+        // Track changes for this order
+        let changes = [];
+
+        // Compare PO reference
+        const ediPO = edi.poNumber || '';
+        const zohoPO = zoho.poReference || zoho.customerPO || '';
+        if (ediPO !== zohoPO) {
+          changes.push({ field: 'PO Reference', from: zohoPO || '(none)', to: ediPO, type: 'update' });
+        }
+
+        // Compare ship date
+        const ediShip = edi.shipDate ? edi.shipDate.split('T')[0] : '';
+        const zohoShip = zoho.shipDate ? zoho.shipDate.split('T')[0] : '';
+        if (ediShip && ediShip !== zohoShip) {
+          changes.push({ field: 'Ship Date', from: zohoShip || '(none)', to: ediShip, type: 'update' });
+        }
+
+        // Compare cancel date
+        const ediCancel = edi.cancelDate ? edi.cancelDate.split('T')[0] : '';
+        const zohoCancel = zoho.cancelDate ? zoho.cancelDate.split('T')[0] : '';
+        if (ediCancel && ediCancel !== zohoCancel) {
+          changes.push({ field: 'Cancel Date', from: zohoCancel || '(none)', to: ediCancel, type: 'update' });
+        }
+
+        // Compare amount
         const amtDiff = edi.totalAmount - zoho.totalAmount;
-        const hasAmtDiff = Math.abs(amtDiff) > 100;
-        
-        if (hasAmtDiff) warningCount++;
-        
-        rowsHtml += \`
-          <tr style="border-bottom:1px solid #f0f0f0;\${hasAmtDiff ? 'background:#fffbf7;' : ''}">
-            <td style="padding:0.5rem 0.75rem;font-weight:500;">\${edi.poNumber}</td>
-            <td style="padding:0.5rem 0.75rem;font-size:0.8125rem;color:#666;">\${(edi.customer || '').substring(0, 20)}</td>
-            <td style="padding:0.5rem 0.75rem;font-size:0.8125rem;">#\${zoho.number}</td>
-            <td style="padding:0.5rem 0.75rem;font-size:0.8125rem;text-align:right;">$\${zoho.totalAmount.toLocaleString('en-US', {minimumFractionDigits:0})}</td>
-            <td style="padding:0.5rem 0.75rem;font-size:0.8125rem;text-align:right;">$\${edi.totalAmount.toLocaleString('en-US', {minimumFractionDigits:0})}</td>
-            <td style="padding:0.5rem 0.75rem;text-align:center;">
-              \${hasAmtDiff ? '<span style="color:#c00;font-size:0.75rem;">⚠️</span>' : '<span style="color:#666;font-size:0.75rem;">✓</span>'}
-            </td>
-          </tr>
+        if (Math.abs(amtDiff) > 1) {
+          const changeType = Math.abs(amtDiff) > 100 ? 'warning' : 'update';
+          if (changeType === 'warning') warningCount++;
+          changes.push({
+            field: 'Total Amount',
+            from: '$' + zoho.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2}),
+            to: '$' + edi.totalAmount.toLocaleString('en-US', {minimumFractionDigits:2}),
+            diff: (amtDiff > 0 ? '+' : '') + '$' + amtDiff.toLocaleString('en-US', {minimumFractionDigits:2}),
+            type: changeType
+          });
+        }
+
+        // Compare unit count
+        const unitsDiff = (edi.totalUnits || 0) - (zoho.totalUnits || 0);
+        if (Math.abs(unitsDiff) > 0) {
+          changes.push({
+            field: 'Total Units',
+            from: (zoho.totalUnits || 0).toLocaleString(),
+            to: (edi.totalUnits || 0).toLocaleString(),
+            diff: (unitsDiff > 0 ? '+' : '') + unitsDiff.toLocaleString(),
+            type: 'update'
+          });
+        }
+
+        // Compare item count
+        const itemsDiff = (edi.itemCount || 0) - (zoho.itemCount || 0);
+        if (itemsDiff !== 0) {
+          changes.push({
+            field: 'Line Items',
+            from: (zoho.itemCount || 0).toString(),
+            to: (edi.itemCount || 0).toString(),
+            diff: (itemsDiff > 0 ? '+' : '') + itemsDiff.toString(),
+            type: 'update'
+          });
+        }
+
+        totalChanges += changes.length;
+
+        // Build diff table for this order
+        let diffRows = '';
+        if (changes.length === 0) {
+          diffRows = '<tr><td colspan="3" style="padding:0.75rem;text-align:center;color:#34c759;font-size:0.8125rem;">✓ No changes detected - order data matches</td></tr>';
+        } else {
+          changes.forEach(c => {
+            const rowBg = c.type === 'warning' ? 'background:#fff7ed;' : '';
+            const diffColor = c.type === 'warning' ? 'color:#c2410c;font-weight:600;' : 'color:#059669;';
+            diffRows += \`
+              <tr style="border-bottom:1px solid #f0f0f0;\${rowBg}">
+                <td style="padding:0.5rem 0.75rem;font-size:0.8125rem;color:#64748b;width:25%;">\${c.field}</td>
+                <td style="padding:0.5rem 0.75rem;font-size:0.8125rem;text-decoration:line-through;color:#94a3b8;width:30%;">\${c.from}</td>
+                <td style="padding:0.5rem 0.75rem;font-size:0.8125rem;\${diffColor}width:30%;">\${c.to}\${c.diff ? ' <span style="font-size:0.75rem;opacity:0.8;">(' + c.diff + ')</span>' : ''}</td>
+              </tr>
+            \`;
+          });
+        }
+
+        const hasWarnings = changes.some(c => c.type === 'warning');
+        const cardBorder = hasWarnings ? 'border-left:4px solid #f59e0b;' : 'border-left:4px solid #22c55e;';
+
+        ordersHtml += \`
+          <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:1rem;overflow:hidden;\${cardBorder}">
+            <div style="background:#f8fafc;padding:0.75rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <span style="font-weight:600;color:#1e293b;">PO# \${edi.poNumber}</span>
+                <span style="color:#64748b;font-size:0.8125rem;margin-left:0.75rem;">\${(edi.customer || '').substring(0, 25)}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.75rem;">
+                <span style="font-size:0.75rem;color:#64748b;">Zoho #\${zoho.number}</span>
+                <span style="font-size:0.75rem;padding:0.25rem 0.5rem;border-radius:4px;\${hasWarnings ? 'background:#fef3c7;color:#b45309;' : 'background:#dcfce7;color:#15803d;'}">\${changes.length} change\${changes.length !== 1 ? 's' : ''}</span>
+              </div>
+            </div>
+            <table style="width:100%;border-collapse:collapse;">
+              <thead>
+                <tr style="background:#f1f5f9;">
+                  <th style="padding:0.5rem 0.75rem;text-align:left;font-size:0.6875rem;text-transform:uppercase;color:#64748b;font-weight:500;">Field</th>
+                  <th style="padding:0.5rem 0.75rem;text-align:left;font-size:0.6875rem;text-transform:uppercase;color:#64748b;font-weight:500;">Current (Zoho)</th>
+                  <th style="padding:0.5rem 0.75rem;text-align:left;font-size:0.6875rem;text-transform:uppercase;color:#64748b;font-weight:500;">New (EDI)</th>
+                </tr>
+              </thead>
+              <tbody>
+                \${diffRows}
+              </tbody>
+            </table>
+          </div>
         \`;
       });
       
       const html = \`
         <div class="modal-overlay" onclick="closeBulkConfirmModal()">
-          <div class="modal" onclick="event.stopPropagation()" style="max-width:700px;">
+          <div class="modal" onclick="event.stopPropagation()" style="max-width:750px;">
             <div class="modal-header" style="background:#1e3a5f;">
-              <h2 style="color:white;">✏️ Modify \${selectedMatches.length} Zoho Order\${selectedMatches.length > 1 ? 's' : ''}</h2>
+              <h2 style="color:white;">📋 Review Changes — \${selectedMatches.length} Order\${selectedMatches.length > 1 ? 's' : ''}</h2>
               <button class="modal-close" onclick="closeBulkConfirmModal()" style="color:white;">×</button>
             </div>
-            <div class="modal-body" style="padding:1.5rem;">
-              <div style="background:#e3f2fd;border:1px solid #90caf9;border-radius:8px;padding:1rem;margin-bottom:1.25rem;">
-                <div style="font-size:0.875rem;color:#1565c0;">
-                  You are about to <strong>update \${selectedMatches.length} existing Zoho order\${selectedMatches.length > 1 ? 's' : ''}</strong> with EDI data.
+            <div class="modal-body" style="padding:1.5rem;background:#f8fafc;">
+              <div style="display:flex;gap:1rem;margin-bottom:1.25rem;">
+                <div style="flex:1;background:white;border:1px solid #e2e8f0;border-radius:8px;padding:1rem;text-align:center;">
+                  <div style="font-size:1.5rem;font-weight:700;color:#1e3a5f;">\${selectedMatches.length}</div>
+                  <div style="font-size:0.75rem;color:#64748b;">Orders</div>
+                </div>
+                <div style="flex:1;background:white;border:1px solid #e2e8f0;border-radius:8px;padding:1rem;text-align:center;">
+                  <div style="font-size:1.5rem;font-weight:700;color:#059669;">\${totalChanges}</div>
+                  <div style="font-size:0.75rem;color:#64748b;">Total Changes</div>
+                </div>
+                <div style="flex:1;background:white;border:1px solid \${warningCount > 0 ? '#fbbf24' : '#e2e8f0'};border-radius:8px;padding:1rem;text-align:center;">
+                  <div style="font-size:1.5rem;font-weight:700;color:\${warningCount > 0 ? '#d97706' : '#64748b'};">\${warningCount}</div>
+                  <div style="font-size:0.75rem;color:#64748b;">Warnings</div>
                 </div>
               </div>
-              
-              <div style="margin-bottom:1rem;">
-                <div style="font-size:0.875rem;font-weight:600;color:#1d1d1f;margin-bottom:0.75rem;">Changes Summary:</div>
-                <div style="max-height:300px;overflow-y:auto;border:1px solid #e5e5e7;border-radius:8px;">
-                  <table style="width:100%;font-size:0.8125rem;border-collapse:collapse;">
-                    <thead>
-                      <tr style="background:#f9f9f9;border-bottom:2px solid #e5e5e5;">
-                        <th style="padding:0.625rem 0.75rem;text-align:left;font-size:0.6875rem;text-transform:uppercase;color:#666;">PO#</th>
-                        <th style="padding:0.625rem 0.75rem;text-align:left;font-size:0.6875rem;text-transform:uppercase;color:#666;">Customer</th>
-                        <th style="padding:0.625rem 0.75rem;text-align:left;font-size:0.6875rem;text-transform:uppercase;color:#666;">Zoho Order</th>
-                        <th style="padding:0.625rem 0.75rem;text-align:right;font-size:0.6875rem;text-transform:uppercase;color:#666;">Current</th>
-                        <th style="padding:0.625rem 0.75rem;text-align:right;font-size:0.6875rem;text-transform:uppercase;color:#666;">New</th>
-                        <th style="padding:0.625rem 0.75rem;text-align:center;font-size:0.6875rem;text-transform:uppercase;color:#666;">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      \${rowsHtml}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              
+
               \${warningCount > 0 ? \`
-              <div style="background:#fff3e0;border:1px solid #ffcc80;border-radius:8px;padding:0.875rem;margin-bottom:1rem;font-size:0.8125rem;color:#e65100;">
-                ⚠️ <strong>\${warningCount} order\${warningCount > 1 ? 's have' : ' has'} amount differences</strong> — please verify before confirming.
+              <div style="background:#fffbeb;border:1px solid #fbbf24;border-radius:8px;padding:0.875rem;margin-bottom:1rem;font-size:0.8125rem;color:#92400e;">
+                ⚠️ <strong>\${warningCount} order\${warningCount > 1 ? 's have' : ' has'} significant amount differences</strong> — review highlighted items below.
               </div>
-              \` : \`
-              <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px;padding:0.875rem;margin-bottom:1rem;font-size:0.8125rem;color:#2e7d32;">
-                ✓ All orders look good — no significant differences detected.
+              \` : ''}
+
+              <div style="font-size:0.8125rem;font-weight:600;color:#334155;margin-bottom:0.75rem;">Changes by Order:</div>
+              <div style="max-height:350px;overflow-y:auto;">
+                \${ordersHtml}
               </div>
-              \`}
-              
-              <div style="background:#f5f5f5;border-radius:8px;padding:0.875rem;font-size:0.8125rem;color:#666;">
-                <strong>💡 Note:</strong> Each order will be updated in Zoho with the EDI data. This action will be logged.
+
+              <div style="background:white;border:1px solid #e2e8f0;border-radius:8px;padding:0.875rem;margin-top:1rem;font-size:0.8125rem;color:#64748b;">
+                💡 <strong>What happens next:</strong> EDI data will update the matching Zoho orders. All changes are logged.
               </div>
             </div>
-            <div class="modal-footer" style="border-top:1px solid #e5e5e7;padding:1rem 1.5rem;display:flex;gap:0.75rem;justify-content:flex-end;">
+            <div class="modal-footer" style="border-top:1px solid #e5e5e7;padding:1rem 1.5rem;display:flex;gap:0.75rem;justify-content:flex-end;background:white;">
               <button class="btn btn-secondary" onclick="closeBulkConfirmModal()">Cancel</button>
-              <button id="confirmBulkBtn" class="btn btn-success" onclick="executeBulkUpdate()" style="min-width:200px;">
-                ✓ Apply Changes to \${selectedMatches.length} Order\${selectedMatches.length > 1 ? 's' : ''}
+              <button id="confirmBulkBtn" class="btn btn-success" onclick="executeBulkUpdate()" style="min-width:220px;">
+                ✓ Apply \${totalChanges} Change\${totalChanges !== 1 ? 's' : ''} to \${selectedMatches.length} Order\${selectedMatches.length > 1 ? 's' : ''}
               </button>
             </div>
           </div>
@@ -3088,7 +3338,33 @@ const dashboardHTML = `
       tbody.innerHTML = filtered.map(o => {
         const items = o.parsed_data?.items || [];
         const amt = items.reduce((s,i) => s + (i.quantityOrdered||0)*(i.unitPrice||0), 0);
-        return \`<tr><td><strong>\${o.edi_order_number||'N/A'}</strong></td><td>\${o.edi_customer_name||'Unknown'}</td><td>\${o.zoho_so_number || o.zoho_so_id || 'N/A'}</td><td>$\${amt.toLocaleString('en-US',{minimumFractionDigits:2})}</td><td>\${o.processed_at ? new Date(o.processed_at).toLocaleString() : '-'}</td><td>\${o.matched_draft_id || '-'}</td></tr>\`;
+
+        // Format Zoho SO# as link if available
+        const zohoId = o.zoho_so_id || o.matched_draft_id || '';
+        const zohoNum = o.zoho_so_number || zohoId || 'N/A';
+        const zohoLink = zohoId ?
+          '<a href="https://books.zoho.com/app/677681121#/salesorders/' + zohoId + '" target="_blank" style="color:#0088c2;text-decoration:none;font-weight:500;">' + zohoNum + ' <span style="font-size:0.75rem;">↗</span></a>' :
+          zohoNum;
+
+        // Format timestamp with relative time
+        let sentAtHtml = '-';
+        if (o.processed_at) {
+          const sentDate = new Date(o.processed_at);
+          const sentStr = formatDateWithTime(sentDate);
+          sentAtHtml = '<span style="font-size:0.8125rem;">' + sentStr + '</span>';
+        }
+
+        // Actions column
+        const actionsHtml = '<button class="btn btn-secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem;" onclick="viewOrder(' + o.id + ')">View</button>';
+
+        return \`<tr>
+          <td><strong>\${o.edi_order_number||'N/A'}</strong></td>
+          <td>\${o.edi_customer_name||'Unknown'}</td>
+          <td>\${zohoLink}</td>
+          <td>$\${amt.toLocaleString('en-US',{minimumFractionDigits:2})}</td>
+          <td>\${sentAtHtml}</td>
+          <td>\${actionsHtml}</td>
+        </tr>\`;
       }).join('');
       
       document.getElementById('sentOrderCount').textContent = 'Showing ' + filtered.length + ' of ' + sentOrdersData.length + ' orders';

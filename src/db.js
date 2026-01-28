@@ -123,6 +123,25 @@ async function initDatabase() {
       );
     `);
 
+    // Create ui_session table for persisting UI state across sessions
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS ui_session (
+        id SERIAL PRIMARY KEY,
+        session_key VARCHAR(50) UNIQUE NOT NULL DEFAULT 'default',
+        match_results JSONB,
+        selected_match_ids JSONB DEFAULT '[]',
+        flagged_match_ids JSONB DEFAULT '[]',
+        selected_match_drafts JSONB DEFAULT '{}',
+        focus_mode_index INTEGER DEFAULT 0,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+
+      -- Insert default session if not exists
+      INSERT INTO ui_session (session_key)
+      VALUES ('default')
+      ON CONFLICT (session_key) DO NOTHING;
+    `);
+
     logger.info('Database tables initialized');
   } finally {
     client.release();
