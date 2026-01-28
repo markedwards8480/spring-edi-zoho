@@ -44,11 +44,26 @@ async function processEDIOrders() {
           customerPO: parsedOrder.header?.poNumber,
           rawEDI: content,
           parsedData: parsedOrder,
-          ediCustomerName: parsedOrder.parties?.buyer?.name || parsedOrder.header?.retailerName || null
+          ediCustomerName: parsedOrder.parties?.buyer?.name || parsedOrder.header?.retailerName || null,
+          transactionType: parsedOrder.header?.transactionType || '850'
         });
 
         await markFileProcessed(file.name, file.size, 1);
         results.filesProcessed++;
+
+        // Track amendments
+        if (savedOrder.wasAmended) {
+          results.ordersAmended = (results.ordersAmended || 0) + 1;
+          logger.info('Order amended', {
+            orderId: savedOrder.id,
+            poNumber: parsedOrder.header?.poNumber,
+            changesCount: savedOrder.changes?.length || 0
+          });
+        } else if (savedOrder.isNew) {
+          results.ordersCreated++;
+        } else if (savedOrder.duplicate) {
+          results.ordersDuplicate = (results.ordersDuplicate || 0) + 1;
+        }
 
         try {
           await sftp.archiveFile(file.name);

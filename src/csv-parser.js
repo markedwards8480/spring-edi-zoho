@@ -103,6 +103,25 @@ function parseSpringCSV(content, filename) {
 
   const firstRow = rows[0];
   
+  // Detect transaction type (850 = New Order, 860 = Change Order)
+  // Check CSV field first, then filename
+  let transactionType = getField(firstRow, 'po_transaction_type', 'transaction_type', 'edi_type') || '';
+  if (!transactionType) {
+    // Check filename for indicators
+    const lowerFilename = (filename || '').toLowerCase();
+    if (lowerFilename.includes('860') || lowerFilename.includes('change') || lowerFilename.includes('amend')) {
+      transactionType = '860';
+    } else {
+      transactionType = '850';
+    }
+  }
+
+  // Check for change reason code (indicates 860)
+  const changeReasonCode = getField(firstRow, 'po_change_reason_code', 'change_reason', 'po_attributes_change_reason') || '';
+  if (changeReasonCode) {
+    transactionType = '860';
+  }
+
   // Build the order object
   const order = {
     header: {
@@ -112,7 +131,9 @@ function parseSpringCSV(content, filename) {
       shipOpenDate: formatDate(getField(firstRow, 'po_po_ship_open_date', 'po.po_ship_open_date')),
       shipCloseDate: formatDate(getField(firstRow, 'po_po_ship_close_date', 'po.po_ship_close_date')),
       vendorName: getField(firstRow, 'vendor_tp_name', 'vendor.tp_name') || '',
-      retailerName: getField(firstRow, 'retailer_tp_name', 'retailer.tp_name') || ''
+      retailerName: getField(firstRow, 'retailer_tp_name', 'retailer.tp_name') || '',
+      transactionType: transactionType,
+      changeReasonCode: changeReasonCode
     },
     parties: {
       buyer: {

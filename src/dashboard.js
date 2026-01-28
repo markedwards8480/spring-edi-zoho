@@ -717,8 +717,14 @@ const dashboardHTML = `
       const hasPrepack = prepackItems.length > 0;
       const totalUnits = items.reduce((s, i) => s + (i.totalUnits || i.quantityOrdered || 0), 0);
 
+      // Check for amendments
+      const isAmended = o.is_amended === true;
+      const amendmentCount = o.amendment_count || 0;
+      const amendmentType = o.amendment_type || '';
+      const is860 = o.transaction_type === '860' || amendmentType === '860_change';
+
       return \`
-        <div class="bg-white rounded-xl border \${isOld ? 'border-amber-200 bg-amber-50/30' : 'border-slate-200'} p-4 hover:border-slate-300 transition">
+        <div class="bg-white rounded-xl border \${isAmended ? 'border-orange-300 bg-orange-50/30' : (isOld ? 'border-amber-200 bg-amber-50/30' : 'border-slate-200')} p-4 hover:border-slate-300 transition">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-4">
               <input type="checkbox" \${selectedIds.has(o.id) ? 'checked' : ''} onchange="toggleSelect(\${o.id})"
@@ -727,8 +733,10 @@ const dashboardHTML = `
                 <div class="font-semibold text-slate-800">\${o.edi_order_number || 'N/A'}</div>
                 <div class="text-sm text-slate-500">\${o.edi_customer_name || 'Unknown'}</div>
               </div>
+              \${isAmended ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">🔄 Amended' + (amendmentCount > 1 ? ' (' + amendmentCount + 'x)' : '') + '</span>' : ''}
+              \${is860 ? '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">860 Change</span>' : ''}
               \${hasPrepack ? '<span class="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">📦 Prepack</span>' : ''}
-              \${isOld ? '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">' + daysSinceImport + ' days old</span>' : ''}
+              \${isOld && !isAmended ? '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">' + daysSinceImport + ' days old</span>' : ''}
             </div>
             <div class="flex items-center gap-8">
               <div class="text-right">
@@ -2091,6 +2099,7 @@ const dashboardHTML = `
               <div class="flex gap-6">
                 <button onclick="showEdiTab('summary')" class="tab-btn active py-3 text-sm font-medium" data-tab="summary">Summary</button>
                 <button onclick="showEdiTab('lineitems')" class="tab-btn py-3 text-sm font-medium text-slate-500" data-tab="lineitems">📦 Line Items</button>
+                \${order.is_amended ? '<button onclick="showEdiTab(\\'changes\\')" class="tab-btn py-3 text-sm font-medium text-orange-500" data-tab="changes">🔄 Changes (' + (order.amendment_count || 1) + ')</button>' : ''}
                 <button onclick="showEdiTab('raw')" class="tab-btn py-3 text-sm font-medium text-slate-500" data-tab="raw">All Raw Data</button>
               </div>
             </div>
@@ -2252,6 +2261,78 @@ const dashboardHTML = `
                   </table>
                 </div>
               </div>
+
+              <!-- Changes Tab (for amended orders) -->
+              \${order.is_amended ? \`
+              <div id="edi-tab-changes" class="edi-tab-content hidden">
+                <div class="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-4">
+                  <div class="flex items-center gap-2 mb-2">
+                    <span class="text-orange-600 text-xl">🔄</span>
+                    <h4 class="font-semibold text-orange-800">Order Amendment Detected</h4>
+                    <span class="text-xs bg-orange-200 text-orange-800 px-2 py-0.5 rounded-full ml-2">
+                      \${order.amendment_type === '860_change' ? 'EDI 860 Change Order' : 'Revised 850'}
+                    </span>
+                  </div>
+                  <p class="text-sm text-orange-700">
+                    This order has been modified \${order.amendment_count || 1} time(s). Review the changes below.
+                  </p>
+                </div>
+
+                \${(() => {
+                  const changes = order.changes_detected || [];
+                  if (typeof changes === 'string') {
+                    try { return JSON.parse(changes); } catch { return []; }
+                  }
+                  return changes;
+                })().length > 0 ? \`
+                <div class="mb-4">
+                  <h4 class="font-semibold text-slate-700 mb-2">📋 What Changed</h4>
+                  <div class="bg-white rounded-lg border overflow-hidden">
+                    <table class="w-full text-sm">
+                      <thead class="bg-slate-100">
+                        <tr>
+                          <th class="text-left px-4 py-2 text-slate-600 font-medium">Field</th>
+                          <th class="text-left px-4 py-2 text-slate-600 font-medium">Previous Value</th>
+                          <th class="text-center px-2 py-2 text-slate-400">→</th>
+                          <th class="text-left px-4 py-2 text-slate-600 font-medium">New Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        \${(() => {
+                          let changes = order.changes_detected || [];
+                          if (typeof changes === 'string') {
+                            try { changes = JSON.parse(changes); } catch { changes = []; }
+                          }
+                          return changes.map((c, idx) => \`
+                            <tr class="\${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'} border-t border-slate-100">
+                              <td class="px-4 py-2 font-medium text-slate-700">\${c.field}</td>
+                              <td class="px-4 py-2 text-red-600">\${c.from !== null && c.from !== undefined ? c.from : '<span class="text-slate-400 italic">none</span>'}</td>
+                              <td class="px-2 py-2 text-center text-slate-400">→</td>
+                              <td class="px-4 py-2 text-green-600 font-medium">\${c.to !== null && c.to !== undefined ? c.to : '<span class="text-slate-400 italic">removed</span>'}</td>
+                            </tr>
+                          \`).join('');
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                \` : '<p class="text-slate-500">No detailed changes recorded.</p>'}
+
+                \${order.previous_data ? \`
+                <div>
+                  <h4 class="font-semibold text-slate-700 mb-2">📜 Previous Order Data</h4>
+                  <details class="bg-slate-50 rounded-lg border">
+                    <summary class="px-4 py-2 cursor-pointer text-sm text-slate-600 hover:text-slate-800">
+                      Click to expand previous version
+                    </summary>
+                    <div class="p-4 border-t max-h-60 overflow-auto">
+                      <pre class="text-xs text-slate-600 whitespace-pre-wrap">\${JSON.stringify(order.previous_data, null, 2)}</pre>
+                    </div>
+                  </details>
+                </div>
+                \` : ''}
+              </div>
+              \` : ''}
 
               <!-- Raw Data Tab -->
               <div id="edi-tab-raw" class="edi-tab-content hidden">

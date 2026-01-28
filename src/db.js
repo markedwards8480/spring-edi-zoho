@@ -148,6 +148,21 @@ async function initDatabase() {
       ALTER TABLE ui_session ADD COLUMN IF NOT EXISTS current_stage VARCHAR(50) DEFAULT 'inbox';
     `);
 
+    // Add amendment tracking columns to edi_orders
+    await client.query(`
+      ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS is_amended BOOLEAN DEFAULT FALSE;
+      ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS amendment_type VARCHAR(50);
+      ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS amendment_count INTEGER DEFAULT 0;
+      ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS previous_data JSONB;
+      ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS changes_detected JSONB;
+      ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS original_order_id INTEGER;
+      ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS transaction_type VARCHAR(10) DEFAULT '850';
+      ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
+
+      CREATE INDEX IF NOT EXISTS idx_edi_orders_po_number ON edi_orders(edi_order_number);
+      CREATE INDEX IF NOT EXISTS idx_edi_orders_amended ON edi_orders(is_amended) WHERE is_amended = TRUE;
+    `);
+
     logger.info('Database tables initialized');
   } finally {
     client.release();
@@ -171,18 +186,161 @@ async function markFileProcessed(filename, fileSize, orderCount) {
   );
 }
 
+// Helper function to detect changes between old and new parsed data
+function detectChanges(oldData, newData) {
+  const changes = [];
+
+  if (!oldData || !newData) return changes;
+
+  // Check dates
+  const oldDates = oldData.dates || {};
+  const newDates = newData.dates || {};
+  if (oldDates.shipDate !== newDates.shipDate) {
+    changes.push({ field: 'Ship Date', from: oldDates.shipDate, to: newDates.shipDate });
+  }
+  if (oldDates.cancelDate !== newDates.cancelDate) {
+    changes.push({ field: 'Cancel Date', from: oldDates.cancelDate, to: newDates.cancelDate });
+  }
+
+  // Check totals
+  const oldItems = oldData.items || [];
+  const newItems = newData.items || [];
+
+  const oldTotal = oldItems.reduce((sum, i) => sum + ((i.quantityOrdered || 0) * (i.unitPrice || 0)), 0);
+  const newTotal = newItems.reduce((sum, i) => sum + ((i.quantityOrdered || 0) * (i.unitPrice || 0)), 0);
+  if (Math.abs(oldTotal - newTotal) > 0.01) {
+    changes.push({ field: 'Total Amount', from: oldTotal.toFixed(2), to: newTotal.toFixed(2) });
+  }
+
+  const oldUnits = oldItems.reduce((sum, i) => sum + (i.quantityOrdered || 0), 0);
+  const newUnits = newItems.reduce((sum, i) => sum + (i.quantityOrdered || 0), 0);
+  if (oldUnits !== newUnits) {
+    changes.push({ field: 'Total Units', from: oldUnits, to: newUnits });
+  }
+
+  // Check line item count
+  if (oldItems.length !== newItems.length) {
+    changes.push({ field: 'Line Items', from: oldItems.length, to: newItems.length });
+  }
+
+  // Check for specific item changes (by SKU)
+  const oldItemMap = new Map(oldItems.map(i => [i.productIds?.sku || i.productIds?.vendorItemNumber, i]));
+  for (const newItem of newItems) {
+    const sku = newItem.productIds?.sku || newItem.productIds?.vendorItemNumber;
+    const oldItem = oldItemMap.get(sku);
+    if (oldItem) {
+      if (oldItem.quantityOrdered !== newItem.quantityOrdered) {
+        changes.push({
+          field: `Qty for ${sku}`,
+          from: oldItem.quantityOrdered,
+          to: newItem.quantityOrdered
+        });
+      }
+      if (Math.abs((oldItem.unitPrice || 0) - (newItem.unitPrice || 0)) > 0.001) {
+        changes.push({
+          field: `Price for ${sku}`,
+          from: (oldItem.unitPrice || 0).toFixed(2),
+          to: (newItem.unitPrice || 0).toFixed(2)
+        });
+      }
+    } else {
+      changes.push({ field: 'New Item Added', from: null, to: sku });
+    }
+  }
+
+  // Check for removed items
+  const newItemMap = new Map(newItems.map(i => [i.productIds?.sku || i.productIds?.vendorItemNumber, i]));
+  for (const oldItem of oldItems) {
+    const sku = oldItem.productIds?.sku || oldItem.productIds?.vendorItemNumber;
+    if (!newItemMap.has(sku)) {
+      changes.push({ field: 'Item Removed', from: sku, to: null });
+    }
+  }
+
+  return changes;
+}
+
 async function saveEDIOrder(order) {
+  const transactionType = order.transactionType || '850';
+
+  // First, check if an order with this PO# already exists (ANY filename)
+  const existingResult = await pool.query(
+    'SELECT id, parsed_data, amendment_count, status, filename FROM edi_orders WHERE edi_order_number = $1 ORDER BY created_at DESC LIMIT 1',
+    [order.ediOrderNumber]
+  );
+
+  if (existingResult.rows.length > 0) {
+    const existing = existingResult.rows[0];
+    const oldData = existing.parsed_data;
+    const newData = order.parsedData;
+
+    // Detect what changed
+    const changes = detectChanges(oldData, newData);
+    const hasChanges = changes.length > 0;
+
+    if (hasChanges || order.filename !== existing.filename) {
+      // This is an amendment - update the existing order
+      logger.info('Amendment detected for PO#', {
+        poNumber: order.ediOrderNumber,
+        existingId: existing.id,
+        changesCount: changes.length,
+        newFilename: order.filename,
+        oldFilename: existing.filename
+      });
+
+      const amendmentType = transactionType === '860' ? '860_change' : '850_revision';
+      const newAmendmentCount = (existing.amendment_count || 0) + 1;
+
+      const result = await pool.query(
+        `UPDATE edi_orders SET
+           filename = $1,
+           raw_edi = $2,
+           parsed_data = $3,
+           edi_customer_name = $4,
+           is_amended = TRUE,
+           amendment_type = $5,
+           amendment_count = $6,
+           previous_data = $7,
+           changes_detected = $8,
+           transaction_type = $9,
+           updated_at = NOW(),
+           status = CASE WHEN status = 'processed' THEN 'review' ELSE status END
+         WHERE id = $10
+         RETURNING id, status, is_amended, amendment_count`,
+        [
+          order.filename,
+          order.rawEDI,
+          newData,
+          order.ediCustomerName || null,
+          amendmentType,
+          newAmendmentCount,
+          oldData,
+          JSON.stringify(changes),
+          transactionType,
+          existing.id
+        ]
+      );
+
+      return { ...result.rows[0], wasAmended: true, changes };
+    } else {
+      // Same data, just return existing
+      logger.debug('Duplicate order with no changes', { poNumber: order.ediOrderNumber });
+      return { id: existing.id, status: existing.status, wasAmended: false, duplicate: true };
+    }
+  }
+
+  // New order - insert it
   const result = await pool.query(
-    `INSERT INTO edi_orders (filename, edi_order_number, customer_po, status, raw_edi, parsed_data, edi_customer_name)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO edi_orders (filename, edi_order_number, customer_po, status, raw_edi, parsed_data, edi_customer_name, transaction_type)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      ON CONFLICT (filename, edi_order_number) DO UPDATE SET
        parsed_data = $6,
        edi_customer_name = $7,
-       status = CASE WHEN edi_orders.status = 'processed' THEN 'processed' ELSE $4 END
+       updated_at = NOW()
      RETURNING id, status`,
-    [order.filename, order.ediOrderNumber, order.customerPO, 'pending', order.rawEDI, order.parsedData, order.ediCustomerName || null]
+    [order.filename, order.ediOrderNumber, order.customerPO, 'pending', order.rawEDI, order.parsedData, order.ediCustomerName || null, transactionType]
   );
-  return result.rows[0];
+  return { ...result.rows[0], wasAmended: false, isNew: true };
 }
 
 async function updateOrderStatus(id, status, zohoData = {}) {
