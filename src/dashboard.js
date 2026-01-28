@@ -424,9 +424,11 @@ const dashboardHTML = `
     if (stage === 'history') { loadActivityLog(); loadAuditStats(); }
     if (stage === 'settings') loadMappings();
     if (stage === 'review') {
-      if (matchResults && ((matchResults.matches && matchResults.matches.length > 0) || (matchResults.noMatches && matchResults.noMatches.length > 0))) {
-        showListView();
-      }
+      // Always try to show list view when navigating to review
+      // showListView will handle empty state if no matches
+      updateFilterCounts();
+      updateReviewCustomerFilter();
+      showListView();
     }
 
     // Save stage to session (debounced)
@@ -470,71 +472,121 @@ const dashboardHTML = `
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
-  // Format raw data for clean display
-  function formatRawDataDisplay(data, depth = 0) {
-    if (data === null) return '<span class="text-slate-400 italic">null</span>';
-    if (data === undefined) return '<span class="text-slate-400 italic">undefined</span>';
+  // Format raw data for clean grid display
+  function formatRawDataDisplay(data) {
+    if (!data || typeof data !== 'object') return '<div class="text-slate-400">No data</div>';
 
-    const indent = '  '.repeat(depth);
-    const type = Array.isArray(data) ? 'array' : typeof data;
+    let html = '';
 
-    if (type === 'string') {
-      // Format dates nicely
-      if (/^\\d{4}-\\d{2}-\\d{2}/.test(data) || /^\\d{8}$/.test(data)) {
-        return '<span class="text-purple-600">"' + escapeHtml(data) + '"</span>';
-      }
-      return '<span class="text-green-600">"' + escapeHtml(data) + '"</span>';
-    }
-    if (type === 'number') {
-      return '<span class="text-blue-600">' + data + '</span>';
-    }
-    if (type === 'boolean') {
-      return '<span class="text-orange-600">' + data + '</span>';
-    }
-
-    if (type === 'array') {
-      if (data.length === 0) return '<span class="text-slate-400">[]</span>';
-
-      let html = '<div class="ml-4 border-l-2 border-slate-200 pl-3">';
-      data.forEach((item, idx) => {
-        html += '<div class="py-1">';
-        html += '<span class="text-slate-400 text-xs mr-2">[' + idx + ']</span>';
-        html += formatRawDataDisplay(item, depth + 1);
-        html += '</div>';
-      });
-      html += '</div>';
-      return html;
-    }
-
-    if (type === 'object') {
-      const keys = Object.keys(data);
-      if (keys.length === 0) return '<span class="text-slate-400">{}</span>';
-
-      let html = '<div class="' + (depth > 0 ? 'ml-4 border-l-2 border-slate-200 pl-3' : '') + '">';
-      keys.forEach(key => {
-        const value = data[key];
-        const isExpandable = (typeof value === 'object' && value !== null);
-
-        html += '<div class="py-1">';
-        html += '<span class="font-medium text-slate-700">' + escapeHtml(key) + '</span>';
-        html += '<span class="text-slate-400">: </span>';
-
-        if (isExpandable) {
-          const itemCount = Array.isArray(value) ? value.length : Object.keys(value).length;
-          const label = Array.isArray(value) ? '[' + itemCount + ' items]' : '{' + itemCount + ' fields}';
-          html += '<span class="text-slate-400 text-xs">' + label + '</span>';
-          html += formatRawDataDisplay(value, depth + 1);
-        } else {
-          html += formatRawDataDisplay(value, depth + 1);
+    // Helper to format a value for display
+    const formatValue = (val) => {
+      if (val === null || val === undefined || val === '') return '<span class="text-slate-400 italic">—</span>';
+      if (typeof val === 'boolean') return val ? '<span class="text-green-600">Yes</span>' : '<span class="text-red-600">No</span>';
+      if (typeof val === 'number') return '<span class="text-blue-600 font-medium">' + val.toLocaleString() + '</span>';
+      if (typeof val === 'string') {
+        // Format dates
+        if (/^\\d{4}-\\d{2}-\\d{2}/.test(val)) {
+          return '<span class="text-purple-600">' + escapeHtml(val) + '</span>';
         }
+        // Truncate long strings
+        if (val.length > 100) {
+          return '<span class="text-slate-700">' + escapeHtml(val.substring(0, 100)) + '...</span>';
+        }
+        return '<span class="text-slate-700">' + escapeHtml(val) + '</span>';
+      }
+      return '<span class="text-slate-500">' + escapeHtml(String(val)) + '</span>';
+    };
 
-        html += '</div>';
+    // Helper to create a section
+    const createSection = (title, obj, icon = '📋') => {
+      if (!obj || typeof obj !== 'object') return '';
+      const entries = Object.entries(obj).filter(([k, v]) => v !== null && v !== undefined && v !== '');
+      if (entries.length === 0) return '';
+
+      let sectionHtml = '<div class="mb-4">';
+      sectionHtml += '<div class="text-sm font-semibold text-slate-600 mb-2 flex items-center gap-2">' + icon + ' ' + title + '</div>';
+      sectionHtml += '<div class="bg-white border border-slate-200 rounded-lg overflow-hidden">';
+      sectionHtml += '<table class="w-full text-sm">';
+
+      entries.forEach(([key, value], idx) => {
+        const bgClass = idx % 2 === 0 ? 'bg-slate-50' : 'bg-white';
+        // Format the key name nicely
+        const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).replace(/_/g, ' ');
+
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          // Nested object - show inline
+          sectionHtml += '<tr class="' + bgClass + '">';
+          sectionHtml += '<td class="px-3 py-2 text-slate-500 font-medium w-1/3 align-top">' + escapeHtml(formattedKey) + '</td>';
+          sectionHtml += '<td class="px-3 py-2">';
+          Object.entries(value).forEach(([subKey, subVal]) => {
+            if (subVal !== null && subVal !== undefined && subVal !== '') {
+              const subKeyFormatted = subKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+              sectionHtml += '<div class="flex gap-2"><span class="text-slate-400">' + subKeyFormatted + ':</span> ' + formatValue(subVal) + '</div>';
+            }
+          });
+          sectionHtml += '</td>';
+          sectionHtml += '</tr>';
+        } else {
+          sectionHtml += '<tr class="' + bgClass + '">';
+          sectionHtml += '<td class="px-3 py-2 text-slate-500 font-medium w-1/3">' + escapeHtml(formattedKey) + '</td>';
+          sectionHtml += '<td class="px-3 py-2">' + formatValue(value) + '</td>';
+          sectionHtml += '</tr>';
+        }
       });
-      html += '</div>';
-      return html;
+
+      sectionHtml += '</table>';
+      sectionHtml += '</div></div>';
+      return sectionHtml;
+    };
+
+    // Create sections for the EDI data
+    if (data.header) html += createSection('Header', data.header, '📄');
+    if (data.dates) html += createSection('Dates', data.dates, '📅');
+    if (data.parties) {
+      if (data.parties.buyer) html += createSection('Buyer', data.parties.buyer, '🏢');
+      if (data.parties.shipTo) html += createSection('Ship To', data.parties.shipTo, '📦');
     }
 
-    return '<span class="text-slate-500">' + String(data) + '</span>';
+    // Items summary
+    if (data.items && data.items.length > 0) {
+      html += '<div class="mb-4">';
+      html += '<div class="text-sm font-semibold text-slate-600 mb-2 flex items-center gap-2">📦 Line Items (' + data.items.length + ' items)</div>';
+      html += '<div class="bg-white border border-slate-200 rounded-lg overflow-hidden">';
+      html += '<table class="w-full text-xs">';
+      html += '<thead class="bg-slate-100"><tr>';
+      html += '<th class="px-2 py-1.5 text-left text-slate-600">#</th>';
+      html += '<th class="px-2 py-1.5 text-left text-slate-600">SKU</th>';
+      html += '<th class="px-2 py-1.5 text-left text-slate-600">Color</th>';
+      html += '<th class="px-2 py-1.5 text-left text-slate-600">Size</th>';
+      html += '<th class="px-2 py-1.5 text-center text-slate-600">UOM</th>';
+      html += '<th class="px-2 py-1.5 text-right text-slate-600">Qty</th>';
+      html += '<th class="px-2 py-1.5 text-right text-slate-600">Pack $</th>';
+      html += '<th class="px-2 py-1.5 text-right text-slate-600">Each $</th>';
+      html += '<th class="px-2 py-1.5 text-right text-slate-600">Amount</th>';
+      html += '</tr></thead><tbody>';
+
+      data.items.forEach((item, idx) => {
+        const bgClass = idx % 2 === 0 ? 'bg-white' : 'bg-slate-50';
+        const sku = item.productIds?.sku || item.productIds?.vendorItemNumber || '-';
+        const uom = item.unitOfMeasure || 'EA';
+        const isPrepack = item.isPrepack || uom === 'AS' || uom === 'ST';
+        html += '<tr class="' + bgClass + ' border-t border-slate-100">';
+        html += '<td class="px-2 py-1 text-slate-400">' + (idx + 1) + '</td>';
+        html += '<td class="px-2 py-1 font-medium">' + escapeHtml(sku) + '</td>';
+        html += '<td class="px-2 py-1">' + escapeHtml(item.color || '-') + '</td>';
+        html += '<td class="px-2 py-1">' + escapeHtml(item.size || '-') + '</td>';
+        html += '<td class="px-2 py-1 text-center"><span class="' + (isPrepack ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600') + ' px-1.5 py-0.5 rounded text-xs">' + uom + '</span></td>';
+        html += '<td class="px-2 py-1 text-right">' + (item.quantityOrdered || 0).toLocaleString() + '</td>';
+        html += '<td class="px-2 py-1 text-right">$' + (item.packPrice || item.unitPrice || 0).toFixed(2) + '</td>';
+        html += '<td class="px-2 py-1 text-right">$' + (item.eachPrice || item.unitPrice || 0).toFixed(2) + '</td>';
+        html += '<td class="px-2 py-1 text-right font-medium">$' + (item.amount || 0).toFixed(2) + '</td>';
+        html += '</tr>';
+      });
+
+      html += '</tbody></table></div></div>';
+    }
+
+    return html || '<div class="text-slate-400">No structured data available</div>';
   }
 
   function escapeHtml(str) {
