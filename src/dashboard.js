@@ -321,8 +321,15 @@ const dashboardHTML = `
 
         <!-- Customer Mappings -->
         <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
-          <h3 class="text-lg font-semibold text-slate-800 mb-4">Customer Mappings</h3>
-          <p class="text-slate-500 mb-4">Map EDI customer names to Zoho accounts</p>
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-lg font-semibold text-slate-800">Customer Mappings</h3>
+              <p class="text-slate-500 text-sm">Map EDI customer names to Zoho customers</p>
+            </div>
+            <button onclick="showAddMappingModal()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm font-medium">
+              + Add Mapping
+            </button>
+          </div>
           <div id="mappingsContent">Loading...</div>
         </div>
 
@@ -2435,13 +2442,20 @@ const dashboardHTML = `
   // ============================================================
   // SETTINGS
   // ============================================================
+  let zohoCustomersCache = [];
+
   async function loadMappings() {
     try {
       const res = await fetch('/customer-mappings');
       const data = await res.json();
 
       if (!data.mappings || data.mappings.length === 0) {
-        document.getElementById('mappingsContent').innerHTML = '<p class="text-slate-500">No customer mappings configured.</p>';
+        document.getElementById('mappingsContent').innerHTML = \`
+          <div class="text-center py-8 text-slate-500">
+            <p class="mb-2">No customer mappings configured yet.</p>
+            <p class="text-sm">Click "Add Mapping" to map an EDI customer to a Zoho customer.</p>
+          </div>
+        \`;
         return;
       }
 
@@ -2450,15 +2464,25 @@ const dashboardHTML = `
           <table class="w-full text-sm">
             <thead class="bg-slate-50">
               <tr>
-                <th class="text-left px-3 py-2 text-slate-500">EDI Customer</th>
-                <th class="text-left px-3 py-2 text-slate-500">Zoho Customer</th>
+                <th class="text-left px-4 py-3 text-slate-600 font-medium">EDI Customer Name</th>
+                <th class="text-left px-4 py-3 text-slate-600 font-medium">Zoho Customer</th>
+                <th class="text-right px-4 py-3 text-slate-600 font-medium w-24">Actions</th>
               </tr>
             </thead>
             <tbody>
               \${data.mappings.map(m => \`
-                <tr class="border-t border-slate-100">
-                  <td class="px-3 py-2">\${m.edi_customer_name}</td>
-                  <td class="px-3 py-2">\${m.zoho_account_name || '-'}</td>
+                <tr class="border-t border-slate-100 hover:bg-slate-50">
+                  <td class="px-4 py-3 font-medium">\${m.edi_customer_name}</td>
+                  <td class="px-4 py-3">
+                    <span class="text-slate-700">\${m.zoho_customer_name || m.zoho_account_name || '-'}</span>
+                    \${m.zoho_customer_id ? '<span class="text-xs text-slate-400 ml-2">ID: ' + m.zoho_customer_id + '</span>' : ''}
+                  </td>
+                  <td class="px-4 py-3 text-right">
+                    <button onclick="editMapping(\${m.id}, '\${escapeQuotes(m.edi_customer_name)}', '\${m.zoho_customer_id || ''}')"
+                      class="text-blue-600 hover:text-blue-800 text-sm mr-3">Edit</button>
+                    <button onclick="deleteMapping(\${m.id}, '\${escapeQuotes(m.edi_customer_name)}')"
+                      class="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                  </td>
                 </tr>
               \`).join('')}
             </tbody>
@@ -2466,8 +2490,140 @@ const dashboardHTML = `
         </div>
       \`;
     } catch (e) {
-      document.getElementById('mappingsContent').innerHTML = '<p class="text-red-500">Failed to load mappings</p>';
+      document.getElementById('mappingsContent').innerHTML = '<p class="text-red-500">Failed to load mappings: ' + e.message + '</p>';
     }
+  }
+
+  function escapeQuotes(str) {
+    return (str || '').replace(/'/g, "\\'").replace(/"/g, '\\"');
+  }
+
+  async function loadZohoCustomers() {
+    if (zohoCustomersCache.length > 0) return zohoCustomersCache;
+    try {
+      const res = await fetch('/zoho/customers');
+      const data = await res.json();
+      if (data.success && data.customers) {
+        zohoCustomersCache = data.customers.sort((a, b) =>
+          (a.contact_name || '').localeCompare(b.contact_name || '')
+        );
+      }
+      return zohoCustomersCache;
+    } catch (e) {
+      console.error('Failed to load Zoho customers:', e);
+      return [];
+    }
+  }
+
+  async function showAddMappingModal(editId = null, editEdiName = '', editZohoId = '') {
+    const customers = await loadZohoCustomers();
+    const isEdit = editId !== null;
+
+    const modalHtml = \`
+      <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onclick="closeModal(event)">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4" onclick="event.stopPropagation()">
+          <div class="px-6 py-4 border-b border-slate-200">
+            <h3 class="text-lg font-semibold text-slate-800">\${isEdit ? 'Edit' : 'Add'} Customer Mapping</h3>
+          </div>
+          <div class="p-6">
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-slate-700 mb-2">EDI Customer Name</label>
+              <input type="text" id="mappingEdiName" value="\${editEdiName}"
+                placeholder="e.g., BURLINGTON COAT FACTORY"
+                class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 \${isEdit ? 'bg-slate-100' : ''}"
+                \${isEdit ? 'readonly' : ''}>
+              <p class="text-xs text-slate-500 mt-1">Enter the customer name exactly as it appears in EDI orders</p>
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-slate-700 mb-2">Zoho Customer</label>
+              <select id="mappingZohoCustomer" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">-- Select Zoho Customer --</option>
+                \${customers.map(c => \`
+                  <option value="\${c.contact_id}" data-name="\${escapeQuotes(c.contact_name || '')}" \${c.contact_id === editZohoId ? 'selected' : ''}>
+                    \${c.contact_name || 'Unnamed'} \${c.company_name && c.company_name !== c.contact_name ? '(' + c.company_name + ')' : ''}
+                  </option>
+                \`).join('')}
+              </select>
+              <p class="text-xs text-slate-500 mt-1">\${customers.length} customers loaded from Zoho</p>
+            </div>
+          </div>
+          <div class="px-6 py-4 bg-slate-50 rounded-b-xl flex justify-end gap-3">
+            <button onclick="closeModal()" class="px-4 py-2 text-slate-600 hover:text-slate-800 transition">Cancel</button>
+            <button onclick="saveMapping(\${editId})" class="px-5 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-medium">
+              \${isEdit ? 'Update' : 'Save'} Mapping
+            </button>
+          </div>
+        </div>
+      </div>
+    \`;
+
+    document.getElementById('modalContainer').innerHTML = modalHtml;
+  }
+
+  function editMapping(id, ediName, zohoId) {
+    showAddMappingModal(id, ediName, zohoId);
+  }
+
+  async function saveMapping(editId = null) {
+    const ediName = document.getElementById('mappingEdiName').value.trim();
+    const zohoSelect = document.getElementById('mappingZohoCustomer');
+    const zohoId = zohoSelect.value;
+    const zohoName = zohoSelect.options[zohoSelect.selectedIndex]?.dataset?.name || '';
+
+    if (!ediName) {
+      toast('Please enter the EDI customer name');
+      return;
+    }
+    if (!zohoId) {
+      toast('Please select a Zoho customer');
+      return;
+    }
+
+    try {
+      const res = await fetch('/customer-mappings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ediCustomerName: ediName,
+          zohoCustomerId: zohoId,
+          zohoCustomerName: zohoName
+        })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        toast(editId ? 'Mapping updated!' : 'Mapping added!');
+        closeModal();
+        loadMappings();
+      } else {
+        toast('Error: ' + (data.error || 'Failed to save'));
+      }
+    } catch (e) {
+      toast('Error: ' + e.message);
+    }
+  }
+
+  async function deleteMapping(id, ediName) {
+    if (!confirm('Delete mapping for "' + ediName + '"?')) return;
+
+    try {
+      const res = await fetch('/customer-mappings/' + id, { method: 'DELETE' });
+      const data = await res.json();
+
+      if (data.success) {
+        toast('Mapping deleted');
+        loadMappings();
+      } else {
+        toast('Error: ' + (data.error || 'Failed to delete'));
+      }
+    } catch (e) {
+      toast('Error: ' + e.message);
+    }
+  }
+
+  function closeModal(event) {
+    if (event && event.target !== event.currentTarget) return;
+    document.getElementById('modalContainer').innerHTML = '';
   }
 
   async function refreshSftpStatus() {

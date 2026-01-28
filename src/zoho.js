@@ -389,10 +389,19 @@ class ZohoClient {
    * Find matches using pre-cached draft data (no API calls)
    * This is the optimized version that uses cached Zoho drafts
    */
-  async findMatchingDraftsFromCache(ediOrders, cachedDrafts) {
+  async findMatchingDraftsFromCache(ediOrders, cachedDrafts, customerMappings = []) {
     logger.info('Starting draft matching from cache', {
       ediOrderCount: ediOrders.length,
-      cachedDraftsCount: cachedDrafts.length
+      cachedDraftsCount: cachedDrafts.length,
+      customerMappingsCount: customerMappings.length
+    });
+
+    // Build lookup map for customer mappings (EDI name -> Zoho customer ID)
+    const customerMappingLookup = new Map();
+    customerMappings.forEach(m => {
+      if (m.edi_customer_name && m.zoho_customer_id) {
+        customerMappingLookup.set(m.edi_customer_name.toLowerCase().trim(), m.zoho_customer_id);
+      }
     });
 
     const matches = [];
@@ -424,7 +433,7 @@ class ZohoClient {
           line_items: draft.line_items || []
         };
 
-        const score = this.scoreMatch(ediOrder, draftForScoring);
+        const score = this.scoreMatch(ediOrder, draftForScoring, customerMappingLookup);
 
         // MATCHING RULES:
         // Option 1: PO number matches (strongest signal) - score >= 30
@@ -528,12 +537,13 @@ class ZohoClient {
    *
    * 100% = All criteria match perfectly
    */
-  scoreMatch(ediOrder, zohoDraft) {
+  scoreMatch(ediOrder, zohoDraft, customerMappingLookup = new Map()) {
     const score = {
       total: 0,
       details: {
         po: false,
         customer: false,
+        customerMapped: false,
         shipDate: false,
         cancelDate: false,
         totalAmount: false,
@@ -585,8 +595,20 @@ class ZohoClient {
 
     // ============================================================
     // CUSTOMER MATCH (15 points)
+    // Check customer mappings first, then fall back to fuzzy matching
     // ============================================================
-    if (ediCustomer && zohoCustomer) {
+    const zohoCustomerId = zohoDraft.customer_id || '';
+
+    // First check: Does the EDI customer have a mapping to this Zoho customer?
+    const mappedZohoId = customerMappingLookup.get(ediCustomer);
+    if (mappedZohoId && mappedZohoId === zohoCustomerId) {
+      // Perfect match via customer mapping - highest confidence
+      score.total += 15;
+      score.details.customer = true;
+      score.details.customerMapped = true;
+      logger.debug('Customer matched via mapping', { ediCustomer, zohoCustomerId, mappedZohoId });
+    } else if (ediCustomer && zohoCustomer) {
+      // Fallback: Fuzzy text matching
       const ediParts = ediCustomer.split(/[\s,]+/).filter(p => p.length > 2);
       const zohoParts = zohoCustomer.split(/[\s,]+/).filter(p => p.length > 2);
       const matchingParts = ediParts.filter(ep =>

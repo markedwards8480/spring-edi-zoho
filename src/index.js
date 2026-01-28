@@ -709,8 +709,12 @@ app.post('/find-matches', async (req, res) => {
       drafts = await zohoDraftsCache.getCachedDrafts();
     }
     
-    // Run matching against cached drafts
-    const matchResults = await zoho.findMatchingDraftsFromCache(orders, drafts);
+    // Load customer mappings for enhanced matching
+    const mappingsResult = await pool.query('SELECT * FROM customer_mappings');
+    const customerMappings = mappingsResult.rows || [];
+
+    // Run matching against cached drafts (with customer mappings)
+    const matchResults = await zoho.findMatchingDraftsFromCache(orders, drafts, customerMappings);
     
     // Save match results server-side
     const session = await auditLogger.saveMatchSession(
@@ -1450,8 +1454,18 @@ app.post('/customer-mappings', async (req, res) => {
     await pool.query(`
       INSERT INTO customer_mappings (edi_customer_name, zoho_customer_id, zoho_customer_name)
       VALUES ($1, $2, $3)
-      ON CONFLICT (edi_customer_name) DO UPDATE SET zoho_customer_id = $2, zoho_customer_name = $3
+      ON CONFLICT (edi_customer_name) DO UPDATE SET zoho_customer_id = $2, zoho_customer_name = $3, updated_at = NOW()
     `, [ediCustomerName, zohoCustomerId, zohoCustomerName]);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.delete('/customer-mappings/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM customer_mappings WHERE id = $1', [id]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
