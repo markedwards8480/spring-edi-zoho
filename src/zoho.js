@@ -424,9 +424,16 @@ class ZohoClient {
         };
 
         const score = this.scoreMatch(ediOrder, draftForScoring);
-        
-        // STRICT RULES: Customer AND Style MUST match
-        if (score.details.customer && score.details.styles && score.total > bestScore) {
+
+        // MATCHING RULES:
+        // Option 1: PO number matches (strongest signal) - score >= 30
+        // Option 2: Customer + Base Style both match - score >= 35
+        // Minimum threshold: 30 points to be considered a potential match
+        const poMatches = score.details.po;
+        const customerAndStyleMatch = score.details.customer && score.details.baseStyle;
+        const meetsThreshold = score.total >= 30;
+
+        if (meetsThreshold && (poMatches || customerAndStyleMatch) && score.total > bestScore) {
           bestScore = score.total;
           bestMatch = {
             ediOrder: {
@@ -487,27 +494,35 @@ class ZohoClient {
 
   /**
    * Score how well an EDI order matches a Zoho draft
-   * 
+   *
    * SCORING (out of 100):
-   * - Customer match: 25 points (REQUIRED)
-   * - Style match: 30 points (REQUIRED - at least one style must match)
-   * - Ship date: 25 points (within 7 days = 25, within 30 days = 15, >30 days = 0)
-   * - Total amount: 20 points (within 5% = 20, within 15% = 10, >15% = 0)
-   * 
-   * Bonus:
-   * - PO Number exact match: +10 points (can exceed 100)
+   * - PO Number match (EDI PO = Zoho reference_number): 30 points (HIGH priority)
+   * - Customer match: 15 points
+   * - Base Style match: 20 points (at least one base style must match)
+   * - Style Suffix match: 5 points (bonus if suffixes also match)
+   * - Ship Date match: 10 points (within 7 days = 10, within 14 days = 5)
+   * - Cancel Date match: 5 points
+   * - Total Units match: 8 points (within 5% = 8, within 15% = 4)
+   * - Total Amount match: 7 points (within 5% = 7, within 15% = 3)
+   *
+   * 100% = All criteria match perfectly
    */
   scoreMatch(ediOrder, zohoDraft) {
     const score = {
       total: 0,
       details: {
-        poNumber: false,
+        po: false,
         customer: false,
         shipDate: false,
+        cancelDate: false,
         totalAmount: false,
-        styles: false,
+        totalUnits: false,
+        baseStyle: false,
+        styleSuffix: false,
         shipDateDiffDays: null,
-        amountDiffPercent: null
+        cancelDateDiffDays: null,
+        amountDiffPercent: null,
+        unitsDiffPercent: null
       }
     };
 
@@ -515,27 +530,47 @@ class ZohoClient {
     const ediItems = parsed.items || [];
     const ediPoNumber = (ediOrder.edi_order_number || '').toLowerCase().trim();
     const ediCustomer = (ediOrder.edi_customer_name || '').toLowerCase().trim();
-    const ediTotal = ediItems.reduce((sum, item) => 
+    const ediTotalAmount = ediItems.reduce((sum, item) =>
       sum + ((item.quantityOrdered || 0) * (item.unitPrice || 0)), 0);
-    const ediShipDate = parsed.dates?.shipNotBefore || '';
+    const ediTotalUnits = ediItems.reduce((sum, item) => sum + (item.quantityOrdered || 0), 0);
+    const ediShipDate = parsed.dates?.shipNotBefore || parsed.dates?.shipDate || '';
+    const ediCancelDate = parsed.dates?.cancelAfter || parsed.dates?.cancelDate || '';
 
     const zohoRef = (zohoDraft.reference_number || '').toLowerCase().trim();
     const zohoCustomer = (zohoDraft.customer_name || '').toLowerCase().trim();
-    const zohoTotal = parseFloat(zohoDraft.total) || 0;
-    const zohoShipDate = zohoDraft.shipment_date || '';
+    const zohoTotalAmount = parseFloat(zohoDraft.total) || 0;
     const zohoItems = zohoDraft.line_items || [];
+    const zohoTotalUnits = zohoItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    const zohoShipDate = zohoDraft.shipment_date || '';
+    // Zoho doesn't have a standard cancel date field, check custom fields
+    const zohoCancelDate = zohoDraft.cf_cancel_date || zohoDraft.custom_field_hash?.cf_cancel_date || '';
 
     // ============================================================
-    // CUSTOMER MATCH (25 points) - REQUIRED
+    // PO NUMBER MATCH (30 points) - HIGH PRIORITY
+    // EDI PO Number should match Zoho reference_number
+    // ============================================================
+    if (ediPoNumber && zohoRef) {
+      if (ediPoNumber === zohoRef) {
+        score.total += 30;
+        score.details.po = true;
+      } else if (zohoRef.includes(ediPoNumber) || ediPoNumber.includes(zohoRef)) {
+        // Partial match (one contains the other)
+        score.total += 20;
+        score.details.po = true;
+      }
+    }
+
+    // ============================================================
+    // CUSTOMER MATCH (15 points)
     // ============================================================
     if (ediCustomer && zohoCustomer) {
       const ediParts = ediCustomer.split(/[\s,]+/).filter(p => p.length > 2);
       const zohoParts = zohoCustomer.split(/[\s,]+/).filter(p => p.length > 2);
-      const matchingParts = ediParts.filter(ep => 
+      const matchingParts = ediParts.filter(ep =>
         zohoParts.some(zp => zp.includes(ep) || ep.includes(zp))
       );
       if (matchingParts.length > 0 || ediCustomer.includes(zohoCustomer) || zohoCustomer.includes(ediCustomer)) {
-        score.total += 25;
+        score.total += 15;
         score.details.customer = true;
       }
     }
@@ -652,111 +687,135 @@ class ZohoClient {
       });
       
       if (baseStyleMatches > 0) {
-        score.details.styles = true;
+        score.details.baseStyle = true;
         score.details.styleMatchCount = baseStyleMatches;
         score.details.ediStyleCount = ediBaseStyles.size;
         score.details.zohoStyleCount = zohoBaseStyles.size;
         score.details.suffixMatches = suffixMatches;
         score.details.suffixMismatches = suffixMismatches;
-        
-        // Score based on how many base styles matched
+
+        // Score based on how many base styles matched (up to 20 points)
         const matchRatio = baseStyleMatches / Math.max(ediBaseStyles.size, 1);
-        
-        // Base points for style match (15-25 based on ratio)
-        let stylePoints = 15; // At least one base style matches
+
+        // Base style points (20 max)
+        let baseStylePoints = 10; // At least one base style matches
         if (matchRatio >= 0.8) {
-          stylePoints = 25; // Almost all base styles match
+          baseStylePoints = 20; // Almost all base styles match
         } else if (matchRatio >= 0.5) {
-          stylePoints = 22; // Most base styles match
+          baseStylePoints = 16; // Most base styles match
         } else if (matchRatio >= 0.25) {
-          stylePoints = 18; // Some base styles match
+          baseStylePoints = 12; // Some base styles match
         }
-        
-        // Bonus points for suffix matches (0-5 extra)
+        score.total += baseStylePoints;
+
+        // Suffix points (5 max - bonus for suffix matching)
         if (suffixMatches > 0 && suffixMismatches === 0) {
-          stylePoints += 5; // All suffixes match - high confidence
+          score.total += 5; // All suffixes match
+          score.details.styleSuffix = true;
         } else if (suffixMatches > suffixMismatches) {
-          stylePoints += 3; // Most suffixes match
+          score.total += 3; // Most suffixes match
+          score.details.styleSuffix = true;
         } else if (suffixMismatches > 0) {
-          // Suffix mismatch - note it for display but don't penalize heavily
+          // Suffix mismatch - note it for display
           score.details.suffixWarning = true;
         }
-        
-        score.total += stylePoints;
-        
-        // Log for debugging
+
         logger.debug('Style match found', {
           ediBaseStyles: Array.from(ediBaseStyles),
           zohoBaseStyles: Array.from(zohoBaseStyles),
           baseStyleMatches,
           suffixMatches,
           suffixMismatches,
-          stylePoints
+          baseStylePoints
         });
       } else {
-        // Log why no match
         logger.debug('No style match - base styles do not overlap', {
           ediBaseStyles: Array.from(ediBaseStyles),
           zohoBaseStyles: Array.from(zohoBaseStyles)
         });
       }
-      // If no base styles match, score.details.styles stays false
-      // This will disqualify the match in findMatchingDrafts
     }
 
     // ============================================================
-    // SHIP DATE (25 points) - Not required, affects confidence
+    // SHIP DATE (10 points)
     // ============================================================
     if (ediShipDate && zohoShipDate) {
       const ediDate = new Date(ediShipDate);
       const zohoDate = new Date(zohoShipDate);
       const diffDays = Math.abs((ediDate - zohoDate) / (1000 * 60 * 60 * 24));
       score.details.shipDateDiffDays = Math.round(diffDays);
-      
-      if (diffDays <= 7) {
-        score.total += 25;
+
+      if (diffDays <= 1) {
+        score.total += 10;
         score.details.shipDate = true;
-      } else if (diffDays <= 30) {
-        score.total += 15;
-        score.details.shipDate = true; // Still considered a match, just not perfect
-      } else if (diffDays <= 60) {
-        score.total += 5;
-        // shipDate stays false for display purposes (warning)
+      } else if (diffDays <= 7) {
+        score.total += 7;
+        score.details.shipDate = true;
+      } else if (diffDays <= 14) {
+        score.total += 4;
       }
-      // >60 days = 0 points, shipDate = false (will show warning)
-    } else if (!ediShipDate || !zohoShipDate) {
-      // If either is missing, give partial credit
-      score.total += 10;
+      // >14 days = 0 points
     }
 
     // ============================================================
-    // TOTAL AMOUNT (20 points) - Not required, affects confidence
+    // CANCEL DATE (5 points)
     // ============================================================
-    if (ediTotal > 0 && zohoTotal > 0) {
-      const diff = Math.abs(ediTotal - zohoTotal);
-      const percentDiff = diff / Math.max(ediTotal, zohoTotal);
+    if (ediCancelDate && zohoCancelDate) {
+      const ediDate = new Date(ediCancelDate);
+      const zohoDate = new Date(zohoCancelDate);
+      const diffDays = Math.abs((ediDate - zohoDate) / (1000 * 60 * 60 * 24));
+      score.details.cancelDateDiffDays = Math.round(diffDays);
+
+      if (diffDays <= 1) {
+        score.total += 5;
+        score.details.cancelDate = true;
+      } else if (diffDays <= 7) {
+        score.total += 3;
+        score.details.cancelDate = true;
+      }
+    }
+
+    // ============================================================
+    // TOTAL UNITS (8 points)
+    // ============================================================
+    if (ediTotalUnits > 0 && zohoTotalUnits > 0) {
+      const diff = Math.abs(ediTotalUnits - zohoTotalUnits);
+      const percentDiff = diff / Math.max(ediTotalUnits, zohoTotalUnits);
+      score.details.unitsDiffPercent = Math.round(percentDiff * 100);
+
+      if (percentDiff <= 0.02) {
+        score.total += 8;
+        score.details.totalUnits = true;
+      } else if (percentDiff <= 0.05) {
+        score.total += 6;
+        score.details.totalUnits = true;
+      } else if (percentDiff <= 0.15) {
+        score.total += 3;
+      }
+      // >15% difference = 0 points
+    }
+
+    // ============================================================
+    // TOTAL AMOUNT (7 points)
+    // ============================================================
+    if (ediTotalAmount > 0 && zohoTotalAmount > 0) {
+      const diff = Math.abs(ediTotalAmount - zohoTotalAmount);
+      const percentDiff = diff / Math.max(ediTotalAmount, zohoTotalAmount);
       score.details.amountDiffPercent = Math.round(percentDiff * 100);
-      
-      if (percentDiff <= 0.05) {
-        score.total += 20;
+
+      if (percentDiff <= 0.02) {
+        score.total += 7;
+        score.details.totalAmount = true;
+      } else if (percentDiff <= 0.05) {
+        score.total += 5;
         score.details.totalAmount = true;
       } else if (percentDiff <= 0.15) {
-        score.total += 10;
-        score.details.totalAmount = true;
-      } else if (percentDiff <= 0.25) {
-        score.total += 5;
-        // totalAmount stays false (will show warning)
+        score.total += 2;
       }
-      // >25% difference = 0 points
+      // >15% difference = 0 points
     }
 
-    // ============================================================
-    // PO NUMBER BONUS (+10 points)
-    // ============================================================
-    if (ediPoNumber && zohoRef && (ediPoNumber === zohoRef || zohoRef.includes(ediPoNumber) || ediPoNumber.includes(zohoRef))) {
-      score.total += 10;
-      score.details.poNumber = true;
-    }
+    // PO number matching is now handled at the top with 30 points
 
     return score;
   }

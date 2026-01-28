@@ -1212,8 +1212,8 @@ const dashboardHTML = `
                   <tbody>
                     \${ediItems.slice(0, 10).map(item => \`
                       <tr class="border-t border-slate-100">
-                        <td class="px-2 py-1">\${item.style || item.productIds?.style || '-'}</td>
-                        <td class="px-2 py-1">\${item.color || item.productIds?.color || '-'}</td>
+                        <td class="px-2 py-1">\${item.productIds?.sku || item.productIds?.vendorItemNumber || item.style || '-'}</td>
+                        <td class="px-2 py-1">\${item.color || '-'}</td>
                         <td class="px-2 py-1 text-right">\${item.quantityOrdered || 0}</td>
                         <td class="px-2 py-1 text-right">$\${(item.unitPrice || 0).toFixed(2)}</td>
                       </tr>
@@ -1608,9 +1608,9 @@ const dashboardHTML = `
                     <tbody>
                       \${items.map(item => \`
                         <tr class="border-t border-slate-100">
-                          <td class="px-3 py-2 font-medium">\${item.style || item.productIds?.style || '-'}</td>
-                          <td class="px-3 py-2">\${item.color || item.productIds?.color || '-'}</td>
-                          <td class="px-3 py-2">\${item.size || item.productIds?.size || '-'}</td>
+                          <td class="px-3 py-2 font-medium">\${item.productIds?.sku || item.productIds?.vendorItemNumber || item.style || '-'}</td>
+                          <td class="px-3 py-2">\${item.color || '-'}</td>
+                          <td class="px-3 py-2">\${item.size || '-'}</td>
                           <td class="px-3 py-2 text-slate-600">\${item.description || '-'}</td>
                           <td class="px-3 py-2 text-right">\${item.quantityOrdered || 0}</td>
                           <td class="px-3 py-2 text-right">$\${(item.unitPrice || 0).toFixed(2)}</td>
