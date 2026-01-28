@@ -390,9 +390,9 @@ class ZohoClient {
    * This is the optimized version that uses cached Zoho drafts
    */
   async findMatchingDraftsFromCache(ediOrders, cachedDrafts) {
-    logger.info('Starting draft matching from cache', { 
+    logger.info('Starting draft matching from cache', {
       ediOrderCount: ediOrders.length,
-      cachedDraftsCount: cachedDrafts.length 
+      cachedDraftsCount: cachedDrafts.length
     });
 
     const matches = [];
@@ -403,12 +403,12 @@ class ZohoClient {
       const ediItems = parsed.items || [];
       const ediPoNumber = ediOrder.edi_order_number || '';
       const ediCustomer = ediOrder.edi_customer_name || '';
-      const ediTotal = ediItems.reduce((sum, item) => 
+      const ediTotal = ediItems.reduce((sum, item) =>
         sum + ((item.quantityOrdered || 0) * (item.unitPrice || 0)), 0);
       const ediShipDate = parsed.dates?.shipNotBefore || '';
 
-      let bestMatch = null;
-      let bestScore = 0;
+      // Collect ALL potential matches, not just the best one
+      const potentialMatches = [];
 
       for (const draft of cachedDrafts) {
         // Convert cached draft format to match expected format
@@ -429,25 +429,17 @@ class ZohoClient {
         // MATCHING RULES:
         // Option 1: PO number matches (strongest signal) - score >= 30
         // Option 2: Customer + Base Style both match - score >= 35
-        // Minimum threshold: 30 points to be considered a potential match
+        // Minimum threshold: 25 points to be considered a potential match
         const poMatches = score.details.po;
         const customerAndStyleMatch = score.details.customer && score.details.baseStyle;
-        const meetsThreshold = score.total >= 30;
+        const customerOnly = score.details.customer;
+        const meetsThreshold = score.total >= 25;
 
-        if (meetsThreshold && (poMatches || customerAndStyleMatch) && score.total > bestScore) {
-          bestScore = score.total;
-          bestMatch = {
-            ediOrder: {
-              id: ediOrder.id,
-              poNumber: ediPoNumber,
-              customer: ediCustomer,
-              shipDate: ediShipDate,
-              cancelDate: parsed.dates?.cancelDate || parsed.dates?.shipNotAfter || '',
-              itemCount: ediItems.length,
-              totalUnits: ediItems.reduce((s, i) => s + (i.quantityOrdered || 0), 0),
-              totalAmount: ediTotal,
-              items: ediItems
-            },
+        // Include if it meets threshold AND has some relevance
+        if (meetsThreshold && (poMatches || customerAndStyleMatch || customerOnly)) {
+          potentialMatches.push({
+            draft,
+            score,
             zohoDraft: {
               id: draft.salesorder_id,
               number: draft.salesorder_number,
@@ -460,16 +452,43 @@ class ZohoClient {
               totalUnits: (draft.line_items || []).reduce((s, i) => s + (i.quantity || 0), 0),
               totalAmount: parseFloat(draft.total) || 0,
               items: draft.line_items || []
-            },
-            score: score,
-            confidence: score.total,
-            confidenceLevel: score.total >= 80 ? 'high' : score.total >= 60 ? 'medium' : 'low'
-          };
+            }
+          });
         }
       }
 
-      if (bestMatch) {
-        matches.push(bestMatch);
+      // Sort by score descending and take top 5
+      potentialMatches.sort((a, b) => b.score.total - a.score.total);
+      const topMatches = potentialMatches.slice(0, 5);
+
+      if (topMatches.length > 0) {
+        const bestMatch = topMatches[0];
+        const alternativeMatches = topMatches.slice(1).map(m => ({
+          zohoDraft: m.zohoDraft,
+          score: m.score,
+          confidence: m.score.total,
+          confidenceLevel: m.score.total >= 80 ? 'high' : m.score.total >= 60 ? 'medium' : 'low'
+        }));
+
+        matches.push({
+          ediOrder: {
+            id: ediOrder.id,
+            poNumber: ediPoNumber,
+            customer: ediCustomer,
+            shipDate: ediShipDate,
+            cancelDate: parsed.dates?.cancelDate || parsed.dates?.shipNotAfter || '',
+            itemCount: ediItems.length,
+            totalUnits: ediItems.reduce((s, i) => s + (i.quantityOrdered || 0), 0),
+            totalAmount: ediTotal,
+            items: ediItems
+          },
+          zohoDraft: bestMatch.zohoDraft,
+          score: bestMatch.score,
+          confidence: bestMatch.score.total,
+          confidenceLevel: bestMatch.score.total >= 80 ? 'high' : bestMatch.score.total >= 60 ? 'medium' : 'low',
+          // NEW: Include alternative matches
+          alternativeMatches: alternativeMatches
+        });
       } else {
         noMatches.push({
           ediOrder: {
@@ -486,9 +505,9 @@ class ZohoClient {
       }
     }
 
-    logger.info('Matching from cache complete', { 
-      matches: matches.length, 
-      noMatches: noMatches.length 
+    logger.info('Matching from cache complete', {
+      matches: matches.length,
+      noMatches: noMatches.length
     });
 
     return { matches, noMatches };

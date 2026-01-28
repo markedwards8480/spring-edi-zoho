@@ -1413,6 +1413,41 @@ const dashboardHTML = `
         </div>
         \`}
 
+        \${!isNoMatch && match.alternativeMatches && match.alternativeMatches.length > 0 ? \`
+        <!-- Alternative Matches -->
+        <div class="px-5 py-3 bg-amber-50 border-t border-amber-200">
+          <div class="text-sm font-medium text-amber-700 mb-2">
+            🔄 Alternative Matches (\${match.alternativeMatches.length} other potential matches)
+          </div>
+          <div class="space-y-2">
+            \${match.alternativeMatches.map((alt, idx) => \`
+              <div class="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-amber-200">
+                <div class="flex items-center gap-3">
+                  <span class="text-xs text-slate-400">#\${idx + 2}</span>
+                  <div>
+                    <div class="font-medium text-sm text-slate-700">\${alt.zohoDraft.customer}</div>
+                    <div class="text-xs text-slate-500">
+                      Ref# \${alt.zohoDraft.reference || alt.zohoDraft.number}
+                      • \${alt.zohoDraft.itemCount} items
+                      • $\${alt.zohoDraft.totalAmount.toLocaleString()}
+                      \${alt.zohoDraft.shipDate ? '• Ship: ' + formatDate(alt.zohoDraft.shipDate) : ''}
+                    </div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="px-2 py-1 rounded text-xs font-medium \${alt.confidence >= 60 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}">
+                    \${alt.confidence}%
+                  </span>
+                  <button onclick="switchToAlternativeMatch(\${focusModeIndex}, \${idx})" class="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition">
+                    Use This
+                  </button>
+                </div>
+              </div>
+            \`).join('')}
+          </div>
+        </div>
+        \` : ''}
+
         <!-- Actions -->
         <div class="px-5 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
           <div class="flex items-center gap-2">
@@ -1487,6 +1522,46 @@ const dashboardHTML = `
 
   function focusModeSkip() {
     focusModeNext();
+  }
+
+  function switchToAlternativeMatch(matchIndex, altIndex) {
+    // Swap the primary match with the alternative match
+    const allMatches = getFilteredMatches();
+    if (matchIndex >= allMatches.length) return;
+
+    const match = allMatches[matchIndex];
+    if (!match.alternativeMatches || altIndex >= match.alternativeMatches.length) return;
+
+    // Get the alternative
+    const alternative = match.alternativeMatches[altIndex];
+
+    // Store the current primary as a new alternative
+    const oldPrimary = {
+      zohoDraft: match.zohoDraft,
+      score: match.score,
+      confidence: match.confidence,
+      confidenceLevel: match.confidenceLevel
+    };
+
+    // Update the match object
+    match.zohoDraft = alternative.zohoDraft;
+    match.score = alternative.score;
+    match.confidence = alternative.confidence;
+    match.confidenceLevel = alternative.confidenceLevel;
+
+    // Update alternatives list: remove the selected one and add the old primary
+    match.alternativeMatches.splice(altIndex, 1);
+    match.alternativeMatches.unshift(oldPrimary);
+
+    // Update the selection if this match was already selected
+    const ediId = match.ediOrder.id;
+    if (selectedMatchIds.has(ediId)) {
+      selectedMatchDrafts.set(ediId, match.zohoDraft.id);
+    }
+
+    saveSession();
+    showFocusMode(); // Re-render
+    toast('Switched to alternative match', 'success');
   }
 
   async function createZohoOrder(ediId) {

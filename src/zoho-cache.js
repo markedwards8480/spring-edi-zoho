@@ -122,6 +122,19 @@ class ZohoDraftsCache {
         }
       }
 
+      // Log custom fields from first order to help debug cancel date field name
+      if (orderDetails.length > 0) {
+        const sampleOrder = orderDetails[0];
+        const customFieldKeys = Object.keys(sampleOrder).filter(k => k.startsWith('cf_') || k.includes('custom'));
+        logger.info('Zoho order custom field keys found', {
+          sampleOrderId: sampleOrder.salesorder_id,
+          customFieldKeys,
+          cf_cancel_date: sampleOrder.cf_cancel_date,
+          custom_field_hash: sampleOrder.custom_field_hash,
+          custom_fields: sampleOrder.custom_fields
+        });
+      }
+
       // Clear old cache and insert new data
       const client = await this.pool.connect();
       try {
@@ -214,7 +227,7 @@ class ZohoDraftsCache {
   async getCachedDrafts() {
     try {
       const result = await this.pool.query(`
-        SELECT 
+        SELECT
           zoho_salesorder_id as salesorder_id,
           salesorder_number,
           customer_id,
@@ -226,16 +239,24 @@ class ZohoDraftsCache {
           order_date as date,
           line_items,
           item_count,
-          total_units
+          total_units,
+          raw_data
         FROM zoho_drafts_cache
         ORDER BY salesorder_number DESC
       `);
 
-      // Parse line_items JSON
-      return result.rows.map(row => ({
-        ...row,
-        line_items: row.line_items || []
-      }));
+      // Parse line_items JSON and merge with raw_data for custom fields
+      return result.rows.map(row => {
+        const rawData = row.raw_data || {};
+        return {
+          ...row,
+          line_items: row.line_items || [],
+          // Include custom fields from raw_data for cancel date etc.
+          cf_cancel_date: rawData.cf_cancel_date,
+          custom_field_hash: rawData.custom_field_hash,
+          custom_fields: rawData.custom_fields
+        };
+      });
 
     } catch (error) {
       logger.error('Failed to get cached orders', { error: error.message });
