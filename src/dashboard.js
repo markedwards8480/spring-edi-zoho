@@ -148,8 +148,13 @@ const dashboardHTML = `
         <div class="flex items-center gap-3">
           <h2 class="text-xl font-semibold text-slate-800">Review Matches</h2>
 
+          <!-- Customer Filter -->
+          <select id="reviewCustomerFilter" onchange="filterReviewMatches()" class="px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">All Customers</option>
+          </select>
+
           <!-- Confidence Filter Buttons -->
-          <div id="confidenceFilters" class="flex items-center gap-1 ml-4 bg-slate-100 p-1 rounded-lg">
+          <div id="confidenceFilters" class="flex items-center gap-1 ml-2 bg-slate-100 p-1 rounded-lg">
             <button onclick="setConfidenceFilter('')" data-filter="" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium bg-white shadow-sm text-slate-700">All (<span id="filter-count-all">0</span>)</button>
             <button onclick="setConfidenceFilter('perfect')" data-filter="perfect" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">100% (<span id="filter-count-perfect">0</span>)</button>
             <button onclick="setConfidenceFilter('high')" data-filter="high" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">80-99% (<span id="filter-count-high">0</span>)</button>
@@ -364,6 +369,7 @@ const dashboardHTML = `
   let focusModeActive = false;
   let focusModeIndex = 0;
   let currentConfidenceFilter = '';
+  let currentReviewCustomerFilter = '';
   let activityLogData = [];
   let viewMode = 'list'; // 'list' or 'focus'
 
@@ -472,6 +478,7 @@ const dashboardHTML = `
         focusModeIndex = data.focusModeIndex || 0;
         updateWorkflowCounts();
         updateFilterCounts();
+        updateReviewCustomerFilter();
         const matchCount = matchResults.matches?.length || 0;
         if (matchCount > 0) {
           toast('Restored ' + matchCount + ' matches from previous session');
@@ -745,6 +752,8 @@ const dashboardHTML = `
         saveSession();
         updateWorkflowCounts();
         updateFilterCounts();
+        updateReviewCustomerFilter();
+        currentReviewCustomerFilter = ''; // Reset customer filter for new results
         showStage('review');
         showListView();
         toast('Found ' + (data.matches?.length || 0) + ' matches');
@@ -813,16 +822,45 @@ const dashboardHTML = `
     let matches = matchResults.matches || [];
     const noMatches = matchResults.noMatches || [];
 
+    // Combine all for filtering
+    let allMatches;
     if (currentConfidenceFilter === 'nomatch') {
-      return noMatches.map(m => ({ ...m, confidence: 0, isNoMatch: true }));
+      allMatches = noMatches.map(m => ({ ...m, confidence: 0, isNoMatch: true }));
+    } else if (currentConfidenceFilter === '') {
+      allMatches = [...matches, ...noMatches.map(m => ({ ...m, confidence: 0, isNoMatch: true }))];
+    } else {
+      allMatches = matches.filter(m => getConfidenceLevel(m.confidence || 0) === currentConfidenceFilter);
     }
 
-    if (currentConfidenceFilter === '') {
-      // Return all matches + no matches
-      return [...matches, ...noMatches.map(m => ({ ...m, confidence: 0, isNoMatch: true }))];
+    // Apply customer filter
+    if (currentReviewCustomerFilter) {
+      allMatches = allMatches.filter(m => m.ediOrder?.customer === currentReviewCustomerFilter);
     }
 
-    return matches.filter(m => getConfidenceLevel(m.confidence || 0) === currentConfidenceFilter);
+    return allMatches;
+  }
+
+  function filterReviewMatches() {
+    currentReviewCustomerFilter = document.getElementById('reviewCustomerFilter')?.value || '';
+    updateFilterCounts();
+    showListView();
+  }
+
+  function updateReviewCustomerFilter() {
+    if (!matchResults) return;
+
+    const matches = matchResults.matches || [];
+    const noMatches = matchResults.noMatches || [];
+    const allMatches = [...matches, ...noMatches];
+
+    const customers = [...new Set(allMatches.map(m => m.ediOrder?.customer).filter(Boolean))].sort();
+
+    const select = document.getElementById('reviewCustomerFilter');
+    if (select) {
+      const currentValue = select.value;
+      select.innerHTML = '<option value="">All Customers</option>' +
+        customers.map(c => '<option value="' + c + '"' + (c === currentValue ? ' selected' : '') + '>' + c + '</option>').join('');
+    }
   }
 
   // ============================================================
