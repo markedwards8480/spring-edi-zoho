@@ -72,7 +72,7 @@ const dashboardHTML = `
           <span class="text-xl">🔍</span>
           <div class="text-left">
             <div class="font-medium">Review Matches</div>
-            <div class="text-sm opacity-70"><span id="review-count">0</span> to review</div>
+            <div class="text-sm opacity-70" id="review-count-container"><span id="review-count">—</span> <span id="review-count-label">click Find Matches</span></div>
           </div>
         </button>
 
@@ -752,8 +752,17 @@ const dashboardHTML = `
     const pendingCount = orders.filter(o => o.status === 'pending' && !o.zoho_so_number).length;
     document.getElementById('inbox-count').textContent = pendingCount;
 
-    const reviewCount = matchResults ? (matchResults.matches?.length || 0) + (matchResults.noMatches?.length || 0) : 0;
-    document.getElementById('review-count').textContent = reviewCount;
+    // Update Review Matches count - show different text when no matching has been run
+    const reviewCountEl = document.getElementById('review-count');
+    const reviewLabelEl = document.getElementById('review-count-label');
+    if (matchResults) {
+      const reviewCount = (matchResults.matches?.length || 0) + (matchResults.noMatches?.length || 0);
+      reviewCountEl.textContent = reviewCount;
+      reviewLabelEl.textContent = 'to review';
+    } else {
+      reviewCountEl.textContent = '—';
+      reviewLabelEl.textContent = 'click Find Matches';
+    }
 
     const sentCount = orders.filter(o => o.status === 'processed' || o.zoho_so_number).length;
     document.getElementById('done-count').textContent = sentCount;
