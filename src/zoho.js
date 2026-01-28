@@ -642,11 +642,22 @@ class ZohoClient {
     };
     
     if (ediItems.length > 0 && zohoItems.length > 0) {
-      // Extract EDI styles with base and suffix
+      // Extract EDI styles with base and suffix, AND UPCs
       const ediStyles = [];
+      const ediUpcs = new Set();
       ediItems.forEach(i => {
         const sku = (i.productIds?.sku || i.productIds?.vendorItemNumber || '').trim();
-        if (sku) {
+        const upc = (i.productIds?.upc || i.productIds?.gtin || '').trim();
+
+        // Collect UPCs for matching
+        if (upc && upc.length >= 10) {
+          ediUpcs.add(upc);
+        }
+
+        // Check if SKU looks like a UPC (12+ digits) - some retailers send UPC as style
+        if (sku && /^\d{10,14}$/.test(sku)) {
+          ediUpcs.add(sku);
+        } else if (sku) {
           const baseStyle = extractBaseStyle(sku);
           const suffix = extractSuffix(sku);
           if (baseStyle && baseStyle.length >= 5) {
@@ -654,13 +665,21 @@ class ZohoClient {
           }
         }
       });
-      
-      // Extract Zoho styles with base and suffix
+
+      // Extract Zoho styles with base and suffix, AND UPCs
       const zohoStyles = [];
+      const zohoUpcs = new Set();
       zohoItems.forEach(i => {
         const name = (i.name || '').trim();
         const desc = (i.description || '').trim();
-        
+        // UPC can be in cf_upc, upc, or item.upc depending on Zoho setup
+        const upc = (i.cf_upc || i.upc || i.item?.upc || '').toString().trim();
+
+        // Collect UPCs for matching
+        if (upc && upc.length >= 10) {
+          zohoUpcs.add(upc);
+        }
+
         // Check item name (e.g., "77887X-BQ-GREY-1X")
         if (name) {
           const baseStyle = extractBaseStyle(name);
@@ -669,7 +688,7 @@ class ZohoClient {
             zohoStyles.push({ full: name.toLowerCase(), base: baseStyle, suffix: suffix });
           }
         }
-        
+
         // Also check description for style patterns
         if (desc) {
           const styleMatch = desc.match(/(\d{4,6}[a-z]?)/i);
@@ -680,40 +699,65 @@ class ZohoClient {
         }
       });
 
-      // Get unique base styles
-      const ediBaseStyles = new Set(ediStyles.map(s => s.base));
-      const zohoBaseStyles = new Set(zohoStyles.map(s => s.base));
-      
-      // Count base style matches (REQUIRED for any match)
-      let baseStyleMatches = 0;
-      let suffixMatches = 0;
-      let suffixMismatches = 0;
-      
-      ediBaseStyles.forEach(ediBase => {
-        if (zohoBaseStyles.has(ediBase)) {
-          baseStyleMatches++;
-          
-          // Check suffix match for this base style
-          const ediSuffixes = ediStyles.filter(s => s.base === ediBase).map(s => s.suffix).filter(s => s);
-          const zohoSuffixes = zohoStyles.filter(s => s.base === ediBase).map(s => s.suffix).filter(s => s);
-          
-          if (ediSuffixes.length > 0 && zohoSuffixes.length > 0) {
-            // Check if any suffixes match
-            const hasMatchingSuffix = ediSuffixes.some(es => zohoSuffixes.includes(es));
-            if (hasMatchingSuffix) {
-              suffixMatches++;
-            } else {
-              suffixMismatches++;
-            }
-          }
+      // Check for UPC matches first (high confidence if UPCs match)
+      let upcMatches = 0;
+      ediUpcs.forEach(ediUpc => {
+        if (zohoUpcs.has(ediUpc)) {
+          upcMatches++;
         }
       });
-      
-      // Collect all unique suffixes for display
-      const allEdiSuffixes = [...new Set(ediStyles.map(s => s.suffix).filter(s => s))];
-      const allZohoSuffixes = [...new Set(zohoStyles.map(s => s.suffix).filter(s => s))];
 
-      if (baseStyleMatches > 0) {
+      if (upcMatches > 0) {
+        score.details.upcMatch = true;
+        score.details.upcMatchCount = upcMatches;
+        score.details.ediUpcCount = ediUpcs.size;
+        score.details.zohoUpcCount = zohoUpcs.size;
+        // UPC match is very strong - award full style points
+        score.total += 30;
+        score.details.baseStyle = true;
+        logger.debug('UPC match found', {
+          ediUpcs: [...ediUpcs].slice(0, 3),
+          zohoUpcs: [...zohoUpcs].slice(0, 3),
+          matches: upcMatches
+        });
+      }
+
+      // If no UPC match, try style matching
+      if (!score.details.upcMatch) {
+        // Get unique base styles
+        const ediBaseStyles = new Set(ediStyles.map(s => s.base));
+        const zohoBaseStyles = new Set(zohoStyles.map(s => s.base));
+
+        // Count base style matches (REQUIRED for any match)
+        let baseStyleMatches = 0;
+        let suffixMatches = 0;
+        let suffixMismatches = 0;
+
+        ediBaseStyles.forEach(ediBase => {
+          if (zohoBaseStyles.has(ediBase)) {
+            baseStyleMatches++;
+
+            // Check suffix match for this base style
+            const ediSuffixes = ediStyles.filter(s => s.base === ediBase).map(s => s.suffix).filter(s => s);
+            const zohoSuffixes = zohoStyles.filter(s => s.base === ediBase).map(s => s.suffix).filter(s => s);
+
+            if (ediSuffixes.length > 0 && zohoSuffixes.length > 0) {
+              // Check if any suffixes match
+              const hasMatchingSuffix = ediSuffixes.some(es => zohoSuffixes.includes(es));
+              if (hasMatchingSuffix) {
+                suffixMatches++;
+              } else {
+                suffixMismatches++;
+              }
+            }
+          }
+        });
+
+        // Collect all unique suffixes for display
+        const allEdiSuffixes = [...new Set(ediStyles.map(s => s.suffix).filter(s => s))];
+        const allZohoSuffixes = [...new Set(zohoStyles.map(s => s.suffix).filter(s => s))];
+
+        if (baseStyleMatches > 0) {
         score.details.baseStyle = true;
         score.details.styleMatchCount = baseStyleMatches;
         score.details.ediStyleCount = ediBaseStyles.size;
@@ -757,12 +801,13 @@ class ZohoClient {
           suffixMismatches,
           baseStylePoints
         });
-      } else {
-        logger.debug('No style match - base styles do not overlap', {
-          ediBaseStyles: Array.from(ediBaseStyles),
-          zohoBaseStyles: Array.from(zohoBaseStyles)
-        });
-      }
+        } else {
+          logger.debug('No style match - base styles do not overlap', {
+            ediBaseStyles: Array.from(ediBaseStyles),
+            zohoBaseStyles: Array.from(zohoBaseStyles)
+          });
+        }
+      } // end if (!score.details.upcMatch)
     }
 
     // ============================================================

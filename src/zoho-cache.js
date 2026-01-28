@@ -133,6 +133,15 @@ class ZohoDraftsCache {
           custom_field_hash: sampleOrder.custom_field_hash,
           custom_fields: sampleOrder.custom_fields
         });
+
+        // Log line item fields to identify UPC field name
+        const sampleLineItem = sampleOrder.line_items?.[0];
+        if (sampleLineItem) {
+          logger.info('Zoho line item fields found', {
+            sampleLineItemKeys: Object.keys(sampleLineItem),
+            sampleLineItem: sampleLineItem
+          });
+        }
       }
 
       // Clear old cache and insert new data
