@@ -1375,6 +1375,30 @@ const dashboardHTML = `
             <span id="lineItemsToggle">▼</span> View line items (\${ediItems.length} EDI → \${zohoItems.length} Zoho)
           </button>
           <div id="lineItemsContainer" class="mt-4">
+            \${(() => {
+              // Check if any items are prepacks
+              const prepackItems = ediItems.filter(i => i.isPrepack || i.unitOfMeasure === 'AS' || i.unitOfMeasure === 'ST');
+              const hasPrepack = prepackItems.length > 0;
+              return hasPrepack ? \`
+              <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3">
+                <div class="flex items-center gap-2 text-purple-700 font-medium text-sm mb-2">
+                  📦 Pre-Pack Order (\${prepackItems.length} prepack line\${prepackItems.length > 1 ? 's' : ''})
+                </div>
+                <div class="text-xs text-purple-600 space-y-1">
+                  <p><strong>How it works:</strong> Customer orders by pack, we match by unit price</p>
+                  <p>• <strong>Pack Price</strong> ÷ <strong>Pack Qty</strong> = <strong>Unit Price</strong> (what we match to Zoho)</p>
+                  \${prepackItems.slice(0, 2).map(item => \`
+                    <p class="bg-white/50 rounded px-2 py-1 mt-1">
+                      Example: $\${(item.packPrice || 0).toFixed(2)} ÷ \${item.packQty || 1} units =
+                      <strong>$\${(item.unitPrice || 0).toFixed(2)}/ea</strong>
+                      \${item.unitPriceCalculated ? ' <span class="text-purple-500">(calculated)</span>' : ''}
+                    </p>
+                  \`).join('')}
+                </div>
+              </div>
+              \` : '';
+            })()}
+
             <div class="grid grid-cols-2 gap-4">
               <!-- EDI Items -->
               <div>
@@ -1385,33 +1409,48 @@ const dashboardHTML = `
                       <th class="text-left px-2 py-1">Style</th>
                       <th class="text-left px-2 py-1">UPC</th>
                       <th class="text-left px-2 py-1">Color</th>
+                      <th class="text-center px-2 py-1">UOM</th>
                       <th class="text-right px-2 py-1">Qty</th>
-                      <th class="text-right px-2 py-1">Price</th>
+                      <th class="text-right px-2 py-1">Pack $</th>
+                      <th class="text-right px-2 py-1">Unit $</th>
                     </tr>
                   </thead>
                   <tbody>
                     \${ediItems.slice(0, 10).map(item => {
                       const uom = item.unitOfMeasure || 'EA';
                       const isPrepack = item.isPrepack || uom === 'AS' || uom === 'ST';
-                      const priceDisplay = isPrepack && item.packPrice ?
-                        '$' + (item.packPrice || 0).toFixed(2) + '/' + uom + (item.packQty > 1 ? ' → $' + (item.unitPrice || 0).toFixed(2) + '/ea' : '') :
-                        '$' + (item.unitPrice || 0).toFixed(2);
                       const upc = item.productIds?.upc || item.productIds?.gtin || '';
                       const sku = item.productIds?.sku || item.productIds?.vendorItemNumber || item.style || '';
-                      // Check if SKU looks like a UPC (all digits, 10+ chars)
                       const skuIsUpc = sku && /^\\d{10,14}$/.test(sku);
+                      const packPrice = item.packPrice || 0;
+                      const unitPrice = item.unitPrice || 0;
+                      const packQty = item.packQty || 1;
                       return \`
-                      <tr class="border-t border-slate-100">
-                        <td class="px-2 py-1">\${skuIsUpc ? '<span class="text-slate-400 text-xs">see UPC</span>' : (sku || '-')}</td>
+                      <tr class="border-t border-slate-100 \${isPrepack ? 'bg-purple-50/30' : ''}">
+                        <td class="px-2 py-1">\${skuIsUpc ? '<span class="text-slate-400 text-xs">UPC→</span>' : (sku || '-')}</td>
                         <td class="px-2 py-1 font-mono text-xs">\${skuIsUpc ? sku : (upc || '-')}</td>
                         <td class="px-2 py-1">\${item.color || '-'}</td>
-                        <td class="px-2 py-1 text-right">\${item.quantityOrdered || 0}\${isPrepack && item.packQty > 1 ? ' <span class="text-slate-400">(' + (item.totalUnits || item.quantityOrdered * item.packQty) + ' units)</span>' : ''}</td>
-                        <td class="px-2 py-1 text-right">\${priceDisplay}</td>
+                        <td class="px-2 py-1 text-center">
+                          <span class="\${isPrepack ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'} px-1.5 py-0.5 rounded text-xs">\${uom}</span>
+                          \${isPrepack && packQty > 1 ? '<div class="text-xs text-purple-500">' + packQty + '/pk</div>' : ''}
+                        </td>
+                        <td class="px-2 py-1 text-right">
+                          \${item.quantityOrdered || 0}
+                          \${isPrepack && packQty > 1 ? '<div class="text-xs text-slate-400">=' + (item.totalUnits || item.quantityOrdered * packQty) + ' ea</div>' : ''}
+                        </td>
+                        <td class="px-2 py-1 text-right \${isPrepack ? 'text-purple-600' : 'text-slate-400'}">
+                          \${isPrepack ? '$' + packPrice.toFixed(2) : '-'}
+                        </td>
+                        <td class="px-2 py-1 text-right font-medium \${item.unitPriceCalculated ? 'text-blue-600' : ''}">
+                          $\${unitPrice.toFixed(2)}
+                          \${item.unitPriceCalculated ? '<span class="text-xs text-blue-400">*</span>' : ''}
+                        </td>
                       </tr>
                     \`}).join('')}
-                    \${ediItems.length > 10 ? '<tr><td colspan="5" class="px-2 py-1 text-center text-slate-400">... and ' + (ediItems.length - 10) + ' more</td></tr>' : ''}
+                    \${ediItems.length > 10 ? '<tr><td colspan="7" class="px-2 py-1 text-center text-slate-400">... and ' + (ediItems.length - 10) + ' more</td></tr>' : ''}
                   </tbody>
                 </table>
+                <div class="text-xs text-slate-400 mt-1">* Unit price calculated from pack price ÷ pack qty</div>
               </div>
               <!-- Zoho Items -->
               <div>
