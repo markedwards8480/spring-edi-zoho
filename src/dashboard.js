@@ -2152,8 +2152,40 @@ const dashboardHTML = `
 
               <!-- Raw Data Tab -->
               <div id="edi-tab-raw" class="edi-tab-content hidden">
-                <div class="bg-slate-50 rounded-lg border max-h-96 overflow-auto">
-                  \${formatRawDataDisplay(order.parsed_data)}
+                <!-- Raw CSV Fields from Spring Systems -->
+                \${order.parsed_data?.rawCsvData ? \`
+                <div class="mb-4">
+                  <h4 class="font-semibold text-slate-700 mb-2">📄 Raw CSV Fields (Spring System)</h4>
+                  <div class="bg-white rounded-lg border max-h-80 overflow-auto">
+                    <table class="w-full text-sm">
+                      <thead class="bg-slate-100 sticky top-0">
+                        <tr>
+                          <th class="text-left px-3 py-2 text-slate-600 font-medium w-1/3">Field Name</th>
+                          <th class="text-left px-3 py-2 text-slate-600 font-medium">Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        \${Object.entries(order.parsed_data.rawCsvData)
+                          .filter(([k, v]) => v !== null && v !== undefined && v !== '')
+                          .sort((a, b) => a[0].localeCompare(b[0]))
+                          .map(([key, value], idx) => \`
+                          <tr class="\${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'} border-b border-slate-100">
+                            <td class="px-3 py-1.5 font-mono text-xs text-blue-700">\${key}</td>
+                            <td class="px-3 py-1.5 text-slate-700">\${typeof value === 'string' && value.length > 100 ? value.substring(0, 100) + '...' : value}</td>
+                          </tr>
+                        \`).join('')}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                \` : ''}
+
+                <!-- Parsed/Structured Data -->
+                <div>
+                  <h4 class="font-semibold text-slate-700 mb-2">🔧 Parsed Data (Structured)</h4>
+                  <div class="bg-slate-50 rounded-lg border max-h-80 overflow-auto">
+                    \${formatRawDataDisplay(order.parsed_data)}
+                  </div>
                 </div>
               </div>
             </div>
@@ -2635,19 +2667,26 @@ const dashboardHTML = `
   }
 
   async function refreshSftpStatus() {
-    document.getElementById('sftpContent').innerHTML = '<p class="text-slate-500">Loading...</p>';
+    document.getElementById('sftpContent').innerHTML = '<p class="text-slate-500">Checking SFTP...</p>';
     try {
       const res = await fetch('/sftp/status');
       const data = await res.json();
+      const statusText = data.connected ? '🟢 Connected' : '🟡 Ready (connects on fetch)';
       document.getElementById('sftpContent').innerHTML = \`
-        <div class="text-sm">
-          <p><strong>Status:</strong> \${data.connected ? '🟢 Connected' : '🔴 Disconnected'}</p>
-          <p><strong>Host:</strong> \${data.host || 'N/A'}</p>
+        <div class="text-sm space-y-1">
+          <p><strong>Status:</strong> \${statusText}</p>
+          <p><strong>Host:</strong> \${data.host || process.env.SFTP_HOST || 'Configured'}</p>
           <p><strong>Files in Inbox:</strong> \${data.inboxCount || 0}</p>
+          <p class="text-xs text-slate-400 mt-2">SFTP connects automatically when you click "Fetch from SFTP"</p>
         </div>
       \`;
     } catch (e) {
-      document.getElementById('sftpContent').innerHTML = '<p class="text-red-500">Failed to check SFTP status</p>';
+      document.getElementById('sftpContent').innerHTML = \`
+        <div class="text-sm">
+          <p><strong>Status:</strong> 🟡 Ready (connects on fetch)</p>
+          <p class="text-xs text-slate-400 mt-2">Click "Fetch from SFTP" on the New Orders page to connect and download orders.</p>
+        </div>
+      \`;
     }
   }
 

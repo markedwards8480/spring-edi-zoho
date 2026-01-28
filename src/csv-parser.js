@@ -230,11 +230,18 @@ function parseSpringCSV(content, filename) {
         pack: getField(row, 'po_item_attributes_packing_pack', 'po_item.attributes.packing.pack') || '',
         innerPack: getField(row, 'product_attributes_inner_pack', 'product.attributes.inner_pack') || '',
         assortmentPack: getField(row, 'product_attributes_assortment_pack', 'product.attributes.assortment_pack') || ''
-      }
+      },
+      // Store the original raw CSV row data for display
+      rawCsvFields: row
     };
 
     order.items.push(item);
   });
+
+  // Store raw CSV data from first row for header-level fields
+  if (rows.length > 0) {
+    order.rawCsvData = rows[0];
+  }
 
   // Log parsing results for debugging
   const sampleItem = order.items[0];
