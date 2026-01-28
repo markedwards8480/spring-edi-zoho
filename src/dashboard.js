@@ -1215,7 +1215,7 @@ const dashboardHTML = `
               <tr class="border-b border-slate-100">
                 <td class="py-2.5 text-slate-500">PO / Ref</td>
                 <td class="py-2.5 bg-blue-50/30 px-3">\${edi.poNumber}</td>
-                <td class="py-2.5 bg-green-50/30 px-3">\${zoho?.poReference || zoho?.number || '-'}</td>
+                <td class="py-2.5 bg-green-50/30 px-3">\${zoho?.reference || zoho?.number || '-'}</td>
                 <td class="py-2.5 text-center">\${details.po ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
               </tr>
               <tr class="border-b border-slate-100">
@@ -1228,25 +1228,25 @@ const dashboardHTML = `
                 <td class="py-2.5 text-slate-500">Ship Date</td>
                 <td class="py-2.5 bg-blue-50/30 px-3">\${ediShipDate}</td>
                 <td class="py-2.5 bg-green-50/30 px-3">\${zohoShipDate}</td>
-                <td class="py-2.5 text-center">\${edi.shipDate === zoho?.shipDate ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+                <td class="py-2.5 text-center">\${details.shipDate ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
               </tr>
               <tr class="border-b border-slate-100">
                 <td class="py-2.5 text-slate-500">Cancel Date</td>
                 <td class="py-2.5 bg-blue-50/30 px-3">\${ediCancelDate}</td>
                 <td class="py-2.5 bg-green-50/30 px-3">\${zohoCancelDate}</td>
-                <td class="py-2.5 text-center">\${!zoho?.cancelDate ? '<span class="text-amber-500">⚠️ missing</span>' : edi.cancelDate === zoho.cancelDate ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+                <td class="py-2.5 text-center">\${details.cancelDate ? '<span class="text-green-600">✓ match</span>' : !zoho?.cancelDate ? '<span class="text-amber-500">⚠️ missing</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
               </tr>
               <tr class="border-b border-slate-100">
                 <td class="py-2.5 text-slate-500">Units</td>
                 <td class="py-2.5 bg-blue-50/30 px-3 font-semibold">\${(edi.totalUnits || 0).toLocaleString()}</td>
                 <td class="py-2.5 bg-green-50/30 px-3 font-semibold">\${(zoho?.totalUnits || 0).toLocaleString()}</td>
-                <td class="py-2.5 text-center">\${edi.totalUnits === zoho?.totalUnits ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+                <td class="py-2.5 text-center">\${details.totalUnits ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
               </tr>
               <tr class="border-b border-slate-100">
                 <td class="py-2.5 text-slate-500">Amount</td>
                 <td class="py-2.5 bg-blue-50/30 px-3 font-semibold">$\${(edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
                 <td class="py-2.5 bg-green-50/30 px-3 font-semibold">$\${(zoho?.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-                <td class="py-2.5 text-center">\${Math.abs((edi.totalAmount || 0) - (zoho?.totalAmount || 0)) < 1 ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+                <td class="py-2.5 text-center">\${details.totalAmount ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
               </tr>
               <tr class="border-b border-slate-100">
                 <td class="py-2.5 text-slate-500">Styles</td>
@@ -1256,7 +1256,7 @@ const dashboardHTML = `
                 <td class="py-2.5 bg-green-50/30 px-3">
                   \${zohoStyles.length > 0 ? zohoStyles.map(s => '<span class="inline-block bg-slate-100 px-2 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-'}
                 </td>
-                <td class="py-2.5 text-center">\${stylesMatch ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+                <td class="py-2.5 text-center">\${details.baseStyle ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
               </tr>
             </tbody>
           </table>
