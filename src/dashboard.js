@@ -692,8 +692,11 @@ const dashboardHTML = `
       const ediDate = o.parsed_data?.dates?.orderDate || o.parsed_data?.dates?.poDate || '';
       const ediDateStr = ediDate ? new Date(ediDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : 'N/A';
 
-      // Check for prepacks
-      const prepackItems = items.filter(i => i.isPrepack || i.unitOfMeasure === 'AS' || i.unitOfMeasure === 'ST');
+      // Check for prepacks - must have UOM of AS/ST AND packQty > 1 to be a true prepack
+      const prepackItems = items.filter(i =>
+        (i.isPrepack || i.unitOfMeasure === 'AS' || i.unitOfMeasure === 'ST') &&
+        i.packQty > 1
+      );
       const hasPrepack = prepackItems.length > 0;
       const totalUnits = items.reduce((s, i) => s + (i.totalUnits || i.quantityOrdered || 0), 0);
 
@@ -1382,8 +1385,11 @@ const dashboardHTML = `
           </button>
           <div id="lineItemsContainer" class="mt-4">
             \${(() => {
-              // Check if any items are prepacks
-              const prepackItems = ediItems.filter(i => i.isPrepack || i.unitOfMeasure === 'AS' || i.unitOfMeasure === 'ST');
+              // Check if any items are prepacks - must have packQty > 1 to show the prepack math
+              const prepackItems = ediItems.filter(i =>
+                (i.isPrepack || i.unitOfMeasure === 'AS' || i.unitOfMeasure === 'ST') &&
+                i.packQty > 1
+              );
               const hasPrepack = prepackItems.length > 0;
               return hasPrepack ? \`
               <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3">
