@@ -863,7 +863,12 @@ const dashboardHTML = `
               \${isAmended ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">🔄 Amended' + (amendmentCount > 1 ? ' (' + amendmentCount + 'x)' : '') + '</span>' : ''}
               \${is860 ? '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">860 Change</span>' : ''}
               \${hasPrepack ? '<span class="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">📦 Prepack</span>' : ''}
-              \${isOld && !isAmended && !isPartial ? '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">' + daysSinceImport + ' days old</span>' : ''}
+              \${!isAmended && !isPartial ? (
+                daysSinceImport === 0 ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">📅 Today</span>' :
+                daysSinceImport === 1 ? '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">📅 1 day</span>' :
+                daysSinceImport < 3 ? '<span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">📅 ' + daysSinceImport + ' days</span>' :
+                '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">⚠️ ' + daysSinceImport + ' days</span>'
+              ) : ''}
             </div>
             <div class="flex items-center gap-8">
               <div class="text-right">
