@@ -175,7 +175,10 @@ function detectDiscrepancies(ediOrder, zohoDraft) {
 }
 
 const app = express();
-app.use(express.json({ limit: '10mb' }));  // Increased limit for large session/match data
+app.use(express.json({ limit: '50mb' }));  // Increased limit for large session/match data
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.text({ limit: '50mb' }));
+app.use(express.raw({ limit: '50mb' }));
 
 // Initialize audit logger and cache
 const auditLogger = new AuditLogger(pool);
