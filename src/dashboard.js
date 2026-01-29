@@ -1777,14 +1777,60 @@ const dashboardHTML = `
               \` : '';
             })()}
 
-            <!-- Sync behavior note -->
-            <div class="bg-green-50 border border-green-200 rounded-lg p-2 mb-3 flex items-start gap-2">
-              <span class="text-green-600">🔒</span>
-              <div class="text-xs text-green-700">
-                <strong>Zoho items preserved:</strong> Only <span class="font-semibold">Qty</span> and <span class="font-semibold">Price</span> will be updated.
-                Your Zoho item names and SKUs stay unchanged. Items are matched by UPC.
-              </div>
-            </div>
+            <!-- Sync behavior note with match status -->
+            \${(() => {
+              // Calculate UPC match potential
+              const ediUpcs = ediItems.filter(i => i.productIds?.upc).map(i => i.productIds.upc);
+              const zohoUpcs = zohoItems.filter(i => i.cf_upc || i.upc).map(i => i.cf_upc || i.upc);
+              const ediUpcCount = ediUpcs.length;
+              const zohoUpcCount = zohoUpcs.length;
+              const matchedCount = ediUpcs.filter(upc => zohoUpcs.includes(upc)).length;
+
+              if (zohoUpcCount === 0 && zohoItems.length > 0) {
+                // Zoho items have no UPCs - can't match
+                return \`
+                  <div class="bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3 flex items-start gap-2">
+                    <span class="text-amber-600">⚠️</span>
+                    <div class="text-xs text-amber-700">
+                      <strong>UPC matching unavailable:</strong> Zoho items have no UPCs.
+                      Zoho quantities/prices will stay unchanged. Add UPCs in Zoho to enable automatic matching.
+                    </div>
+                  </div>
+                \`;
+              } else if (matchedCount === 0 && ediUpcCount > 0 && zohoUpcCount > 0) {
+                // Have UPCs but none match
+                return \`
+                  <div class="bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3 flex items-start gap-2">
+                    <span class="text-amber-600">⚠️</span>
+                    <div class="text-xs text-amber-700">
+                      <strong>No UPC matches found:</strong> \${ediUpcCount} EDI UPCs, \${zohoUpcCount} Zoho UPCs, but 0 matches.
+                      Zoho quantities/prices will stay unchanged.
+                    </div>
+                  </div>
+                \`;
+              } else if (matchedCount > 0) {
+                // Have matches
+                return \`
+                  <div class="bg-green-50 border border-green-200 rounded-lg p-2 mb-3 flex items-start gap-2">
+                    <span class="text-green-600">🔒</span>
+                    <div class="text-xs text-green-700">
+                      <strong>Zoho items preserved:</strong> \${matchedCount} of \${zohoItems.length} items matched by UPC.
+                      Only <span class="font-semibold">Qty</span> and <span class="font-semibold">Price</span> will be updated for matched items.
+                    </div>
+                  </div>
+                \`;
+              } else {
+                // Default - no Zoho items
+                return \`
+                  <div class="bg-slate-50 border border-slate-200 rounded-lg p-2 mb-3 flex items-start gap-2">
+                    <span class="text-slate-500">ℹ️</span>
+                    <div class="text-xs text-slate-600">
+                      <strong>New line items:</strong> No existing Zoho items found. EDI items will be added as new.
+                    </div>
+                  </div>
+                \`;
+              }
+            })()}
 
             <div class="grid grid-cols-2 gap-4">
               <!-- EDI Items -->
