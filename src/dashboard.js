@@ -822,17 +822,14 @@ const dashboardHTML = `
       const isOld = daysSinceImport >= 3;
       const importedStr = formatDateWithTime(importDate);
 
-      // Age badge based on days since import
-      let ageBadge = '';
-      if (daysSinceImport === 0) {
-        ageBadge = '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">📅 Today</span>';
-      } else if (daysSinceImport === 1) {
-        ageBadge = '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">📅 1 day</span>';
-      } else if (daysSinceImport < 3) {
-        ageBadge = '<span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">📅 ' + daysSinceImport + ' days</span>';
-      } else {
-        ageBadge = '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">⚠️ ' + daysSinceImport + ' days</span>';
-      }
+      // Age badge based on days since import - always show
+      const ageBadge = daysSinceImport === 0
+        ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">📅 Today</span>'
+        : daysSinceImport === 1
+        ? '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">📅 1 day</span>'
+        : daysSinceImport < 3
+        ? '<span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">📅 ' + daysSinceImport + ' days</span>'
+        : '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">⚠️ ' + (daysSinceImport || 0) + ' days</span>';
       const ediDate = o.parsed_data?.dates?.orderDate || o.parsed_data?.dates?.poDate || '';
       const ediDateStr = ediDate ? new Date(ediDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : 'N/A';
 
