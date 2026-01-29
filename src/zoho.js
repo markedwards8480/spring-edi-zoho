@@ -1043,17 +1043,10 @@ class ZohoClient {
    */
   async updateDraftWithEdiData(salesorderId, ediOrder, options = {}) {
     const parsed = ediOrder.parsed_data || {};
-    const { selectedFields = {}, overrides = {}, selectedItems } = options;
+    const { selectedFields = {}, overrides = {}, selectedItems, preserveZohoItems = true } = options;
 
     // Use selectedItems if provided, otherwise use all items
     const ediItems = selectedItems || parsed.items || [];
-
-    const lineItems = ediItems.map(item => ({
-      name: item.productIds?.sku || item.productIds?.vendorItemNumber || 'Item',
-      description: `${item.productIds?.sku || ''} ${item.description || ''} ${item.color || ''} ${item.size || ''}`.trim(),
-      quantity: item.quantityOrdered || 0,
-      rate: item.unitPrice || 0
-    }));
 
     const updateData = {
       reference_number: ediOrder.edi_order_number,
@@ -1062,7 +1055,6 @@ class ZohoClient {
 
     // Apply selected fields (only include if selected or not specified = default to include)
     if (selectedFields.shipDate !== false) {
-      // Check for override first
       updateData.shipment_date = overrides.shipDate || parsed.dates?.shipNotBefore || undefined;
     }
 
@@ -1073,16 +1065,78 @@ class ZohoClient {
       // updateData.cf_cancel_date = overrides.cancelDate || parsed.dates?.cancelDate;
     }
 
-    // Only include line items if there are any selected
-    if (lineItems.length > 0) {
-      updateData.line_items = lineItems;
+    // Handle line items - preserve Zoho items by default
+    if (ediItems.length > 0 && preserveZohoItems) {
+      // Fetch current Zoho draft to get existing line items
+      const currentDraft = await this.getSalesOrderDetails(salesorderId);
+      const zohoLineItems = currentDraft?.line_items || [];
+
+      if (zohoLineItems.length > 0) {
+        // Build a map of EDI items by UPC for matching
+        const ediByUpc = new Map();
+        ediItems.forEach(item => {
+          const upc = item.productIds?.upc;
+          if (upc) ediByUpc.set(upc, item);
+        });
+
+        // Update existing Zoho line items with EDI qty/price where we can match
+        const updatedLineItems = zohoLineItems.map(zohoItem => {
+          const zohoUpc = zohoItem.cf_upc || zohoItem.upc || '';
+          const matchedEdi = ediByUpc.get(zohoUpc);
+
+          // Preserve the existing Zoho item, only update qty and rate if matched
+          const updatedItem = {
+            line_item_id: zohoItem.line_item_id, // CRITICAL: Keep the existing line item ID
+            item_id: zohoItem.item_id,           // Keep the Zoho item reference
+            quantity: matchedEdi ? (matchedEdi.quantityOrdered || zohoItem.quantity) : zohoItem.quantity,
+            rate: matchedEdi ? (matchedEdi.unitPrice || zohoItem.rate) : zohoItem.rate
+          };
+
+          // Remove the matched EDI item so we can track unmatched ones
+          if (matchedEdi) {
+            ediByUpc.delete(zohoUpc);
+          }
+
+          return updatedItem;
+        });
+
+        // Log matching results
+        const matchedCount = ediItems.length - ediByUpc.size;
+        logger.info('Line item matching results', {
+          salesorderId,
+          ediItemCount: ediItems.length,
+          zohoItemCount: zohoLineItems.length,
+          matchedByUpc: matchedCount,
+          unmatchedEdi: ediByUpc.size
+        });
+
+        updateData.line_items = updatedLineItems;
+      } else {
+        // No existing Zoho items - fall back to creating new ones
+        logger.info('No existing Zoho line items, creating new ones', { salesorderId });
+        updateData.line_items = ediItems.map(item => ({
+          name: item.productIds?.sku || item.productIds?.vendorItemNumber || 'Item',
+          description: `${item.productIds?.sku || ''} ${item.description || ''} ${item.color || ''} ${item.size || ''}`.trim(),
+          quantity: item.quantityOrdered || 0,
+          rate: item.unitPrice || 0
+        }));
+      }
+    } else if (ediItems.length > 0 && !preserveZohoItems) {
+      // Legacy behavior - replace all line items (use with caution)
+      updateData.line_items = ediItems.map(item => ({
+        name: item.productIds?.sku || item.productIds?.vendorItemNumber || 'Item',
+        description: `${item.productIds?.sku || ''} ${item.description || ''} ${item.color || ''} ${item.size || ''}`.trim(),
+        quantity: item.quantityOrdered || 0,
+        rate: item.unitPrice || 0
+      }));
     }
 
     // Log what we're sending
     logger.info('Updating Zoho draft with selective fields', {
       salesorderId,
       fieldsIncluded: Object.keys(updateData),
-      lineItemCount: lineItems.length,
+      lineItemCount: updateData.line_items?.length || 0,
+      preserveZohoItems,
       hasOverrides: Object.keys(overrides).length > 0
     });
 
