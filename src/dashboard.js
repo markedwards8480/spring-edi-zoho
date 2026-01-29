@@ -1679,7 +1679,7 @@ const dashboardHTML = `
                       <input type="checkbox" \${isChecked ? 'checked' : ''} onchange="toggleFieldSelection(\${edi.id}, '\${r.key}')"
                         class="w-4 h-4 rounded border-slate-300 text-blue-500 cursor-pointer">
                     </td>
-                    <td class="py-2 text-slate-500 text-xs">\${r.label}</td>
+                                                <td class="py-2 text-slate-500 text-xs">\${r.match ? '<span class="text-green-600 mr-1">✓</span>' : '<span class="text-red-500 mr-1">✗</span>'}\${r.label}</td>
                     <td class="py-2 bg-blue-50/30 px-2 text-slate-600 text-xs">\${r.ediVal}</td>
                     <td class="py-2 bg-green-50/30 px-2 text-xs">\${r.zohoVal}</td>
                     <td class="py-2 bg-purple-50/30 px-2" id="field-cell-\${edi.id}-\${r.key}">
