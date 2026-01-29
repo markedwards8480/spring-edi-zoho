@@ -2775,7 +2775,7 @@ const dashboardHTML = `
     }
   }
 
-  // Filter raw data table based on search term
+  // Filter raw data table based on search term with highlighting
   function filterRawDataTable(searchTerm) {
     const rows = document.querySelectorAll('.raw-data-row');
     const countEl = document.getElementById('rawDataSearchCount');
@@ -2786,23 +2786,64 @@ const dashboardHTML = `
     rows.forEach(row => {
       const field = row.getAttribute('data-field') || '';
       const value = row.getAttribute('data-value') || '';
+      const fieldCell = row.querySelector('td:first-child');
+      const valueCell = row.querySelector('td:last-child');
 
-      if (!term || field.includes(term) || value.includes(term)) {
+      // Get or store original content (preserve on first search)
+      if (!row.getAttribute('data-original-field') && fieldCell) {
+        row.setAttribute('data-original-field', fieldCell.innerHTML);
+        row.setAttribute('data-original-value', valueCell?.innerHTML || '');
+      }
+      const originalField = row.getAttribute('data-original-field') || '';
+      const originalValue = row.getAttribute('data-original-value') || '';
+
+      if (!term) {
+        // No search term - show all rows, remove highlights
         row.style.display = '';
+        row.classList.remove('bg-yellow-50', 'border-l-4', 'border-yellow-400');
+        if (fieldCell) fieldCell.innerHTML = originalField;
+        if (valueCell) valueCell.innerHTML = originalValue;
         visibleCount++;
+      } else if (field.includes(term) || value.includes(term)) {
+        // Match found - show row and highlight matches
+        row.style.display = '';
+        row.classList.add('bg-yellow-50', 'border-l-4', 'border-yellow-400');
+        visibleCount++;
+
+        // Highlight matching text in cells
+        if (fieldCell) {
+          fieldCell.innerHTML = field.includes(term) ? highlightMatch(originalField, searchTerm) : originalField;
+        }
+        if (valueCell) {
+          valueCell.innerHTML = value.includes(term) ? highlightMatch(originalValue, searchTerm) : originalValue;
+        }
       } else {
+        // No match - hide row
         row.style.display = 'none';
+        row.classList.remove('bg-yellow-50', 'border-l-4', 'border-yellow-400');
       }
     });
 
-    // Update count display
+    // Update count display with colored feedback
     if (countEl) {
       if (term) {
-        countEl.textContent = visibleCount + ' of ' + totalCount + ' fields matching "' + searchTerm + '"';
+        if (visibleCount > 0) {
+          countEl.innerHTML = '<span class="text-green-600">✓ ' + visibleCount + ' of ' + totalCount + ' fields match "' + searchTerm + '"</span>';
+        } else {
+          countEl.innerHTML = '<span class="text-amber-600">✗ No fields match "' + searchTerm + '"</span>';
+        }
       } else {
-        countEl.textContent = totalCount + ' fields total';
+        countEl.innerHTML = '<span class="text-slate-500">' + totalCount + ' fields total</span>';
       }
     }
+  }
+
+  // Highlight matching text (case-insensitive)
+  function highlightMatch(text, term) {
+    if (!term || !text) return text;
+    const escaped = term.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
+    const regex = new RegExp('(' + escaped + ')', 'gi');
+    return text.replace(regex, '<mark class="bg-yellow-300 px-0.5 rounded">$1</mark>');
   }
 
   // ============================================================
