@@ -1717,7 +1717,7 @@ const dashboardHTML = `
               </tr>
               <tr class="border-b border-slate-100">
                 <td class="py-2 text-center text-slate-300">—</td>
-                <td class="py-2 text-slate-500 text-xs">Style</td>
+                <td class="py-2 text-slate-500 text-xs">Base Style</td>
                 <td class="py-2 bg-blue-50/30 px-2">
                   \${ediStyles.length > 0 ? ediStyles.map(s => '<span class="inline-block bg-blue-100 px-1.5 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-'}
                 </td>
@@ -1727,6 +1727,21 @@ const dashboardHTML = `
                 </td>
                 <td class="py-2 bg-purple-50/30 px-2">
                   \${ediStyles.length > 0 ? ediStyles.map(s => '<span class="inline-block bg-purple-100 px-1.5 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-'}
+                </td>
+                <td class="py-2"></td>
+              </tr>
+              <tr class="border-b border-slate-100">
+                <td class="py-2 text-center text-slate-300">—</td>
+                <td class="py-2 text-slate-500 text-xs">Suffix</td>
+                <td class="py-2 bg-blue-50/30 px-2">
+                  \${details.ediSuffixes ? '<span class="inline-block bg-blue-100 px-1.5 py-0.5 rounded text-xs">' + details.ediSuffixes + '</span>' : '-'}
+                </td>
+                <td class="py-2 bg-green-50/30 px-2">
+                  \${details.zohoSuffixes ? '<span class="inline-block bg-green-100 px-1.5 py-0.5 rounded text-xs">' + details.zohoSuffixes + '</span>' : '-'}
+                  \${details.styleSuffix ? '<span class="text-green-600 ml-1">✓</span>' : (details.suffixWarning ? '<span class="text-amber-500 ml-1">⚠️</span>' : '')}
+                </td>
+                <td class="py-2 bg-purple-50/30 px-2">
+                  \${details.ediSuffixes ? '<span class="inline-block bg-purple-100 px-1.5 py-0.5 rounded text-xs">' + details.ediSuffixes + '</span>' : '-'}
                 </td>
                 <td class="py-2"></td>
               </tr>
