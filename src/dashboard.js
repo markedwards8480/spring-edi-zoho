@@ -1533,87 +1533,94 @@ const dashboardHTML = `
         <div class="px-5 py-4">
           <div class="text-xs text-slate-500 mb-2 flex items-center gap-2">
             <span>💡</span>
-            <span>Check/uncheck fields to include in update. Click ✏️ to override a value.</span>
+            <span>EDI stays unchanged. Click ✏️ to customize what gets sent to Zoho.</span>
           </div>
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-slate-200">
-                <th class="text-center py-2 font-medium text-slate-500 w-12">Send</th>
-                <th class="text-left py-2 font-medium text-slate-500 w-28">Field</th>
-                <th class="text-left py-2 font-medium text-blue-600 bg-blue-50/50 px-3 rounded-tl-lg">EDI Value</th>
-                <th class="text-left py-2 font-medium text-green-600 bg-green-50/50 px-3">Zoho Draft</th>
-                <th class="text-center py-2 font-medium text-slate-500 w-20">Status</th>
-                <th class="text-center py-2 font-medium text-slate-500 w-16">Edit</th>
+                <th class="text-center py-2 font-medium text-slate-500 w-10">✓</th>
+                <th class="text-left py-2 font-medium text-slate-500 w-24">Field</th>
+                <th class="text-left py-2 font-medium text-blue-600 bg-blue-50/50 px-2">EDI (source)</th>
+                <th class="text-left py-2 font-medium text-green-600 bg-green-50/50 px-2">Zoho Now</th>
+                <th class="text-left py-2 font-medium text-purple-600 bg-purple-50/50 px-2">→ Send to Zoho</th>
+                <th class="text-center py-2 font-medium text-slate-500 w-12">✏️</th>
               </tr>
             </thead>
             <tbody>
               \${(() => {
                 const sel = fieldSelections.get(edi.id) || { fields: {}, overrides: {} };
                 const rows = [
-                  { key: 'poNumber', label: 'PO / Ref', ediVal: edi.poNumber, zohoVal: zoho?.reference || zoho?.number || '-', match: details.po, editable: false },
+                  { key: 'poNumber', label: 'PO / Ref', ediVal: edi.poNumber, zohoVal: zoho?.reference || zoho?.number || '-', match: details.po, editable: true, rawVal: edi.poNumber },
                   { key: 'customer', label: 'Customer', ediVal: edi.customer, zohoVal: zoho?.customer || '-', match: details.customer, editable: false },
                   { key: 'shipDate', label: 'Ship Date', ediVal: ediShipDate, zohoVal: zohoShipDate, match: details.shipDate, editable: true, rawVal: edi.shipDate },
-                  { key: 'cancelDate', label: 'Cancel Date', ediVal: ediCancelDate, zohoVal: zohoCancelDate, match: details.cancelDate, editable: true, rawVal: edi.cancelDate }
+                  { key: 'cancelDate', label: 'Cancel', ediVal: ediCancelDate, zohoVal: zohoCancelDate, match: details.cancelDate, editable: true, rawVal: edi.cancelDate }
                 ];
                 return rows.map(r => {
                   const isChecked = sel.fields[r.key] !== false;
                   const hasOverride = sel.overrides[r.key] !== undefined;
-                  const displayVal = hasOverride ? sel.overrides[r.key] : r.ediVal;
+                  const sendVal = hasOverride ? sel.overrides[r.key] : r.ediVal;
                   return \`
-                  <tr class="border-b border-slate-100 \${!isChecked ? 'opacity-50 bg-slate-50' : ''}">
-                    <td class="py-2.5 text-center">
+                  <tr class="border-b border-slate-100 \${!isChecked ? 'opacity-40 bg-slate-50' : ''}">
+                    <td class="py-2 text-center">
                       <input type="checkbox" \${isChecked ? 'checked' : ''} onchange="toggleFieldSelection(\${edi.id}, '\${r.key}')"
                         class="w-4 h-4 rounded border-slate-300 text-blue-500 cursor-pointer">
                     </td>
-                    <td class="py-2.5 text-slate-500">\${r.label}</td>
-                    <td class="py-2.5 bg-blue-50/30 px-3" id="field-cell-\${edi.id}-\${r.key}">
-                      \${hasOverride ? '<span class="text-purple-600 font-medium">' + displayVal + '</span> <span class="text-xs text-purple-400">(edited)</span>' : displayVal}
+                    <td class="py-2 text-slate-500 text-xs">\${r.label}</td>
+                    <td class="py-2 bg-blue-50/30 px-2 text-slate-600 text-xs">\${r.ediVal}</td>
+                    <td class="py-2 bg-green-50/30 px-2 text-xs">\${r.zohoVal}</td>
+                    <td class="py-2 bg-purple-50/30 px-2" id="field-cell-\${edi.id}-\${r.key}">
+                      \${isChecked ?
+                        (hasOverride ?
+                          '<span class="text-purple-700 font-semibold">' + sendVal + '</span> <span class="text-xs text-purple-400">(custom)</span>' :
+                          '<span class="text-purple-600">' + sendVal + '</span>') :
+                        '<span class="text-slate-400 italic text-xs">skip</span>'}
                     </td>
-                    <td class="py-2.5 bg-green-50/30 px-3">\${r.zohoVal}</td>
-                    <td class="py-2.5 text-center">\${r.match ? '<span class="text-green-600">✓</span>' : '<span class="text-amber-500">⚠️</span>'}</td>
-                    <td class="py-2.5 text-center">
-                      \${r.editable ? '<button onclick="showFieldEdit(' + edi.id + ', \\'' + r.key + '\\', \\'' + (r.rawVal || '') + '\\')" class="text-slate-400 hover:text-blue-600">✏️</button>' : '<span class="text-slate-300">—</span>'}
+                    <td class="py-2 text-center">
+                      \${r.editable && isChecked ? '<button onclick="showFieldEdit(' + edi.id + ', \\'' + r.key + '\\', \\'' + (sendVal || '').replace(/'/g, "\\\\'") + '\\')" class="text-slate-400 hover:text-purple-600 text-xs">✏️</button>' : ''}
                     </td>
                   </tr>
                   \`;
                 }).join('');
               })()}
-              <tr class="border-b border-slate-100 bg-slate-50">
-                <td class="py-2.5 text-center text-slate-400">—</td>
-                <td class="py-2.5 text-slate-500">Units</td>
-                <td class="py-2.5 bg-blue-50/30 px-3 font-semibold">\${(edi.totalUnits || 0).toLocaleString()}</td>
-                <td class="py-2.5 bg-green-50/30 px-3 font-semibold">\${(zoho?.totalUnits || 0).toLocaleString()}</td>
-                <td class="py-2.5 text-center">\${details.totalUnits ? '<span class="text-green-600">✓</span>' : '<span class="text-amber-500">⚠️</span>'}</td>
-                <td class="py-2.5 text-center"><span class="text-slate-300">—</span></td>
+              <tr class="border-b border-slate-100 bg-slate-50/50">
+                <td class="py-2 text-center text-slate-300">—</td>
+                <td class="py-2 text-slate-500 text-xs">Units</td>
+                <td class="py-2 bg-blue-50/30 px-2 font-semibold text-xs">\${(edi.totalUnits || 0).toLocaleString()}</td>
+                <td class="py-2 bg-green-50/30 px-2 font-semibold text-xs">\${(zoho?.totalUnits || 0).toLocaleString()}</td>
+                <td class="py-2 bg-purple-50/30 px-2 text-purple-600 text-xs">\${(edi.totalUnits || 0).toLocaleString()}</td>
+                <td class="py-2"></td>
               </tr>
               <tr class="border-b border-slate-100 bg-slate-50">
-                <td class="py-2.5 text-center text-slate-400">—</td>
-                <td class="py-2.5 text-slate-500">Amount</td>
-                <td class="py-2.5 bg-blue-50/30 px-3 font-semibold">$\${(edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-                <td class="py-2.5 bg-green-50/30 px-3 font-semibold">$\${(zoho?.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-                <td class="py-2.5 text-center">\${details.totalAmount ? '<span class="text-green-600">✓</span>' : '<span class="text-amber-500">⚠️</span>'}</td>
-                <td class="py-2.5 text-center"><span class="text-slate-300">—</span></td>
+                <td class="py-2 text-center text-slate-300">—</td>
+                <td class="py-2 text-slate-500 text-xs">Amount</td>
+                <td class="py-2 bg-blue-50/30 px-2 font-semibold text-xs">$\${(edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                <td class="py-2 bg-green-50/30 px-2 font-semibold text-xs">$\${(zoho?.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})} \${details.totalAmount ? '<span class="text-green-600">✓</span>' : '<span class="text-amber-500">⚠️</span>'}</td>
+                <td class="py-2 bg-purple-50/30 px-2 text-purple-600 text-xs">$\${(edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                <td class="py-2"></td>
               </tr>
               <tr class="border-b border-slate-100">
-                <td class="py-2.5 text-center text-slate-400">—</td>
-                <td class="py-2.5 text-slate-500">Base Style</td>
-                <td class="py-2.5 bg-blue-50/30 px-3">
-                  \${ediStyles.length > 0 ? ediStyles.map(s => '<span class="inline-block bg-slate-100 px-2 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-'}
+                <td class="py-2 text-center text-slate-300">—</td>
+                <td class="py-2 text-slate-500 text-xs">Style</td>
+                <td class="py-2 bg-blue-50/30 px-2">
+                  \${ediStyles.length > 0 ? ediStyles.map(s => '<span class="inline-block bg-blue-100 px-1.5 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-'}
                 </td>
-                <td class="py-2.5 bg-green-50/30 px-3">
-                  \${zohoStyles.length > 0 ? zohoStyles.map(s => '<span class="inline-block bg-slate-100 px-2 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-'}
+                <td class="py-2 bg-green-50/30 px-2">
+                  \${zohoStyles.length > 0 ? zohoStyles.map(s => '<span class="inline-block bg-green-100 px-1.5 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-'}
+                  \${details.baseStyle ? '<span class="text-green-600 ml-1">✓</span>' : '<span class="text-amber-500 ml-1">⚠️</span>'}
                 </td>
-                <td class="py-2.5 text-center">\${details.baseStyle ? '<span class="text-green-600">✓</span>' : '<span class="text-amber-500">⚠️</span>'}</td>
-                <td class="py-2.5 text-center"><span class="text-slate-300">—</span></td>
+                <td class="py-2 bg-purple-50/30 px-2">
+                  \${ediStyles.length > 0 ? ediStyles.map(s => '<span class="inline-block bg-purple-100 px-1.5 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-'}
+                </td>
+                <td class="py-2"></td>
               </tr>
               \${details.upcMatch ? \`
               <tr class="border-b border-slate-100 bg-green-50/50">
-                <td class="py-2.5 text-center text-slate-400">—</td>
-                <td class="py-2.5 text-slate-500">UPC Match</td>
-                <td class="py-2.5 px-3 text-xs font-mono">\${details.ediUpcCount || 0} UPCs</td>
-                <td class="py-2.5 px-3 text-xs font-mono">\${details.zohoUpcCount || 0} UPCs</td>
-                <td class="py-2.5 text-center"><span class="text-green-600 font-medium">✓ \${details.upcMatchCount || 0}</span></td>
-                <td class="py-2.5 text-center"><span class="text-slate-300">—</span></td>
+                <td class="py-2 text-center text-slate-300">—</td>
+                <td class="py-2 text-slate-500 text-xs">UPC</td>
+                <td class="py-2 bg-blue-50/30 px-2 text-xs font-mono">\${details.ediUpcCount || 0} UPCs</td>
+                <td class="py-2 bg-green-50/30 px-2 text-xs font-mono">\${details.zohoUpcCount || 0} UPCs <span class="text-green-600 font-medium">✓ \${details.upcMatchCount || 0}</span></td>
+                <td class="py-2 bg-purple-50/30 px-2 text-xs font-mono">\${details.ediUpcCount || 0} UPCs</td>
+                <td class="py-2"></td>
               </tr>
               \` : ''}
             </tbody>
