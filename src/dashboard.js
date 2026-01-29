@@ -871,11 +871,11 @@ const dashboardHTML = `
                 <div class="font-semibold text-slate-800">\${o.edi_order_number || 'N/A'}</div>
                 <div class="text-sm text-slate-500">\${o.edi_customer_name || 'Unknown'}</div>
               </div>
+              \${ageBadge}
               \${isPartial ? '<span class="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-medium">🟡 Partial' + (pendingCount > 0 ? ' (' + pendingCount + ' pending)' : '') + '</span>' : ''}
               \${isAmended ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">🔄 Amended' + (amendmentCount > 1 ? ' (' + amendmentCount + 'x)' : '') + '</span>' : ''}
               \${is860 ? '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">860 Change</span>' : ''}
               \${hasPrepack ? '<span class="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">📦 Prepack</span>' : ''}
-              \${!isAmended && !isPartial ? ageBadge : ''}
             </div>
             <div class="flex items-center gap-8">
               <div class="text-right">
