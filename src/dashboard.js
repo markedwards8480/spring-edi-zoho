@@ -7,7 +7,7 @@ const dashboardHTML = `
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EDI Order Processing | Mark Edwards Apparel</title>
+  <title>EDI v2 | Mark Edwards Apparel</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     @keyframes pulse-green { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
