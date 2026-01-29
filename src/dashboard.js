@@ -913,27 +913,32 @@ const dashboardHTML = `
   function updatePendingCount() {
     const pending = orders.filter(o => !o.zoho_so_number && o.status !== 'processed');
     const count = selectedIds.size > 0 ? selectedIds.size : pending.length;
-    document.getElementById('pendingCountBtn').textContent = count;
+    const el = document.getElementById('pendingCountBtn');
+    if (el) el.textContent = count;
   }
 
   function updateWorkflowCounts() {
     const pendingCount = orders.filter(o => o.status === 'pending' && !o.zoho_so_number).length;
-    document.getElementById('inbox-count').textContent = pendingCount;
+    const inboxEl = document.getElementById('inbox-count');
+    if (inboxEl) inboxEl.textContent = pendingCount;
 
     // Update Review Matches count - show different text when no matching has been run
     const reviewCountEl = document.getElementById('review-count');
     const reviewLabelEl = document.getElementById('review-count-label');
-    if (matchResults) {
-      const reviewCount = (matchResults.matches?.length || 0) + (matchResults.noMatches?.length || 0);
-      reviewCountEl.textContent = reviewCount;
-      reviewLabelEl.textContent = 'to review';
-    } else {
-      reviewCountEl.textContent = '—';
-      reviewLabelEl.textContent = 'click Find Matches';
+    if (reviewCountEl && reviewLabelEl) {
+      if (matchResults) {
+        const reviewCount = (matchResults.matches?.length || 0) + (matchResults.noMatches?.length || 0);
+        reviewCountEl.textContent = reviewCount;
+        reviewLabelEl.textContent = 'to review';
+      } else {
+        reviewCountEl.textContent = '—';
+        reviewLabelEl.textContent = 'click Find Matches';
+      }
     }
 
     const sentCount = orders.filter(o => o.status === 'processed' || o.zoho_so_number).length;
-    document.getElementById('done-count').textContent = sentCount;
+    const doneEl = document.getElementById('done-count');
+    if (doneEl) doneEl.textContent = sentCount;
 
     updatePendingCount();
     updateSelectedDisplay();
@@ -941,14 +946,18 @@ const dashboardHTML = `
 
   function updateSelectedDisplay() {
     const count = selectedMatchIds.size;
-    document.getElementById('selectedCountDisplay').textContent = count;
-    document.getElementById('actionBarCount').textContent = count;
+    const countDisplay = document.getElementById('selectedCountDisplay');
+    const actionBarCount = document.getElementById('actionBarCount');
+    if (countDisplay) countDisplay.textContent = count;
+    if (actionBarCount) actionBarCount.textContent = count;
 
     const actionBar = document.getElementById('reviewActionBar');
-    if (count > 0) {
-      actionBar.classList.remove('hidden');
-    } else {
-      actionBar.classList.add('hidden');
+    if (actionBar) {
+      if (count > 0) {
+        actionBar.classList.remove('hidden');
+      } else {
+        actionBar.classList.add('hidden');
+      }
     }
   }
 
