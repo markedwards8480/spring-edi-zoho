@@ -163,6 +163,19 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_edi_orders_amended ON edi_orders(is_amended) WHERE is_amended = TRUE;
     `);
 
+    // Add selective field processing columns
+    await client.query(`
+      ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS is_partial BOOLEAN DEFAULT FALSE;
+      ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS fields_sent JSONB DEFAULT '{}';
+      ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS fields_pending JSONB DEFAULT '{}';
+      ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS line_items_sent JSONB DEFAULT '[]';
+      ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS line_items_pending JSONB DEFAULT '[]';
+      ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS field_overrides JSONB DEFAULT '{}';
+      ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS partial_processed_at TIMESTAMP;
+
+      CREATE INDEX IF NOT EXISTS idx_edi_orders_partial ON edi_orders(is_partial) WHERE is_partial = TRUE;
+    `);
+
     logger.info('Database tables initialized');
   } finally {
     client.release();

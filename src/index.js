@@ -956,27 +956,88 @@ app.post('/confirm-matches', async (req, res) => {
 
 app.post('/update-draft', async (req, res) => {
   try {
-    const { ediOrderId, zohoDraftId } = req.body;
-    
+    const { ediOrderId, zohoDraftId, fieldSelections } = req.body;
+
     const orderResult = await pool.query('SELECT * FROM edi_orders WHERE id = $1', [ediOrderId]);
     if (orderResult.rows.length === 0) return res.status(404).json({ success: false, error: 'Not found' });
-    
+
     const ediOrder = orderResult.rows[0];
     const parsed = ediOrder.parsed_data || {};
-    const items = parsed.items || [];
+    let items = parsed.items || [];
+
+    // Apply field selections if provided
+    const isPartial = fieldSelections?.isPartial === true;
+    const selectedFields = fieldSelections?.fields || {};
+    const overrides = fieldSelections?.overrides || {};
+    const selectedLineItems = fieldSelections?.lineItems;
+
+    // Filter line items if selective
+    if (selectedLineItems && Array.isArray(selectedLineItems) && selectedLineItems.length < items.length) {
+      items = items.filter((_, idx) => selectedLineItems.includes(idx));
+      logger.info('Selective line items', {
+        orderId: ediOrderId,
+        originalCount: parsed.items.length,
+        selectedCount: items.length
+      });
+    }
+
     const totalAmount = items.reduce((sum, item) => sum + ((item.quantityOrdered || 0) * (item.unitPrice || 0)), 0);
     const totalUnits = items.reduce((sum, item) => sum + (item.quantityOrdered || 0), 0);
-    
+
     const ZohoClient = require('./zoho');
     const zoho = new ZohoClient();
-    
-    const updated = await zoho.updateDraftWithEdiData(zohoDraftId, ediOrder);
-    
+
+    // Pass field selections and overrides to the Zoho update
+    const updated = await zoho.updateDraftWithEdiData(zohoDraftId, ediOrder, {
+      selectedFields,
+      overrides,
+      selectedItems: items
+    });
+
+    // Determine status based on partial or full
+    const newStatus = isPartial ? 'partial' : 'processed';
+
+    // Track what was sent vs pending
+    const fieldsSent = { ...selectedFields };
+    const fieldsPending = {};
+    if (isPartial) {
+      ['shipDate', 'cancelDate', 'customer', 'poNumber'].forEach(f => {
+        if (selectedFields[f] === false) {
+          fieldsPending[f] = true;
+        }
+      });
+    }
+
     await pool.query(`
-      UPDATE edi_orders 
-      SET status = 'processed', zoho_so_id = $1, zoho_so_number = $2, matched_draft_id = $3, processed_at = NOW()
-      WHERE id = $4
-    `, [updated.salesorder_id, updated.salesorder_number, zohoDraftId, ediOrderId]);
+      UPDATE edi_orders
+      SET status = $1,
+          zoho_so_id = $2,
+          zoho_so_number = $3,
+          matched_draft_id = $4,
+          processed_at = NOW(),
+          is_partial = $5,
+          fields_sent = $6,
+          fields_pending = $7,
+          line_items_sent = $8,
+          line_items_pending = $9,
+          field_overrides = $10,
+          partial_processed_at = CASE WHEN $5 THEN NOW() ELSE NULL END
+      WHERE id = $11
+    `, [
+      newStatus,
+      updated.salesorder_id,
+      updated.salesorder_number,
+      zohoDraftId,
+      isPartial,
+      JSON.stringify(fieldsSent),
+      JSON.stringify(fieldsPending),
+      JSON.stringify(selectedLineItems || []),
+      JSON.stringify(isPartial && selectedLineItems ?
+        (parsed.items || []).map((_, i) => i).filter(i => !selectedLineItems.includes(i)) :
+        []),
+      JSON.stringify(overrides),
+      ediOrderId
+    ]);
     
     // Record in permanent audit log
     await auditLogger.recordZohoSend({

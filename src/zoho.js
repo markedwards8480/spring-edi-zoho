@@ -1037,10 +1037,16 @@ class ZohoClient {
 
   /**
    * Update a Zoho draft with EDI data
+   * @param {string} salesorderId - Zoho sales order ID
+   * @param {object} ediOrder - EDI order data
+   * @param {object} options - Optional: { selectedFields, overrides, selectedItems }
    */
-  async updateDraftWithEdiData(salesorderId, ediOrder) {
+  async updateDraftWithEdiData(salesorderId, ediOrder, options = {}) {
     const parsed = ediOrder.parsed_data || {};
-    const ediItems = parsed.items || [];
+    const { selectedFields = {}, overrides = {}, selectedItems } = options;
+
+    // Use selectedItems if provided, otherwise use all items
+    const ediItems = selectedItems || parsed.items || [];
 
     const lineItems = ediItems.map(item => ({
       name: item.productIds?.sku || item.productIds?.vendorItemNumber || 'Item',
@@ -1051,10 +1057,34 @@ class ZohoClient {
 
     const updateData = {
       reference_number: ediOrder.edi_order_number,
-      shipment_date: parsed.dates?.shipNotBefore || undefined,
-      notes: `Updated from EDI ${ediOrder.edi_order_number} on ${new Date().toISOString()}`,
-      line_items: lineItems
+      notes: `Updated from EDI ${ediOrder.edi_order_number} on ${new Date().toISOString()}`
     };
+
+    // Apply selected fields (only include if selected or not specified = default to include)
+    if (selectedFields.shipDate !== false) {
+      // Check for override first
+      updateData.shipment_date = overrides.shipDate || parsed.dates?.shipNotBefore || undefined;
+    }
+
+    // Cancel date goes to custom field (if your Zoho has one) - check if selected
+    if (selectedFields.cancelDate !== false && (overrides.cancelDate || parsed.dates?.cancelDate)) {
+      // Note: Zoho Books doesn't have a native cancel date field
+      // You may need to use a custom field - adjust field name as needed
+      // updateData.cf_cancel_date = overrides.cancelDate || parsed.dates?.cancelDate;
+    }
+
+    // Only include line items if there are any selected
+    if (lineItems.length > 0) {
+      updateData.line_items = lineItems;
+    }
+
+    // Log what we're sending
+    logger.info('Updating Zoho draft with selective fields', {
+      salesorderId,
+      fieldsIncluded: Object.keys(updateData),
+      lineItemCount: lineItems.length,
+      hasOverrides: Object.keys(overrides).length > 0
+    });
 
     return await this.updateSalesOrder(salesorderId, updateData);
   }

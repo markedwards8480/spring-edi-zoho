@@ -128,6 +128,12 @@ const dashboardHTML = `
         <select id="customerFilter" onchange="filterOrders()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="">All Customers</option>
         </select>
+        <select id="statusFilter" onchange="filterOrders()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">All Status</option>
+          <option value="pending">Pending</option>
+          <option value="partial">🟡 Partial (needs follow-up)</option>
+          <option value="amended">🔄 Amended</option>
+        </select>
         <label class="flex items-center gap-2 text-sm text-slate-600 ml-auto">
           <input type="checkbox" id="selectAll" onchange="toggleAll()" class="w-4 h-4 rounded border-slate-300">
           Select All
@@ -382,6 +388,10 @@ const dashboardHTML = `
   let selectedMatchDrafts = new Map();
   let flaggedMatchIds = new Set();
   let focusModeActive = false;
+
+  // Field selection state for selective processing
+  // Key: orderId, Value: { fields: { shipDate: true, cancelDate: true, ... }, overrides: { shipDate: '2026-03-01', ... }, lineItems: [0, 1, 2] }
+  let fieldSelections = new Map();
   let focusModeIndex = 0;
   let currentConfidenceFilter = '';
   let currentReviewCustomerFilter = '';
@@ -684,11 +694,20 @@ const dashboardHTML = `
   function renderOrders() {
     const search = (document.getElementById('searchBox')?.value || '').toLowerCase();
     const customer = document.getElementById('customerFilter')?.value || '';
+    const statusFilter = document.getElementById('statusFilter')?.value || '';
 
     let filtered = orders.filter(o => {
-      if (o.status === 'processed' || o.zoho_so_number) return false; // Hide processed
+      // Show pending and partial orders, hide fully processed
+      if (o.status === 'processed' && !o.is_partial) return false;
+      if (o.zoho_so_number && !o.is_partial) return false; // Hide fully processed
       if (search && !(o.edi_order_number || '').toLowerCase().includes(search)) return false;
       if (customer && o.edi_customer_name !== customer) return false;
+
+      // Status filter
+      if (statusFilter === 'pending' && (o.status !== 'pending' || o.is_partial)) return false;
+      if (statusFilter === 'partial' && !o.is_partial) return false;
+      if (statusFilter === 'amended' && !o.is_amended) return false;
+
       return true;
     });
 
@@ -723,8 +742,19 @@ const dashboardHTML = `
       const amendmentType = o.amendment_type || '';
       const is860 = o.transaction_type === '860' || amendmentType === '860_change';
 
+      // Check for partial processing
+      const isPartial = o.is_partial === true || o.status === 'partial';
+      const fieldsPending = o.fields_pending || {};
+      const pendingCount = Object.keys(fieldsPending).length;
+
+      // Determine border color priority: partial > amended > old > default
+      let borderClass = 'border-slate-200';
+      if (isPartial) borderClass = 'border-yellow-400 bg-yellow-50/30';
+      else if (isAmended) borderClass = 'border-orange-300 bg-orange-50/30';
+      else if (isOld) borderClass = 'border-amber-200 bg-amber-50/30';
+
       return \`
-        <div class="bg-white rounded-xl border \${isAmended ? 'border-orange-300 bg-orange-50/30' : (isOld ? 'border-amber-200 bg-amber-50/30' : 'border-slate-200')} p-4 hover:border-slate-300 transition">
+        <div class="bg-white rounded-xl border \${borderClass} p-4 hover:border-slate-300 transition">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-4">
               <input type="checkbox" \${selectedIds.has(o.id) ? 'checked' : ''} onchange="toggleSelect(\${o.id})"
@@ -733,10 +763,11 @@ const dashboardHTML = `
                 <div class="font-semibold text-slate-800">\${o.edi_order_number || 'N/A'}</div>
                 <div class="text-sm text-slate-500">\${o.edi_customer_name || 'Unknown'}</div>
               </div>
+              \${isPartial ? '<span class="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-medium">🟡 Partial' + (pendingCount > 0 ? ' (' + pendingCount + ' pending)' : '') + '</span>' : ''}
               \${isAmended ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">🔄 Amended' + (amendmentCount > 1 ? ' (' + amendmentCount + 'x)' : '') + '</span>' : ''}
               \${is860 ? '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">860 Change</span>' : ''}
               \${hasPrepack ? '<span class="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">📦 Prepack</span>' : ''}
-              \${isOld && !isAmended ? '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">' + daysSinceImport + ' days old</span>' : ''}
+              \${isOld && !isAmended && !isPartial ? '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">' + daysSinceImport + ' days old</span>' : ''}
             </div>
             <div class="flex items-center gap-8">
               <div class="text-right">
@@ -1179,6 +1210,161 @@ const dashboardHTML = `
   }
 
   // ============================================================
+  // FIELD SELECTION FOR SELECTIVE PROCESSING
+  // ============================================================
+
+  // Initialize field selections for an order (all fields selected by default)
+  function initFieldSelection(orderId, ediOrder, zohoDraft) {
+    if (!fieldSelections.has(orderId)) {
+      fieldSelections.set(orderId, {
+        fields: {
+          shipDate: true,
+          cancelDate: true,
+          customer: true,
+          poNumber: true
+        },
+        overrides: {},
+        lineItems: (ediOrder.items || []).map((_, idx) => idx), // All line items selected by default
+        allLinesSelected: true
+      });
+    }
+    return fieldSelections.get(orderId);
+  }
+
+  // Toggle a field selection
+  function toggleFieldSelection(orderId, fieldName) {
+    const sel = fieldSelections.get(orderId);
+    if (sel) {
+      sel.fields[fieldName] = !sel.fields[fieldName];
+      updateFieldSelectionUI(orderId);
+    }
+  }
+
+  // Set a field override value
+  function setFieldOverride(orderId, fieldName, value) {
+    const sel = fieldSelections.get(orderId);
+    if (sel) {
+      if (value === null || value === undefined || value === '') {
+        delete sel.overrides[fieldName];
+      } else {
+        sel.overrides[fieldName] = value;
+      }
+      updateFieldSelectionUI(orderId);
+    }
+  }
+
+  // Toggle a line item selection
+  function toggleLineItemSelection(orderId, lineIdx) {
+    const sel = fieldSelections.get(orderId);
+    if (sel) {
+      const idx = sel.lineItems.indexOf(lineIdx);
+      if (idx >= 0) {
+        sel.lineItems.splice(idx, 1);
+      } else {
+        sel.lineItems.push(lineIdx);
+        sel.lineItems.sort((a, b) => a - b);
+      }
+      sel.allLinesSelected = false;
+      updateFieldSelectionUI(orderId);
+    }
+  }
+
+  // Toggle all line items
+  function toggleAllLineItems(orderId, totalLines) {
+    const sel = fieldSelections.get(orderId);
+    if (sel) {
+      if (sel.lineItems.length === totalLines) {
+        sel.lineItems = [];
+        sel.allLinesSelected = false;
+      } else {
+        sel.lineItems = Array.from({ length: totalLines }, (_, i) => i);
+        sel.allLinesSelected = true;
+      }
+      updateFieldSelectionUI(orderId);
+    }
+  }
+
+  // Check if all fields are selected (no partial)
+  function isFullSelection(orderId, totalLines) {
+    const sel = fieldSelections.get(orderId);
+    if (!sel) return true;
+    const allFieldsSelected = Object.values(sel.fields).every(v => v === true);
+    const allLinesSelected = sel.lineItems.length === totalLines;
+    const noOverrides = Object.keys(sel.overrides).length === 0;
+    return allFieldsSelected && allLinesSelected && noOverrides;
+  }
+
+  // Get count of selected fields/items
+  function getSelectionCounts(orderId, totalLines) {
+    const sel = fieldSelections.get(orderId);
+    if (!sel) return { fields: 4, lines: totalLines, hasOverrides: false };
+    return {
+      fields: Object.values(sel.fields).filter(v => v).length,
+      lines: sel.lineItems.length,
+      hasOverrides: Object.keys(sel.overrides).length > 0
+    };
+  }
+
+  // Update the UI to reflect current selections
+  function updateFieldSelectionUI(orderId) {
+    // Re-render focus mode if we're in it
+    if (focusModeActive) {
+      showFocusMode();
+    }
+  }
+
+  // Show inline edit input for a field
+  function showFieldEdit(orderId, fieldName, currentValue) {
+    const inputId = 'edit-' + orderId + '-' + fieldName;
+    const existingInput = document.getElementById(inputId);
+    if (existingInput) {
+      existingInput.focus();
+      return;
+    }
+
+    // Create inline edit
+    const container = document.getElementById('field-cell-' + orderId + '-' + fieldName);
+    if (container) {
+      const isDate = fieldName.toLowerCase().includes('date');
+      container.innerHTML = \`
+        <input type="\${isDate ? 'date' : 'text'}" id="\${inputId}"
+          value="\${currentValue || ''}"
+          class="w-full px-2 py-1 border border-blue-400 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          onblur="saveFieldEdit(\${orderId}, '\${fieldName}')"
+          onkeydown="if(event.key==='Enter'){saveFieldEdit(\${orderId}, '\${fieldName}')}"
+        >
+      \`;
+      document.getElementById(inputId).focus();
+    }
+  }
+
+  // Save inline edit
+  function saveFieldEdit(orderId, fieldName) {
+    const inputId = 'edit-' + orderId + '-' + fieldName;
+    const input = document.getElementById(inputId);
+    if (input) {
+      const newValue = input.value;
+      setFieldOverride(orderId, fieldName, newValue);
+    }
+  }
+
+  // Reset field selection to all selected
+  function resetFieldSelection(orderId, totalLines) {
+    fieldSelections.set(orderId, {
+      fields: {
+        shipDate: true,
+        cancelDate: true,
+        customer: true,
+        poNumber: true
+      },
+      overrides: {},
+      lineItems: Array.from({ length: totalLines }, (_, i) => i),
+      allLinesSelected: true
+    });
+    updateFieldSelectionUI(orderId);
+  }
+
+  // ============================================================
   // FOCUS MODE
   // ============================================================
   function openFocusMode(index) {
@@ -1327,55 +1513,89 @@ const dashboardHTML = `
         </div>
 
         \${!isNoMatch ? \`
-        <!-- Comparison Table -->
+        <!-- Field Selection Info -->
+        \${(() => {
+          const sel = initFieldSelection(edi.id, edi, zoho);
+          const counts = getSelectionCounts(edi.id, ediItems.length);
+          const isFull = isFullSelection(edi.id, ediItems.length);
+          return !isFull ? \`
+          <div class="mx-5 mt-4 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
+            <div class="flex items-center gap-2 text-sm text-amber-700">
+              <span>⚡</span>
+              <span><strong>Selective Processing:</strong> \${counts.fields}/4 fields, \${counts.lines}/\${ediItems.length} line items\${counts.hasOverrides ? ', with overrides' : ''}</span>
+            </div>
+            <button onclick="resetFieldSelection(\${edi.id}, \${ediItems.length})" class="text-xs text-amber-600 hover:text-amber-800 underline">Reset to All</button>
+          </div>
+          \` : '';
+        })()}
+
+        <!-- Comparison Table with Checkboxes -->
         <div class="px-5 py-4">
+          <div class="text-xs text-slate-500 mb-2 flex items-center gap-2">
+            <span>💡</span>
+            <span>Check/uncheck fields to include in update. Click ✏️ to override a value.</span>
+          </div>
           <table class="w-full text-sm">
             <thead>
               <tr class="border-b border-slate-200">
+                <th class="text-center py-2 font-medium text-slate-500 w-12">Send</th>
                 <th class="text-left py-2 font-medium text-slate-500 w-28">Field</th>
-                <th class="text-left py-2 font-medium text-blue-600 bg-blue-50/50 px-3 rounded-tl-lg">EDI Order</th>
+                <th class="text-left py-2 font-medium text-blue-600 bg-blue-50/50 px-3 rounded-tl-lg">EDI Value</th>
                 <th class="text-left py-2 font-medium text-green-600 bg-green-50/50 px-3">Zoho Draft</th>
-                <th class="text-center py-2 font-medium text-slate-500 w-24">Status</th>
+                <th class="text-center py-2 font-medium text-slate-500 w-20">Status</th>
+                <th class="text-center py-2 font-medium text-slate-500 w-16">Edit</th>
               </tr>
             </thead>
             <tbody>
-              <tr class="border-b border-slate-100">
-                <td class="py-2.5 text-slate-500">PO / Ref</td>
-                <td class="py-2.5 bg-blue-50/30 px-3">\${edi.poNumber}</td>
-                <td class="py-2.5 bg-green-50/30 px-3">\${zoho?.reference || zoho?.number || '-'}</td>
-                <td class="py-2.5 text-center">\${details.po ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
-              </tr>
-              <tr class="border-b border-slate-100">
-                <td class="py-2.5 text-slate-500">Customer</td>
-                <td class="py-2.5 bg-blue-50/30 px-3">\${edi.customer}</td>
-                <td class="py-2.5 bg-green-50/30 px-3">\${zoho?.customer || '-'}</td>
-                <td class="py-2.5 text-center">\${details.customer ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
-              </tr>
-              <tr class="border-b border-slate-100">
-                <td class="py-2.5 text-slate-500">Ship Date</td>
-                <td class="py-2.5 bg-blue-50/30 px-3">\${ediShipDate}</td>
-                <td class="py-2.5 bg-green-50/30 px-3">\${zohoShipDate}</td>
-                <td class="py-2.5 text-center">\${details.shipDate ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
-              </tr>
-              <tr class="border-b border-slate-100">
-                <td class="py-2.5 text-slate-500">Cancel Date</td>
-                <td class="py-2.5 bg-blue-50/30 px-3">\${ediCancelDate}</td>
-                <td class="py-2.5 bg-green-50/30 px-3">\${zohoCancelDate}</td>
-                <td class="py-2.5 text-center">\${details.cancelDate ? '<span class="text-green-600">✓ match</span>' : !zoho?.cancelDate ? '<span class="text-amber-500">⚠️ missing</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
-              </tr>
-              <tr class="border-b border-slate-100">
+              \${(() => {
+                const sel = fieldSelections.get(edi.id) || { fields: {}, overrides: {} };
+                const rows = [
+                  { key: 'poNumber', label: 'PO / Ref', ediVal: edi.poNumber, zohoVal: zoho?.reference || zoho?.number || '-', match: details.po, editable: false },
+                  { key: 'customer', label: 'Customer', ediVal: edi.customer, zohoVal: zoho?.customer || '-', match: details.customer, editable: false },
+                  { key: 'shipDate', label: 'Ship Date', ediVal: ediShipDate, zohoVal: zohoShipDate, match: details.shipDate, editable: true, rawVal: edi.shipDate },
+                  { key: 'cancelDate', label: 'Cancel Date', ediVal: ediCancelDate, zohoVal: zohoCancelDate, match: details.cancelDate, editable: true, rawVal: edi.cancelDate }
+                ];
+                return rows.map(r => {
+                  const isChecked = sel.fields[r.key] !== false;
+                  const hasOverride = sel.overrides[r.key] !== undefined;
+                  const displayVal = hasOverride ? sel.overrides[r.key] : r.ediVal;
+                  return \`
+                  <tr class="border-b border-slate-100 \${!isChecked ? 'opacity-50 bg-slate-50' : ''}">
+                    <td class="py-2.5 text-center">
+                      <input type="checkbox" \${isChecked ? 'checked' : ''} onchange="toggleFieldSelection(\${edi.id}, '\${r.key}')"
+                        class="w-4 h-4 rounded border-slate-300 text-blue-500 cursor-pointer">
+                    </td>
+                    <td class="py-2.5 text-slate-500">\${r.label}</td>
+                    <td class="py-2.5 bg-blue-50/30 px-3" id="field-cell-\${edi.id}-\${r.key}">
+                      \${hasOverride ? '<span class="text-purple-600 font-medium">' + displayVal + '</span> <span class="text-xs text-purple-400">(edited)</span>' : displayVal}
+                    </td>
+                    <td class="py-2.5 bg-green-50/30 px-3">\${r.zohoVal}</td>
+                    <td class="py-2.5 text-center">\${r.match ? '<span class="text-green-600">✓</span>' : '<span class="text-amber-500">⚠️</span>'}</td>
+                    <td class="py-2.5 text-center">
+                      \${r.editable ? '<button onclick="showFieldEdit(' + edi.id + ', \\'' + r.key + '\\', \\'' + (r.rawVal || '') + '\\')" class="text-slate-400 hover:text-blue-600">✏️</button>' : '<span class="text-slate-300">—</span>'}
+                    </td>
+                  </tr>
+                  \`;
+                }).join('');
+              })()}
+              <tr class="border-b border-slate-100 bg-slate-50">
+                <td class="py-2.5 text-center text-slate-400">—</td>
                 <td class="py-2.5 text-slate-500">Units</td>
                 <td class="py-2.5 bg-blue-50/30 px-3 font-semibold">\${(edi.totalUnits || 0).toLocaleString()}</td>
                 <td class="py-2.5 bg-green-50/30 px-3 font-semibold">\${(zoho?.totalUnits || 0).toLocaleString()}</td>
-                <td class="py-2.5 text-center">\${details.totalUnits ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+                <td class="py-2.5 text-center">\${details.totalUnits ? '<span class="text-green-600">✓</span>' : '<span class="text-amber-500">⚠️</span>'}</td>
+                <td class="py-2.5 text-center"><span class="text-slate-300">—</span></td>
               </tr>
-              <tr class="border-b border-slate-100">
+              <tr class="border-b border-slate-100 bg-slate-50">
+                <td class="py-2.5 text-center text-slate-400">—</td>
                 <td class="py-2.5 text-slate-500">Amount</td>
                 <td class="py-2.5 bg-blue-50/30 px-3 font-semibold">$\${(edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
                 <td class="py-2.5 bg-green-50/30 px-3 font-semibold">$\${(zoho?.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-                <td class="py-2.5 text-center">\${details.totalAmount ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+                <td class="py-2.5 text-center">\${details.totalAmount ? '<span class="text-green-600">✓</span>' : '<span class="text-amber-500">⚠️</span>'}</td>
+                <td class="py-2.5 text-center"><span class="text-slate-300">—</span></td>
               </tr>
               <tr class="border-b border-slate-100">
+                <td class="py-2.5 text-center text-slate-400">—</td>
                 <td class="py-2.5 text-slate-500">Base Style</td>
                 <td class="py-2.5 bg-blue-50/30 px-3">
                   \${ediStyles.length > 0 ? ediStyles.map(s => '<span class="inline-block bg-slate-100 px-2 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-'}
@@ -1383,22 +1603,19 @@ const dashboardHTML = `
                 <td class="py-2.5 bg-green-50/30 px-3">
                   \${zohoStyles.length > 0 ? zohoStyles.map(s => '<span class="inline-block bg-slate-100 px-2 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-'}
                 </td>
-                <td class="py-2.5 text-center">\${details.baseStyle ? '<span class="text-green-600">✓ match</span>' : '<span class="text-amber-500">⚠️ diff</span>'}</td>
+                <td class="py-2.5 text-center">\${details.baseStyle ? '<span class="text-green-600">✓</span>' : '<span class="text-amber-500">⚠️</span>'}</td>
+                <td class="py-2.5 text-center"><span class="text-slate-300">—</span></td>
               </tr>
               \${details.upcMatch ? \`
               <tr class="border-b border-slate-100 bg-green-50/50">
+                <td class="py-2.5 text-center text-slate-400">—</td>
                 <td class="py-2.5 text-slate-500">UPC Match</td>
                 <td class="py-2.5 px-3 text-xs font-mono">\${details.ediUpcCount || 0} UPCs</td>
                 <td class="py-2.5 px-3 text-xs font-mono">\${details.zohoUpcCount || 0} UPCs</td>
-                <td class="py-2.5 text-center"><span class="text-green-600 font-medium">✓ \${details.upcMatchCount || 0} matched</span></td>
+                <td class="py-2.5 text-center"><span class="text-green-600 font-medium">✓ \${details.upcMatchCount || 0}</span></td>
+                <td class="py-2.5 text-center"><span class="text-slate-300">—</span></td>
               </tr>
               \` : ''}
-              <tr class="border-b border-slate-100">
-                <td class="py-2.5 text-slate-500">Suffix</td>
-                <td class="py-2.5 bg-blue-50/30 px-3 text-xs text-slate-600">\${details.ediSuffixes || '-'}</td>
-                <td class="py-2.5 bg-green-50/30 px-3 text-xs text-slate-600">\${details.zohoSuffixes || '-'}</td>
-                <td class="py-2.5 text-center">\${details.styleSuffix ? '<span class="text-green-600">✓ match</span>' : details.baseStyle ? '<span class="text-amber-500">⚠️ diff</span>' : '-'}</td>
-              </tr>
             </tbody>
           </table>
         </div>
@@ -1439,33 +1656,42 @@ const dashboardHTML = `
             <div class="grid grid-cols-2 gap-4">
               <!-- EDI Items -->
               <div>
-                <div class="text-sm font-semibold text-blue-600 mb-2">EDI Order</div>
+                <div class="text-sm font-semibold text-blue-600 mb-2 flex items-center justify-between">
+                  <span>EDI Order Line Items</span>
+                  <label class="flex items-center gap-1 text-xs font-normal text-slate-500 cursor-pointer">
+                    <input type="checkbox" \${(() => { const sel = fieldSelections.get(edi.id); return sel && sel.lineItems.length === ediItems.length ? 'checked' : ''; })()}
+                      onchange="toggleAllLineItems(\${edi.id}, \${ediItems.length})" class="w-3 h-3 rounded">
+                    All
+                  </label>
+                </div>
                 <table class="w-full text-xs">
                   <thead class="bg-blue-50">
                     <tr>
+                      <th class="text-center px-1 py-1 w-8">✓</th>
                       <th class="text-left px-2 py-1">Style</th>
-                      <th class="text-left px-2 py-1">UPC</th>
                       <th class="text-left px-2 py-1">Color</th>
                       <th class="text-center px-2 py-1">UOM</th>
                       <th class="text-right px-2 py-1">Qty</th>
-                      <th class="text-right px-2 py-1">Pack $</th>
                       <th class="text-right px-2 py-1">Unit $</th>
                     </tr>
                   </thead>
                   <tbody>
-                    \${ediItems.slice(0, 10).map(item => {
+                    \${ediItems.slice(0, 15).map((item, idx) => {
                       const uom = item.unitOfMeasure || 'EA';
                       const isPrepack = item.isPrepack || uom === 'AS' || uom === 'ST';
-                      const upc = item.productIds?.upc || item.productIds?.gtin || '';
                       const sku = item.productIds?.sku || item.productIds?.vendorItemNumber || item.style || '';
-                      const skuIsUpc = sku && /^\\d{10,14}$/.test(sku);
                       const packPrice = item.packPrice || 0;
                       const unitPrice = item.unitPrice || 0;
                       const packQty = item.packQty || 1;
+                      const sel = fieldSelections.get(edi.id);
+                      const isSelected = sel ? sel.lineItems.includes(idx) : true;
                       return \`
-                      <tr class="border-t border-slate-100 \${isPrepack ? 'bg-purple-50/30' : ''}">
-                        <td class="px-2 py-1">\${skuIsUpc ? '<span class="text-slate-400 text-xs">UPC→</span>' : (sku || '-')}</td>
-                        <td class="px-2 py-1 font-mono text-xs">\${skuIsUpc ? sku : (upc || '-')}</td>
+                      <tr class="border-t border-slate-100 \${isPrepack ? 'bg-purple-50/30' : ''} \${!isSelected ? 'opacity-40 bg-slate-50' : ''}">
+                        <td class="px-1 py-1 text-center">
+                          <input type="checkbox" \${isSelected ? 'checked' : ''} onchange="toggleLineItemSelection(\${edi.id}, \${idx})"
+                            class="w-3 h-3 rounded border-slate-300 text-blue-500 cursor-pointer">
+                        </td>
+                        <td class="px-2 py-1">\${sku || '-'}</td>
                         <td class="px-2 py-1">\${item.color || '-'}</td>
                         <td class="px-2 py-1 text-center">
                           <span class="\${isPrepack ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'} px-1.5 py-0.5 rounded text-xs">\${uom}</span>
@@ -1475,12 +1701,8 @@ const dashboardHTML = `
                           \${item.quantityOrdered || 0}
                           \${isPrepack && packQty > 1 ? '<div class="text-xs text-slate-400">=' + (item.totalUnits || item.quantityOrdered * packQty) + ' ea</div>' : ''}
                         </td>
-                        <td class="px-2 py-1 text-right \${isPrepack ? 'text-purple-600' : 'text-slate-400'}">
-                          \${isPrepack ? '$' + packPrice.toFixed(2) : '-'}
-                        </td>
                         <td class="px-2 py-1 text-right font-medium \${item.unitPriceCalculated ? 'text-blue-600' : ''}">
                           $\${unitPrice.toFixed(2)}
-                          \${item.unitPriceCalculated ? '<span class="text-xs text-blue-400">*</span>' : ''}
                         </td>
                       </tr>
                     \`}).join('')}
@@ -1578,9 +1800,18 @@ const dashboardHTML = `
             </button>\` : ''}
           </div>
           \${!isNoMatch ? \`
-          <button onclick="focusModeApprove()" class="px-6 py-2.5 \${selectedMatchIds.has(edi.id) ? 'bg-green-600' : 'bg-green-500'} text-white rounded-lg hover:bg-green-600 transition font-medium flex items-center gap-2">
-            \${selectedMatchIds.has(edi.id) ? '✓ Selected' : '✓ Select & Next →'}
-          </button>
+          \${(() => {
+            const isFull = isFullSelection(edi.id, ediItems.length);
+            const counts = getSelectionCounts(edi.id, ediItems.length);
+            const isSelected = selectedMatchIds.has(edi.id);
+            if (isSelected) {
+              return '<button onclick="focusModeApprove()" class="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium flex items-center gap-2">✓ Selected' + (!isFull ? ' (Partial)' : '') + '</button>';
+            } else if (isFull) {
+              return '<button onclick="focusModeApprove()" class="px-6 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-medium flex items-center gap-2">✓ Select All & Next →</button>';
+            } else {
+              return '<button onclick="focusModeApprove()" class="px-6 py-2.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition font-medium flex items-center gap-2">⚡ Select Partial (' + counts.fields + '/4 fields, ' + counts.lines + '/' + ediItems.length + ' items) →</button>';
+            }
+          })()}
           \` : \`
           <button onclick="createZohoOrder(\${edi.id})" class="px-6 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-medium flex items-center gap-2">
             ➕ Create in Zoho
@@ -1985,10 +2216,24 @@ const dashboardHTML = `
       progressFill.style.width = percent + '%';
 
       try {
+        // Include field selections if any
+        const sel = fieldSelections.get(ediOrderId);
+        const ediItems = match.ediOrder.items || [];
+        const requestBody = {
+          ediOrderId: ediOrderId,
+          zohoDraftId: draftId,
+          fieldSelections: sel ? {
+            fields: sel.fields,
+            overrides: sel.overrides,
+            lineItems: sel.lineItems,
+            isPartial: !isFullSelection(ediOrderId, ediItems.length)
+          } : null
+        };
+
         const res = await fetch('/update-draft', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ediOrderId: ediOrderId, zohoDraftId: draftId })
+          body: JSON.stringify(requestBody)
         });
         const data = await res.json();
         if (data.success) {
