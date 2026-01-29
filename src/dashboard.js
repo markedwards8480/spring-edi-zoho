@@ -107,7 +107,7 @@ const dashboardHTML = `
           </button>
           <button onclick="findMatchesForSelected()" id="findMatchesBtn"
             class="px-5 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2 font-medium">
-            🔍 Find Matches (<span id="pendingCountBtn">0</span>)
+            🔍 Find Matches for <span id="pendingCountBtn">0</span> orders
           </button>
         </div>
       </div>
@@ -516,11 +516,18 @@ const dashboardHTML = `
     if (stage === 'history') { loadActivityLog(); loadAuditStats(); }
     if (stage === 'settings') loadMappings();
     if (stage === 'review') {
-      // Always try to show list view when navigating to review
-      // showListView will handle empty state if no matches
-      updateFilterCounts();
-      updateReviewCustomerFilter();
-      showListView();
+      // If no matches in memory, try to load from session first
+      if (!matchResults || (!matchResults.matches?.length && !matchResults.noMatches?.length)) {
+        loadMatchesFromSession().then(() => {
+          updateFilterCounts();
+          updateReviewCustomerFilter();
+          showListView();
+        });
+      } else {
+        updateFilterCounts();
+        updateReviewCustomerFilter();
+        showListView();
+      }
     }
 
     // Save stage to session (debounced)
@@ -704,6 +711,28 @@ const dashboardHTML = `
       }
     } catch (e) {
       console.log('No saved session');
+    }
+  }
+
+  // Load just the matches from session (called when navigating to review tab)
+  async function loadMatchesFromSession() {
+    try {
+      const res = await fetch('/session');
+      const data = await res.json();
+      if (data.matchResults && (data.matchResults.matches?.length > 0 || data.matchResults.noMatches?.length > 0)) {
+        matchResults = data.matchResults;
+        selectedMatchIds = new Set(data.selectedMatchIds || []);
+        flaggedMatchIds = new Set(data.flaggedMatchIds || []);
+        selectedMatchDrafts = new Map(Object.entries(data.selectedMatchDrafts || {}).map(([k, v]) => [parseInt(k), v]));
+        focusModeIndex = data.focusModeIndex || 0;
+        updateWorkflowCounts();
+        const matchCount = (matchResults.matches?.length || 0) + (matchResults.noMatches?.length || 0);
+        if (matchCount > 0) {
+          console.log('Loaded ' + matchCount + ' matches from session');
+        }
+      }
+    } catch (e) {
+      console.log('Could not load matches from session:', e);
     }
   }
 
@@ -1047,7 +1076,7 @@ const dashboardHTML = `
       toast('Error: ' + e.message);
     } finally {
       btn.disabled = false;
-      btn.innerHTML = '🔍 Find Matches (<span id="pendingCountBtn">' + (selectedIds.size || orders.filter(o => o.status === 'pending' && !o.zoho_so_number).length) + '</span>)';
+      btn.innerHTML = '🔍 Find Matches for <span id="pendingCountBtn">' + (selectedIds.size || orders.filter(o => o.status === 'pending' && !o.zoho_so_number).length) + '</span> orders';
     }
   }
 
