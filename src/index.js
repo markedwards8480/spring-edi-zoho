@@ -1,13 +1,178 @@
 require('dotenv').config();
 const express = require('express');
 const cron = require('node-cron');
-const { initDatabase, pool } = require('./db');
+const db = require('./db');
+const { initDatabase, pool } = db;
 const { processEDIOrders } = require('./processor');
 const { setupOAuthRoutes } = require('./oauth');
 const logger = require('./logger');
 const dashboardHTML = require('./dashboard');
 const { AuditLogger, ACTIONS, SEVERITY } = require('./audit-logger');
 const ZohoDraftsCache = require('./zoho-cache');
+
+// Helper function to detect discrepancies between EDI and Zoho data
+function detectDiscrepancies(ediOrder, zohoDraft) {
+  const discrepancies = [];
+  const parsed = ediOrder.parsed_data || {};
+  const ediDates = parsed.dates || {};
+
+  // Format dates for comparison
+  const formatDate = (d) => {
+    if (!d) return null;
+    try {
+      const date = new Date(d);
+      return date.toISOString().split('T')[0];
+    } catch { return d; }
+  };
+
+  const ediShipDate = formatDate(ediDates.shipNotBefore || ediDates.shipDate);
+  const zohoShipDate = formatDate(zohoDraft?.shipment_date);
+  const ediCancelDate = formatDate(ediDates.cancelDate || ediDates.cancelAfter);
+  const zohoCancelDate = formatDate(zohoDraft?.cf_cancel_date);
+
+  const baseData = {
+    ediOrderId: ediOrder.id,
+    zohoSoId: zohoDraft?.salesorder_id,
+    zohoSoNumber: zohoDraft?.salesorder_number,
+    customerName: ediOrder.edi_customer_name || parsed.buyer?.name,
+    poNumber: ediOrder.edi_order_number || ediOrder.customer_po
+  };
+
+  // Ship Date
+  if (ediShipDate && zohoShipDate && ediShipDate !== zohoShipDate) {
+    discrepancies.push({
+      ...baseData,
+      fieldName: 'ship_date',
+      fieldLabel: 'Ship Date',
+      ediValue: ediShipDate,
+      zohoValue: zohoShipDate,
+      discrepancyType: 'date_mismatch',
+      severity: 'warning'
+    });
+  }
+
+  // Cancel Date
+  if (ediCancelDate && zohoCancelDate && ediCancelDate !== zohoCancelDate) {
+    discrepancies.push({
+      ...baseData,
+      fieldName: 'cancel_date',
+      fieldLabel: 'Cancel Date',
+      ediValue: ediCancelDate,
+      zohoValue: zohoCancelDate,
+      discrepancyType: 'date_mismatch',
+      severity: 'warning'
+    });
+  }
+
+  // PO Number / Reference
+  const ediPo = ediOrder.edi_order_number || ediOrder.customer_po || '';
+  const zohoPo = zohoDraft?.reference_number || zohoDraft?.reference || '';
+  if (ediPo && zohoPo && ediPo.toLowerCase() !== zohoPo.toLowerCase()) {
+    discrepancies.push({
+      ...baseData,
+      fieldName: 'po_number',
+      fieldLabel: 'PO / Reference',
+      ediValue: ediPo,
+      zohoValue: zohoPo,
+      discrepancyType: 'reference_mismatch',
+      severity: 'warning'
+    });
+  }
+
+  // Calculate totals
+  const ediItems = parsed.items || [];
+  const zohoItems = zohoDraft?.line_items || [];
+
+  const ediTotal = ediItems.reduce((sum, i) => sum + ((i.quantityOrdered || 0) * (i.unitPrice || 0)), 0);
+  const zohoTotal = parseFloat(zohoDraft?.total || 0);
+  if (Math.abs(ediTotal - zohoTotal) > 0.01) {
+    discrepancies.push({
+      ...baseData,
+      fieldName: 'total_amount',
+      fieldLabel: 'Total Amount',
+      ediValue: `$${ediTotal.toFixed(2)}`,
+      zohoValue: `$${zohoTotal.toFixed(2)}`,
+      discrepancyType: 'amount_mismatch',
+      severity: Math.abs(ediTotal - zohoTotal) > 100 ? 'error' : 'warning'
+    });
+  }
+
+  const ediUnits = ediItems.reduce((sum, i) => sum + (i.quantityOrdered || 0), 0);
+  const zohoUnits = zohoItems.reduce((sum, i) => sum + (parseInt(i.quantity) || 0), 0);
+  if (ediUnits !== zohoUnits) {
+    discrepancies.push({
+      ...baseData,
+      fieldName: 'total_units',
+      fieldLabel: 'Total Units',
+      ediValue: ediUnits.toString(),
+      zohoValue: zohoUnits.toString(),
+      discrepancyType: 'quantity_mismatch',
+      severity: 'warning'
+    });
+  }
+
+  // Line item count
+  if (ediItems.length !== zohoItems.length) {
+    discrepancies.push({
+      ...baseData,
+      fieldName: 'line_item_count',
+      fieldLabel: 'Line Items Count',
+      ediValue: ediItems.length.toString(),
+      zohoValue: zohoItems.length.toString(),
+      discrepancyType: 'line_count_mismatch',
+      severity: 'info'
+    });
+  }
+
+  // Check for line-item level discrepancies (by SKU/UPC)
+  const zohoItemsByUpc = new Map();
+  for (const zi of zohoItems) {
+    const upc = zi.cf_upc || zi.upc || '';
+    if (upc) zohoItemsByUpc.set(upc, zi);
+  }
+
+  for (let idx = 0; idx < ediItems.length; idx++) {
+    const ei = ediItems[idx];
+    const ediUpc = ei.productIds?.upc || '';
+    const sku = ei.productIds?.sku || ei.productIds?.vendorItemNumber || ei.style || '';
+
+    if (ediUpc && zohoItemsByUpc.has(ediUpc)) {
+      const zi = zohoItemsByUpc.get(ediUpc);
+      // Check quantity
+      if (ei.quantityOrdered !== parseInt(zi.quantity || 0)) {
+        discrepancies.push({
+          ...baseData,
+          fieldName: 'line_item_qty',
+          fieldLabel: `Qty for ${sku || ediUpc}`,
+          ediValue: (ei.quantityOrdered || 0).toString(),
+          zohoValue: (zi.quantity || 0).toString(),
+          discrepancyType: 'line_qty_mismatch',
+          severity: 'warning',
+          lineItemIndex: idx,
+          lineItemSku: sku || ediUpc
+        });
+      }
+      // Check price
+      const ediPrice = ei.unitPrice || 0;
+      const zohoPrice = parseFloat(zi.rate || 0);
+      if (Math.abs(ediPrice - zohoPrice) > 0.01) {
+        discrepancies.push({
+          ...baseData,
+          fieldName: 'line_item_price',
+          fieldLabel: `Price for ${sku || ediUpc}`,
+          ediValue: `$${ediPrice.toFixed(2)}`,
+          zohoValue: `$${zohoPrice.toFixed(2)}`,
+          discrepancyType: 'line_price_mismatch',
+          severity: 'warning',
+          lineItemIndex: idx,
+          lineItemSku: sku || ediUpc
+        });
+      }
+    }
+  }
+
+  return discrepancies;
+}
 
 const app = express();
 app.use(express.json());
@@ -788,12 +953,24 @@ app.post('/confirm-matches', async (req, res) => {
         const ediShipDate = parsed.dates?.shipDate || parsed.dates?.shipNotBefore || null;
         const ediCancelDate = parsed.dates?.cancelDate || parsed.dates?.shipNotAfter || null;
 
-        // Get the current Zoho draft data before updating (for audit trail)
+        // Get the current Zoho draft data before updating (for audit trail and discrepancy detection)
         let zohoBeforeData = null;
         try {
           zohoBeforeData = await zoho.getSalesOrderDetails(match.zohoDraftId);
         } catch (e) {
           logger.warn('Could not fetch Zoho draft before update', { draftId: match.zohoDraftId });
+        }
+
+        // Detect and log discrepancies before update
+        if (zohoBeforeData) {
+          const discrepancies = detectDiscrepancies(ediOrder, zohoBeforeData);
+          if (discrepancies.length > 0) {
+            logger.info('Discrepancies detected in bulk confirm', {
+              orderId: match.ediOrderId,
+              count: discrepancies.length
+            });
+            await db.logMultipleDiscrepancies(discrepancies);
+          }
         }
 
         const updated = await zoho.updateDraftWithEdiData(match.zohoDraftId, ediOrder);
@@ -986,6 +1163,27 @@ app.post('/update-draft', async (req, res) => {
 
     const ZohoClient = require('./zoho');
     const zoho = new ZohoClient();
+
+    // Fetch Zoho draft data for discrepancy detection
+    let zohoDraft = null;
+    try {
+      zohoDraft = await zoho.getSalesOrderDetails(zohoDraftId);
+    } catch (e) {
+      logger.warn('Could not fetch Zoho draft for discrepancy check', { draftId: zohoDraftId });
+    }
+
+    // Detect and log discrepancies before update
+    if (zohoDraft) {
+      const discrepancies = detectDiscrepancies(ediOrder, zohoDraft);
+      if (discrepancies.length > 0) {
+        logger.info('Discrepancies detected', {
+          orderId: ediOrderId,
+          count: discrepancies.length,
+          types: [...new Set(discrepancies.map(d => d.discrepancyType))]
+        });
+        await db.logMultipleDiscrepancies(discrepancies);
+      }
+    }
 
     // Pass field selections and overrides to the Zoho update
     const updated = await zoho.updateDraftWithEdiData(zohoDraftId, ediOrder, {
@@ -1380,6 +1578,114 @@ app.get('/audit/check/:poNumber', async (req, res) => {
     const result = await auditLogger.wasOrderSentToZoho(req.params.poNumber);
     res.json({ success: true, alreadySent: !!result, details: result });
   } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================
+// DISCREPANCY TRACKING ENDPOINTS
+// ============================================================
+
+// Get discrepancies with filters
+app.get('/discrepancies', async (req, res) => {
+  try {
+    const filters = {
+      startDate: req.query.startDate,
+      endDate: req.query.endDate,
+      customerName: req.query.customer,
+      discrepancyType: req.query.type,
+      poNumber: req.query.po,
+      resolved: req.query.resolved === 'true' ? true : req.query.resolved === 'false' ? false : undefined,
+      limit: req.query.limit ? parseInt(req.query.limit) : 500
+    };
+    const discrepancies = await db.getDiscrepancies(filters);
+    res.json({ success: true, discrepancies, count: discrepancies.length });
+  } catch (error) {
+    logger.error('Error fetching discrepancies:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get discrepancy summary/stats
+app.get('/discrepancies/summary', async (req, res) => {
+  try {
+    const filters = {
+      startDate: req.query.startDate,
+      endDate: req.query.endDate
+    };
+    const summary = await db.getDiscrepancySummary(filters);
+    res.json({ success: true, summary });
+  } catch (error) {
+    logger.error('Error fetching discrepancy summary:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Export discrepancies to Excel format
+app.get('/discrepancies/export', async (req, res) => {
+  try {
+    const filters = {
+      startDate: req.query.startDate,
+      endDate: req.query.endDate,
+      customerName: req.query.customer,
+      discrepancyType: req.query.type,
+      resolved: req.query.resolved === 'true' ? true : req.query.resolved === 'false' ? false : undefined
+    };
+    const discrepancies = await db.getDiscrepancies(filters);
+
+    // Return data formatted for Excel export (client will generate the file)
+    const exportData = discrepancies.map(d => ({
+      'Date Detected': new Date(d.detected_at).toLocaleDateString(),
+      'Time': new Date(d.detected_at).toLocaleTimeString(),
+      'Customer': d.customer_name || '',
+      'PO Number': d.po_number || '',
+      'Zoho SO#': d.zoho_so_number || '',
+      'Field': d.field_label || d.field_name,
+      'EDI Value': d.edi_value || '',
+      'Zoho Value': d.zoho_value || '',
+      'Type': d.discrepancy_type || 'mismatch',
+      'Severity': d.severity || 'warning',
+      'Line Item SKU': d.line_item_sku || '',
+      'Status': d.resolved_at ? 'Resolved' : 'Open',
+      'Resolved By': d.resolved_by || '',
+      'Resolution Notes': d.resolution_notes || ''
+    }));
+
+    res.json({ success: true, data: exportData, count: exportData.length });
+  } catch (error) {
+    logger.error('Error exporting discrepancies:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Resolve a discrepancy
+app.post('/discrepancies/:id/resolve', async (req, res) => {
+  try {
+    const { resolvedBy, notes } = req.body;
+    const result = await db.resolveDiscrepancy(
+      parseInt(req.params.id),
+      resolvedBy || 'user',
+      notes || ''
+    );
+    res.json({ success: true, discrepancy: result });
+  } catch (error) {
+    logger.error('Error resolving discrepancy:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Resolve all discrepancies for an order
+app.post('/discrepancies/resolve-order/:ediOrderId', async (req, res) => {
+  try {
+    const { resolvedBy, notes } = req.body;
+    const results = await db.resolveDiscrepanciesForOrder(
+      parseInt(req.params.ediOrderId),
+      resolvedBy || 'user',
+      notes || 'Resolved with order'
+    );
+    res.json({ success: true, resolved: results.length, discrepancies: results });
+  } catch (error) {
+    logger.error('Error resolving discrepancies for order:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

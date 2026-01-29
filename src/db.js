@@ -176,6 +176,36 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_edi_orders_partial ON edi_orders(is_partial) WHERE is_partial = TRUE;
     `);
 
+    // Create discrepancies table for tracking EDI vs Zoho mismatches
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS discrepancies (
+        id SERIAL PRIMARY KEY,
+        edi_order_id INTEGER REFERENCES edi_orders(id),
+        zoho_so_id VARCHAR(100),
+        zoho_so_number VARCHAR(100),
+        customer_name VARCHAR(500),
+        po_number VARCHAR(100),
+        field_name VARCHAR(100) NOT NULL,
+        field_label VARCHAR(200),
+        edi_value TEXT,
+        zoho_value TEXT,
+        discrepancy_type VARCHAR(50),
+        severity VARCHAR(20) DEFAULT 'warning',
+        detected_at TIMESTAMP DEFAULT NOW(),
+        resolved_at TIMESTAMP,
+        resolved_by VARCHAR(100),
+        resolution_notes TEXT,
+        line_item_index INTEGER,
+        line_item_sku VARCHAR(200)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_discrepancies_edi_order ON discrepancies(edi_order_id);
+      CREATE INDEX IF NOT EXISTS idx_discrepancies_detected ON discrepancies(detected_at);
+      CREATE INDEX IF NOT EXISTS idx_discrepancies_resolved ON discrepancies(resolved_at);
+      CREATE INDEX IF NOT EXISTS idx_discrepancies_customer ON discrepancies(customer_name);
+      CREATE INDEX IF NOT EXISTS idx_discrepancies_type ON discrepancies(discrepancy_type);
+    `);
+
     logger.info('Database tables initialized');
   } finally {
     client.release();
@@ -498,6 +528,160 @@ async function getReplacedDrafts(limit = 100) {
   return result.rows;
 }
 
+// Discrepancy tracking functions
+async function logDiscrepancy(data) {
+  const result = await pool.query(
+    `INSERT INTO discrepancies
+     (edi_order_id, zoho_so_id, zoho_so_number, customer_name, po_number,
+      field_name, field_label, edi_value, zoho_value, discrepancy_type, severity,
+      line_item_index, line_item_sku)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+     RETURNING id`,
+    [
+      data.ediOrderId,
+      data.zohoSoId,
+      data.zohoSoNumber,
+      data.customerName,
+      data.poNumber,
+      data.fieldName,
+      data.fieldLabel || data.fieldName,
+      data.ediValue?.toString() || '',
+      data.zohoValue?.toString() || '',
+      data.discrepancyType || 'mismatch',
+      data.severity || 'warning',
+      data.lineItemIndex || null,
+      data.lineItemSku || null
+    ]
+  );
+  return result.rows[0];
+}
+
+async function logMultipleDiscrepancies(discrepancies) {
+  if (!discrepancies || discrepancies.length === 0) return [];
+
+  const results = [];
+  for (const d of discrepancies) {
+    const result = await logDiscrepancy(d);
+    results.push(result);
+  }
+  return results;
+}
+
+async function getDiscrepancies(filters = {}) {
+  let query = `
+    SELECT d.*, e.filename, e.parsed_data
+    FROM discrepancies d
+    LEFT JOIN edi_orders e ON d.edi_order_id = e.id
+    WHERE 1=1
+  `;
+  const params = [];
+  let paramIndex = 1;
+
+  if (filters.startDate) {
+    query += ` AND d.detected_at >= $${paramIndex++}`;
+    params.push(filters.startDate);
+  }
+  if (filters.endDate) {
+    query += ` AND d.detected_at <= $${paramIndex++}`;
+    params.push(filters.endDate);
+  }
+  if (filters.customerName) {
+    query += ` AND d.customer_name ILIKE $${paramIndex++}`;
+    params.push(`%${filters.customerName}%`);
+  }
+  if (filters.discrepancyType) {
+    query += ` AND d.discrepancy_type = $${paramIndex++}`;
+    params.push(filters.discrepancyType);
+  }
+  if (filters.resolved === true) {
+    query += ` AND d.resolved_at IS NOT NULL`;
+  } else if (filters.resolved === false) {
+    query += ` AND d.resolved_at IS NULL`;
+  }
+  if (filters.poNumber) {
+    query += ` AND d.po_number ILIKE $${paramIndex++}`;
+    params.push(`%${filters.poNumber}%`);
+  }
+
+  query += ` ORDER BY d.detected_at DESC`;
+
+  if (filters.limit) {
+    query += ` LIMIT $${paramIndex++}`;
+    params.push(filters.limit);
+  }
+
+  const result = await pool.query(query, params);
+  return result.rows;
+}
+
+async function getDiscrepancySummary(filters = {}) {
+  let whereClause = '1=1';
+  const params = [];
+  let paramIndex = 1;
+
+  if (filters.startDate) {
+    whereClause += ` AND detected_at >= $${paramIndex++}`;
+    params.push(filters.startDate);
+  }
+  if (filters.endDate) {
+    whereClause += ` AND detected_at <= $${paramIndex++}`;
+    params.push(filters.endDate);
+  }
+
+  const result = await pool.query(`
+    SELECT
+      COUNT(*) as total_discrepancies,
+      COUNT(DISTINCT edi_order_id) as orders_with_discrepancies,
+      COUNT(DISTINCT customer_name) as customers_affected,
+      COUNT(*) FILTER (WHERE resolved_at IS NOT NULL) as resolved_count,
+      COUNT(*) FILTER (WHERE resolved_at IS NULL) as unresolved_count,
+      discrepancy_type,
+      COUNT(*) as type_count
+    FROM discrepancies
+    WHERE ${whereClause}
+    GROUP BY discrepancy_type
+  `, params);
+
+  // Also get overall totals
+  const totals = await pool.query(`
+    SELECT
+      COUNT(*) as total,
+      COUNT(DISTINCT edi_order_id) as unique_orders,
+      COUNT(DISTINCT customer_name) as unique_customers,
+      COUNT(*) FILTER (WHERE resolved_at IS NOT NULL) as resolved,
+      COUNT(*) FILTER (WHERE resolved_at IS NULL) as unresolved
+    FROM discrepancies
+    WHERE ${whereClause}
+  `, params);
+
+  return {
+    byType: result.rows,
+    totals: totals.rows[0]
+  };
+}
+
+async function resolveDiscrepancy(discrepancyId, resolvedBy, notes) {
+  const result = await pool.query(
+    `UPDATE discrepancies
+     SET resolved_at = NOW(), resolved_by = $2, resolution_notes = $3
+     WHERE id = $1
+     RETURNING *`,
+    [discrepancyId, resolvedBy, notes]
+  );
+  return result.rows[0];
+}
+
+async function resolveDiscrepanciesForOrder(ediOrderId, resolvedBy, notes) {
+  const result = await pool.query(
+    `UPDATE discrepancies
+     SET resolved_at = NOW(), resolved_by = $2, resolution_notes = $3
+     WHERE edi_order_id = $1 AND resolved_at IS NULL
+     RETURNING *`,
+    [ediOrderId, resolvedBy, notes]
+  );
+  return result.rows;
+}
+
 module.exports = {
   pool,
   initDatabase,
@@ -515,5 +699,12 @@ module.exports = {
   getProcessingLogs,
   getZohoSentOrders,
   saveReplacedDraft,
-  getReplacedDrafts
+  getReplacedDrafts,
+  // Discrepancy tracking
+  logDiscrepancy,
+  logMultipleDiscrepancies,
+  getDiscrepancies,
+  getDiscrepancySummary,
+  resolveDiscrepancy,
+  resolveDiscrepanciesForOrder
 };

@@ -350,7 +350,7 @@ const dashboardHTML = `
         </div>
 
         <!-- Re-parse Orders -->
-        <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
           <h3 class="text-lg font-semibold text-slate-800 mb-2">Re-parse Orders</h3>
           <p class="text-slate-500 mb-4">Re-process existing orders with updated CSV parsing logic (e.g., pack qty calculation from prices)</p>
           <div class="flex items-center gap-3">
@@ -362,6 +362,73 @@ const dashboardHTML = `
           <div id="reparseResults" class="mt-4 hidden">
             <div class="bg-slate-50 rounded-lg p-4 max-h-64 overflow-y-auto">
               <pre id="reparseResultsContent" class="text-sm text-slate-600 whitespace-pre-wrap"></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Discrepancy Reports -->
+        <div class="bg-white rounded-xl border border-slate-200 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-lg font-semibold text-slate-800">📊 Discrepancy Reports</h3>
+              <p class="text-slate-500 text-sm">Track and export EDI vs Zoho mismatches for sales team review</p>
+            </div>
+          </div>
+
+          <!-- Date Range Filter -->
+          <div class="flex items-center gap-4 mb-4 p-3 bg-slate-50 rounded-lg">
+            <div class="flex items-center gap-2">
+              <label class="text-sm text-slate-600">From:</label>
+              <input type="date" id="discrepancyStartDate" class="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-sm text-slate-600">To:</label>
+              <input type="date" id="discrepancyEndDate" class="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <button onclick="loadDiscrepancies()" class="px-4 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm font-medium">
+              🔍 Load
+            </button>
+            <button onclick="exportDiscrepanciesToExcel()" id="exportDiscrepanciesBtn" class="px-4 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm font-medium flex items-center gap-1">
+              📥 Export Excel
+            </button>
+          </div>
+
+          <!-- Summary Stats -->
+          <div id="discrepancySummary" class="grid grid-cols-4 gap-4 mb-4">
+            <div class="bg-slate-50 rounded-lg p-3 text-center">
+              <div class="text-2xl font-bold text-slate-800" id="discrepancyTotalCount">-</div>
+              <div class="text-xs text-slate-500">Total Discrepancies</div>
+            </div>
+            <div class="bg-amber-50 rounded-lg p-3 text-center">
+              <div class="text-2xl font-bold text-amber-600" id="discrepancyOpenCount">-</div>
+              <div class="text-xs text-slate-500">Unresolved</div>
+            </div>
+            <div class="bg-green-50 rounded-lg p-3 text-center">
+              <div class="text-2xl font-bold text-green-600" id="discrepancyResolvedCount">-</div>
+              <div class="text-xs text-slate-500">Resolved</div>
+            </div>
+            <div class="bg-blue-50 rounded-lg p-3 text-center">
+              <div class="text-2xl font-bold text-blue-600" id="discrepancyOrdersCount">-</div>
+              <div class="text-xs text-slate-500">Orders Affected</div>
+            </div>
+          </div>
+
+          <!-- Discrepancy List -->
+          <div id="discrepancyListContainer" class="border border-slate-200 rounded-lg overflow-hidden">
+            <div class="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
+              <span class="text-sm font-medium text-slate-600">Recent Discrepancies</span>
+              <select id="discrepancyTypeFilter" onchange="loadDiscrepancies()" class="text-sm border border-slate-300 rounded px-2 py-1">
+                <option value="">All Types</option>
+                <option value="date_mismatch">Date Mismatch</option>
+                <option value="amount_mismatch">Amount Mismatch</option>
+                <option value="quantity_mismatch">Quantity Mismatch</option>
+                <option value="reference_mismatch">Reference Mismatch</option>
+                <option value="line_qty_mismatch">Line Item Qty</option>
+                <option value="line_price_mismatch">Line Item Price</option>
+              </select>
+            </div>
+            <div id="discrepancyList" class="max-h-96 overflow-y-auto">
+              <div class="p-4 text-center text-slate-500 text-sm">Select a date range and click Load to view discrepancies</div>
             </div>
           </div>
         </div>
@@ -3187,6 +3254,188 @@ const dashboardHTML = `
     btn.disabled = false;
     btn.innerHTML = '🔄 Re-parse All Orders';
   }
+
+  // ============================================================
+  // DISCREPANCY REPORTS
+  // ============================================================
+  let discrepanciesData = [];
+
+  async function loadDiscrepancies() {
+    const startDate = document.getElementById('discrepancyStartDate')?.value || '';
+    const endDate = document.getElementById('discrepancyEndDate')?.value || '';
+    const typeFilter = document.getElementById('discrepancyTypeFilter')?.value || '';
+
+    const listEl = document.getElementById('discrepancyList');
+    listEl.innerHTML = '<div class="p-4 text-center text-slate-500 text-sm">Loading...</div>';
+
+    try {
+      // Build query params
+      const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate + 'T23:59:59');
+      if (typeFilter) params.append('type', typeFilter);
+
+      // Fetch discrepancies
+      const res = await fetch('/discrepancies?' + params.toString());
+      const data = await res.json();
+
+      if (!data.success) throw new Error(data.error);
+
+      discrepanciesData = data.discrepancies || [];
+
+      // Also fetch summary
+      const summaryRes = await fetch('/discrepancies/summary?' + params.toString());
+      const summaryData = await summaryRes.json();
+
+      if (summaryData.success && summaryData.summary) {
+        const totals = summaryData.summary.totals || {};
+        document.getElementById('discrepancyTotalCount').textContent = totals.total || 0;
+        document.getElementById('discrepancyOpenCount').textContent = totals.unresolved || 0;
+        document.getElementById('discrepancyResolvedCount').textContent = totals.resolved || 0;
+        document.getElementById('discrepancyOrdersCount').textContent = totals.unique_orders || 0;
+      }
+
+      // Render list
+      renderDiscrepancyList(discrepanciesData);
+
+    } catch (e) {
+      listEl.innerHTML = '<div class="p-4 text-center text-red-500 text-sm">Error: ' + e.message + '</div>';
+    }
+  }
+
+  function renderDiscrepancyList(discrepancies) {
+    const listEl = document.getElementById('discrepancyList');
+
+    if (!discrepancies || discrepancies.length === 0) {
+      listEl.innerHTML = '<div class="p-4 text-center text-slate-500 text-sm">No discrepancies found for the selected filters</div>';
+      return;
+    }
+
+    const typeColors = {
+      date_mismatch: 'bg-amber-100 text-amber-700',
+      amount_mismatch: 'bg-red-100 text-red-700',
+      quantity_mismatch: 'bg-orange-100 text-orange-700',
+      reference_mismatch: 'bg-blue-100 text-blue-700',
+      line_qty_mismatch: 'bg-purple-100 text-purple-700',
+      line_price_mismatch: 'bg-pink-100 text-pink-700',
+      line_count_mismatch: 'bg-slate-100 text-slate-700'
+    };
+
+    listEl.innerHTML = '<table class="w-full text-sm">' +
+      '<thead class="bg-slate-50 sticky top-0">' +
+        '<tr>' +
+          '<th class="text-left px-3 py-2 font-medium text-slate-600">Date</th>' +
+          '<th class="text-left px-3 py-2 font-medium text-slate-600">Customer</th>' +
+          '<th class="text-left px-3 py-2 font-medium text-slate-600">PO#</th>' +
+          '<th class="text-left px-3 py-2 font-medium text-slate-600">Field</th>' +
+          '<th class="text-left px-3 py-2 font-medium text-slate-600">EDI Value</th>' +
+          '<th class="text-left px-3 py-2 font-medium text-slate-600">Zoho Value</th>' +
+          '<th class="text-center px-3 py-2 font-medium text-slate-600">Type</th>' +
+          '<th class="text-center px-3 py-2 font-medium text-slate-600">Status</th>' +
+        '</tr>' +
+      '</thead>' +
+      '<tbody>' +
+        discrepancies.map(d => {
+          const date = new Date(d.detected_at).toLocaleDateString();
+          const typeClass = typeColors[d.discrepancy_type] || 'bg-slate-100 text-slate-700';
+          const statusClass = d.resolved_at ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
+          const status = d.resolved_at ? 'Resolved' : 'Open';
+          return '<tr class="border-t border-slate-100 hover:bg-slate-50">' +
+            '<td class="px-3 py-2 text-slate-500">' + date + '</td>' +
+            '<td class="px-3 py-2 truncate max-w-[150px]" title="' + (d.customer_name || '') + '">' + (d.customer_name || '-').substring(0, 25) + '</td>' +
+            '<td class="px-3 py-2 font-mono text-xs">' + (d.po_number || '-') + '</td>' +
+            '<td class="px-3 py-2">' + (d.field_label || d.field_name || '-') + '</td>' +
+            '<td class="px-3 py-2 font-mono text-xs bg-blue-50">' + (d.edi_value || '-') + '</td>' +
+            '<td class="px-3 py-2 font-mono text-xs bg-green-50">' + (d.zoho_value || '-') + '</td>' +
+            '<td class="px-3 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs ' + typeClass + '">' + (d.discrepancy_type || '-').replace(/_/g, ' ') + '</span></td>' +
+            '<td class="px-3 py-2 text-center"><span class="px-2 py-0.5 rounded text-xs ' + statusClass + '">' + status + '</span></td>' +
+          '</tr>';
+        }).join('') +
+      '</tbody>' +
+    '</table>';
+  }
+
+  async function exportDiscrepanciesToExcel() {
+    const startDate = document.getElementById('discrepancyStartDate')?.value || '';
+    const endDate = document.getElementById('discrepancyEndDate')?.value || '';
+    const typeFilter = document.getElementById('discrepancyTypeFilter')?.value || '';
+
+    const btn = document.getElementById('exportDiscrepanciesBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Exporting...';
+
+    try {
+      // Build query params
+      const params = new URLSearchParams();
+      if (startDate) params.append('startDate', startDate);
+      if (endDate) params.append('endDate', endDate + 'T23:59:59');
+      if (typeFilter) params.append('type', typeFilter);
+
+      const res = await fetch('/discrepancies/export?' + params.toString());
+      const data = await res.json();
+
+      if (!data.success) throw new Error(data.error);
+
+      if (!data.data || data.data.length === 0) {
+        toast('No discrepancies to export');
+        return;
+      }
+
+      // Generate CSV and trigger download
+      const headers = Object.keys(data.data[0]);
+      const csvContent = [
+        headers.join(','),
+        ...data.data.map(row =>
+          headers.map(h => {
+            const val = row[h] || '';
+            // Escape quotes and wrap in quotes if contains comma
+            const escaped = String(val).replace(/"/g, '""');
+            return escaped.includes(',') || escaped.includes('\\n') ? '"' + escaped + '"' : escaped;
+          }).join(',')
+        )
+      ].join('\\n');
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      const filename = 'discrepancy_report_' + (startDate || 'all') + '_' + (endDate || 'today') + '.csv';
+
+      link.setAttribute('href', url);
+      link.setAttribute('download', filename);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast('Exported ' + data.count + ' discrepancies to ' + filename);
+
+    } catch (e) {
+      toast('Export failed: ' + e.message);
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '📥 Export Excel';
+  }
+
+  // Set default date range (last 30 days)
+  function initDiscrepancyDateRange() {
+    const endDate = new Date().toISOString().split('T')[0];
+    const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const startEl = document.getElementById('discrepancyStartDate');
+    const endEl = document.getElementById('discrepancyEndDate');
+    if (startEl) startEl.value = startDate;
+    if (endEl) endEl.value = endDate;
+  }
+
+  // Initialize date range when settings page loads
+  const origShowStage = showStage;
+  showStage = function(stage, skipSave) {
+    if (stage === 'settings') {
+      setTimeout(initDiscrepancyDateRange, 100);
+    }
+    return origShowStage(stage, skipSave);
+  };
 
 </script>
 </body>
