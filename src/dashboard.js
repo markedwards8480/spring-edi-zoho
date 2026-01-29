@@ -2877,7 +2877,7 @@ const dashboardHTML = `
   // Highlight matching text (case-insensitive)
   function highlightMatch(text, term) {
     if (!term || !text) return text;
-    const escaped = term.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');
+    const escaped = term.replace(/[.*+?^\${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp('(' + escaped + ')', 'gi');
     return text.replace(regex, '<mark class="bg-yellow-300 px-0.5 rounded">$1</mark>');
   }
