@@ -821,6 +821,18 @@ const dashboardHTML = `
       const daysSinceImport = Math.floor((new Date() - importDate) / (1000 * 60 * 60 * 24));
       const isOld = daysSinceImport >= 3;
       const importedStr = formatDateWithTime(importDate);
+
+      // Age badge based on days since import
+      let ageBadge = '';
+      if (daysSinceImport === 0) {
+        ageBadge = '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">📅 Today</span>';
+      } else if (daysSinceImport === 1) {
+        ageBadge = '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">📅 1 day</span>';
+      } else if (daysSinceImport < 3) {
+        ageBadge = '<span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">📅 ' + daysSinceImport + ' days</span>';
+      } else {
+        ageBadge = '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">⚠️ ' + daysSinceImport + ' days</span>';
+      }
       const ediDate = o.parsed_data?.dates?.orderDate || o.parsed_data?.dates?.poDate || '';
       const ediDateStr = ediDate ? new Date(ediDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : 'N/A';
 
@@ -863,12 +875,7 @@ const dashboardHTML = `
               \${isAmended ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">🔄 Amended' + (amendmentCount > 1 ? ' (' + amendmentCount + 'x)' : '') + '</span>' : ''}
               \${is860 ? '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">860 Change</span>' : ''}
               \${hasPrepack ? '<span class="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">📦 Prepack</span>' : ''}
-              \${!isAmended && !isPartial ? (
-                daysSinceImport === 0 ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">📅 Today</span>' :
-                daysSinceImport === 1 ? '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">📅 1 day</span>' :
-                daysSinceImport < 3 ? '<span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">📅 ' + daysSinceImport + ' days</span>' :
-                '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">⚠️ ' + daysSinceImport + ' days</span>'
-              ) : ''}
+              \${!isAmended && !isPartial ? ageBadge : ''}
             </div>
             <div class="flex items-center gap-8">
               <div class="text-right">
