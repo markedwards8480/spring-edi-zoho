@@ -2687,21 +2687,29 @@ const dashboardHTML = `
                 <!-- Raw CSV Fields from Spring Systems -->
                 \${order.parsed_data?.rawCsvData ? \`
                 <div class="mb-4">
-                  <h4 class="font-semibold text-slate-700 mb-2">📄 Raw CSV Fields (Spring System)</h4>
+                  <div class="flex items-center justify-between mb-2">
+                    <h4 class="font-semibold text-slate-700">📄 Raw CSV Fields (Spring System)</h4>
+                    <div class="relative">
+                      <input type="text" id="rawDataSearch" placeholder="Search fields..."
+                        oninput="filterRawDataTable(this.value)"
+                        class="pl-8 pr-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-48">
+                      <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+                    </div>
+                  </div>
                   <div class="bg-white rounded-lg border max-h-80 overflow-auto">
-                    <table class="w-full text-sm">
+                    <table class="w-full text-sm" id="rawDataTable">
                       <thead class="bg-slate-100 sticky top-0">
                         <tr>
                           <th class="text-left px-3 py-2 text-slate-600 font-medium w-1/3">Field Name</th>
                           <th class="text-left px-3 py-2 text-slate-600 font-medium">Value</th>
                         </tr>
                       </thead>
-                      <tbody>
+                      <tbody id="rawDataTableBody">
                         \${Object.entries(order.parsed_data.rawCsvData)
                           .filter(([k, v]) => v !== null && v !== undefined && v !== '')
                           .sort((a, b) => a[0].localeCompare(b[0]))
                           .map(([key, value], idx) => \`
-                          <tr class="\${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'} border-b border-slate-100">
+                          <tr class="raw-data-row \${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'} border-b border-slate-100" data-field="\${key.toLowerCase()}" data-value="\${String(value).toLowerCase()}">
                             <td class="px-3 py-1.5 font-mono text-xs text-blue-700">\${key}</td>
                             <td class="px-3 py-1.5 text-slate-700">\${typeof value === 'string' && value.length > 100 ? value.substring(0, 100) + '...' : value}</td>
                           </tr>
@@ -2709,6 +2717,7 @@ const dashboardHTML = `
                       </tbody>
                     </table>
                   </div>
+                  <div id="rawDataSearchCount" class="text-xs text-slate-500 mt-1"></div>
                 </div>
                 \` : ''}
 
@@ -2748,6 +2757,43 @@ const dashboardHTML = `
     // Activate button
     document.querySelector('.tab-btn[data-tab="' + tabName + '"]')?.classList.add('active');
     document.querySelector('.tab-btn[data-tab="' + tabName + '"]')?.classList.remove('text-slate-500');
+
+    // Clear search when switching to raw tab
+    if (tabName === 'raw') {
+      const searchInput = document.getElementById('rawDataSearch');
+      if (searchInput) searchInput.value = '';
+      filterRawDataTable('');
+    }
+  }
+
+  // Filter raw data table based on search term
+  function filterRawDataTable(searchTerm) {
+    const rows = document.querySelectorAll('.raw-data-row');
+    const countEl = document.getElementById('rawDataSearchCount');
+    const term = searchTerm.toLowerCase().trim();
+    let visibleCount = 0;
+    let totalCount = rows.length;
+
+    rows.forEach(row => {
+      const field = row.getAttribute('data-field') || '';
+      const value = row.getAttribute('data-value') || '';
+
+      if (!term || field.includes(term) || value.includes(term)) {
+        row.style.display = '';
+        visibleCount++;
+      } else {
+        row.style.display = 'none';
+      }
+    });
+
+    // Update count display
+    if (countEl) {
+      if (term) {
+        countEl.textContent = visibleCount + ' of ' + totalCount + ' fields matching "' + searchTerm + '"';
+      } else {
+        countEl.textContent = totalCount + ' fields total';
+      }
+    }
   }
 
   // ============================================================
