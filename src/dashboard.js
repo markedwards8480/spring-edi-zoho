@@ -1765,6 +1765,15 @@ const dashboardHTML = `
               \` : '';
             })()}
 
+            <!-- Sync behavior note -->
+            <div class="bg-green-50 border border-green-200 rounded-lg p-2 mb-3 flex items-start gap-2">
+              <span class="text-green-600">🔒</span>
+              <div class="text-xs text-green-700">
+                <strong>Zoho items preserved:</strong> Only <span class="font-semibold">Qty</span> and <span class="font-semibold">Price</span> will be updated.
+                Your Zoho item names and SKUs stay unchanged. Items are matched by UPC.
+              </div>
+            </div>
+
             <div class="grid grid-cols-2 gap-4">
               <!-- EDI Items -->
               <div>
@@ -1825,14 +1834,17 @@ const dashboardHTML = `
               </div>
               <!-- Zoho Items -->
               <div>
-                <div class="text-sm font-semibold text-green-600 mb-2">Zoho Draft</div>
+                <div class="text-sm font-semibold text-green-600 mb-2 flex items-center gap-2">
+                  <span>Zoho Draft</span>
+                  <span class="text-xs font-normal text-green-500 bg-green-100 px-1.5 py-0.5 rounded">🔒 Items preserved</span>
+                </div>
                 <table class="w-full text-xs">
                   <thead class="bg-green-50">
                     <tr>
-                      <th class="text-left px-2 py-1">Item</th>
+                      <th class="text-left px-2 py-1">Item <span class="text-green-500">🔒</span></th>
                       <th class="text-left px-2 py-1">UPC</th>
-                      <th class="text-right px-2 py-1">Qty</th>
-                      <th class="text-right px-2 py-1">Rate</th>
+                      <th class="text-right px-2 py-1 text-blue-600">Qty ✎</th>
+                      <th class="text-right px-2 py-1 text-blue-600">Rate ✎</th>
                     </tr>
                   </thead>
                   <tbody>
