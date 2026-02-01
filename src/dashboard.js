@@ -966,7 +966,7 @@ const dashboardHTML = `
       const size = Math.max(Math.sqrt(pct) * 12, 10);
       const isActive = treemapFilter === customer;
 
-      html += '<div class="treemap-item ' + (isActive ? 'active' : '') + '" style="flex-basis:' + size + '%;background:' + colors[idx % colors.length] + '" onclick="filterByCustomer(\'' + customer.replace(/'/g, "\\'") + '\')">';
+      html += '<div class="treemap-item ' + (isActive ? 'active' : '') + '" style="flex-basis:' + size + '%;background:' + colors[idx % colors.length] + '" onclick="filterByCustomer(\\'' + customer.replace(/'/g, "\\\\'") + '\\')">';
       html += '<div class="treemap-label">' + customer + '</div>';
       html += '<div class="treemap-value">' + data.count + ' orders</div>';
       html += '<div class="treemap-stats">' + data.units.toLocaleString() + ' units · $' + Math.round(data.amount).toLocaleString() + '</div>';
