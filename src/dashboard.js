@@ -21,6 +21,13 @@ const dashboardHTML = `
     @keyframes spin { to { transform: rotate(360deg); } }
     .tab-btn.active { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
     .tab-btn { border-bottom: 2px solid transparent; }
+    .customer-treemap { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 16px; }
+    .treemap-item { padding: 8px; color: white; border-radius: 6px; cursor: pointer; transition: all 0.15s; min-width: 60px; flex-grow: 1; }
+    .treemap-item:hover { transform: scale(1.03); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .treemap-item.active { outline: 2px solid white; outline-offset: 2px; }
+    .treemap-label { font-weight: 600; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .treemap-value { font-size: 0.8rem; opacity: 0.9; }
+    .treemap-stats { font-size: 0.6875rem; opacity: 0.8; }
   </style>
 </head>
 <body class="bg-slate-50 min-h-screen">
@@ -138,6 +145,16 @@ const dashboardHTML = `
           <input type="checkbox" id="selectAll" onchange="toggleAll()" class="w-4 h-4 rounded border-slate-300">
           Select All
         </label>
+      </div>
+
+      <!-- Customer Treemap -->
+      <div class="mb-4">
+        <div class="flex items-center gap-2 text-slate-600 hover:text-slate-800 mb-2 cursor-pointer" onclick="toggleTreemap()">
+          <span id="treemapArrow">▼</span>
+          <span class="font-medium text-sm">📊 Orders by Customer</span>
+          <span class="text-xs text-slate-400">(click to filter)</span>
+        </div>
+        <div id="customerTreemap" class="customer-treemap"></div>
       </div>
 
       <!-- Order Cards -->
@@ -779,6 +796,8 @@ const dashboardHTML = `
     try {
       const res = await fetch('/orders');
       orders = await res.json();
+      window.currentOrders = orders;
+      buildCustomerTreemap(orders);
       renderOrders();
       updateCustomerFilter();
       updateWorkflowCounts();
@@ -898,6 +917,79 @@ const dashboardHTML = `
   }
 
   function filterOrders() { renderOrders(); }
+
+  // Customer Treemap Functions
+  var treemapFilter = null;
+
+  function toggleTreemap() {
+    const container = document.getElementById('customerTreemap');
+    const arrow = document.getElementById('treemapArrow');
+    if (container.style.display === 'none') {
+      container.style.display = 'flex';
+      arrow.textContent = '▼';
+    } else {
+      container.style.display = 'none';
+      arrow.textContent = '▶';
+    }
+  }
+
+  function buildCustomerTreemap(orders) {
+    const pendingOrders = orders.filter(o => o.status !== 'processed' && !o.zoho_so_number);
+    const customerData = {};
+
+    pendingOrders.forEach(o => {
+      const customer = o.edi_customer_name || 'Unknown';
+      if (!customerData[customer]) customerData[customer] = { count: 0, units: 0, amount: 0 };
+      customerData[customer].count++;
+
+      const parsed = typeof o.parsed_data === 'string' ? JSON.parse(o.parsed_data) : o.parsed_data;
+      if (parsed && parsed.items) {
+        parsed.items.forEach(item => {
+          customerData[customer].units += item.totalUnits || item.quantityOrdered || 0;
+          customerData[customer].amount += (item.unitPrice || 0) * (item.quantityOrdered || 0);
+        });
+      }
+    });
+
+    const sorted = Object.entries(customerData).sort((a, b) => {
+      const scoreA = a[1].count * 0.4 + (a[1].units / 1000) * 0.3 + (a[1].amount / 10000) * 0.3;
+      const scoreB = b[1].count * 0.4 + (b[1].units / 1000) * 0.3 + (b[1].amount / 10000) * 0.3;
+      return scoreB - scoreA;
+    });
+
+    const totalOrders = sorted.reduce((s, [_, d]) => s + d.count, 0);
+    const colors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#6366f1', '#14b8a6', '#ec4899'];
+
+    let html = '';
+    sorted.forEach(([customer, data], idx) => {
+      const pct = totalOrders > 0 ? (data.count / totalOrders * 100) : 0;
+      const size = Math.max(Math.sqrt(pct) * 12, 10);
+      const isActive = treemapFilter === customer;
+
+      html += '<div class="treemap-item ' + (isActive ? 'active' : '') + '" style="flex-basis:' + size + '%;background:' + colors[idx % colors.length] + '" onclick="filterByCustomer(\'' + customer.replace(/'/g, "\\'") + '\')">';
+      html += '<div class="treemap-label">' + customer + '</div>';
+      html += '<div class="treemap-value">' + data.count + ' orders</div>';
+      html += '<div class="treemap-stats">' + data.units.toLocaleString() + ' units · $' + Math.round(data.amount).toLocaleString() + '</div>';
+      html += '</div>';
+    });
+
+    document.getElementById('customerTreemap').innerHTML = html;
+  }
+
+  function filterByCustomer(customer) {
+    const customerDropdown = document.getElementById('customerFilter');
+
+    if (treemapFilter === customer) {
+      treemapFilter = null;
+      customerDropdown.value = '';
+    } else {
+      treemapFilter = customer;
+      customerDropdown.value = customer;
+    }
+
+    filterOrders();
+    buildCustomerTreemap(window.currentOrders);
+  }
 
   function toggleSelect(id) {
     selectedIds.has(id) ? selectedIds.delete(id) : selectedIds.add(id);
