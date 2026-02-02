@@ -3049,9 +3049,10 @@ const dashboardHTML = `
     const ediItems = edi.items || [];
     const zohoItems = zoho?.line_items || zoho?.items || [];
 
-    // Check for prepacks
+    // Check for prepacks - UOM of AS (assortment) or ST (set) indicates prepack
+    // Don't require packQty > 1 as it may not always be populated
     const prepackItems = ediItems.filter(i =>
-      (i.isPrepack || i.unitOfMeasure === 'AS' || i.unitOfMeasure === 'ST') && i.packQty > 1
+      i.isPrepack || i.unitOfMeasure === 'AS' || i.unitOfMeasure === 'ST'
     );
     const hasPrepack = prepackItems.length > 0;
 
@@ -3178,14 +3179,20 @@ const dashboardHTML = `
     // Prepack explanation - more detailed
     let prepackHTML = '';
     if (hasPrepack) {
+      // Check if any prepacks have packQty > 1 for showing calculation examples
+      const prepacksWithQty = prepackItems.filter(i => i.packQty > 1);
+      const examplesHTML = prepacksWithQty.length > 0
+        ? prepacksWithQty.slice(0, 3).map(item =>
+            '<p class="bg-white/50 rounded px-2 py-1 mt-1">Example: $' + (item.packPrice || 0).toFixed(2) + ' ÷ ' + (item.packQty || 1) + ' units = <strong>$' + (item.unitPrice || 0).toFixed(2) + '/ea</strong>' + (item.unitPriceCalculated ? ' <span class="text-purple-500">(calculated)</span>' : '') + '</p>'
+          ).join('')
+        : '<p class="bg-white/50 rounded px-2 py-1 mt-1">Items marked AS/ST are sold as assortments/sets</p>';
+
       prepackHTML = '<div class="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3">' +
         '<div class="flex items-center gap-2 text-purple-700 font-medium text-sm mb-2">📦 Pre-Pack Order (' + prepackItems.length + ' prepack line' + (prepackItems.length > 1 ? 's' : '') + ')</div>' +
         '<div class="text-xs text-purple-600 space-y-1">' +
-          '<p><strong>How it works:</strong> Customer orders by pack, we match by unit price</p>' +
-          '<p>• <strong>Pack Price</strong> ÷ <strong>Pack Qty</strong> = <strong>Unit Price</strong> (what we match to Zoho)</p>' +
-          prepackItems.slice(0, 3).map(item =>
-            '<p class="bg-white/50 rounded px-2 py-1 mt-1">Example: $' + (item.packPrice || 0).toFixed(2) + ' ÷ ' + (item.packQty || 1) + ' units = <strong>$' + (item.unitPrice || 0).toFixed(2) + '/ea</strong>' + (item.unitPriceCalculated ? ' <span class="text-purple-500">(calculated)</span>' : '') + '</p>'
-          ).join('') +
+          '<p><strong>How it works:</strong> Customer orders by pack/assortment, we match by unit price</p>' +
+          '<p>• <strong>UOM: AS</strong> = Assortment, <strong>ST</strong> = Set (multi-unit packs)</p>' +
+          examplesHTML +
         '</div></div>';
     }
 

@@ -436,16 +436,16 @@ class ZohoClient {
         const score = this.scoreMatch(ediOrder, draftForScoring, customerMappingLookup);
 
         // MATCHING RULES:
-        // Option 1: PO number matches (strongest signal) - score >= 30
-        // Option 2: Customer + Base Style both match - score >= 35
+        // Option 1: PO number matches (strongest signal)
+        // Option 2: Customer + Base Style BOTH match (required - customer alone is not enough)
         // Minimum threshold: 25 points to be considered a potential match
         const poMatches = score.details.po;
         const customerAndStyleMatch = score.details.customer && score.details.baseStyle;
-        const customerOnly = score.details.customer;
         const meetsThreshold = score.total >= 25;
 
-        // Include if it meets threshold AND has some relevance
-        if (meetsThreshold && (poMatches || customerAndStyleMatch || customerOnly)) {
+        // Include ONLY if: PO matches OR (customer AND base style both match)
+        // Customer alone is NOT sufficient - base style must match to avoid wrong orders
+        if (meetsThreshold && (poMatches || customerAndStyleMatch)) {
           potentialMatches.push({
             draft,
             score,
