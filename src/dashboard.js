@@ -21,13 +21,20 @@ const dashboardHTML = `
     @keyframes spin { to { transform: rotate(360deg); } }
     .tab-btn.active { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
     .tab-btn { border-bottom: 2px solid transparent; }
-    .customer-treemap { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 16px; }
-    .treemap-item { padding: 8px; color: white; border-radius: 6px; cursor: pointer; transition: all 0.15s; min-width: 60px; flex-grow: 1; }
-    .treemap-item:hover { transform: scale(1.03); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-    .treemap-item.active { outline: 2px solid white; outline-offset: 2px; }
-    .treemap-label { font-weight: 600; font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .treemap-value { font-size: 0.8rem; opacity: 0.9; }
-    .treemap-stats { font-size: 0.6875rem; opacity: 0.8; }
+    .inbox-layout { display: flex; gap: 24px; }
+    .inbox-sidebar { width: 280px; flex-shrink: 0; }
+    .inbox-main { flex: 1; min-width: 0; }
+    .sidebar-section { background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 16px; margin-bottom: 16px; }
+    .sidebar-header { font-weight: 600; font-size: 0.875rem; color: #334155; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .sidebar-header:hover { color: #1e293b; }
+    .sidebar-header .total { margin-left: auto; font-weight: 500; color: #64748b; }
+    .customer-treemap { display: flex; flex-direction: column; gap: 6px; }
+    .treemap-item { padding: 10px 12px; color: white; border-radius: 8px; cursor: pointer; transition: all 0.15s; display: flex; flex-direction: column; }
+    .treemap-item:hover { transform: translateX(4px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .treemap-item.active { outline: 2px solid #3b82f6; outline-offset: 2px; }
+    .treemap-label { font-weight: 600; font-size: 0.8125rem; margin-bottom: 2px; }
+    .treemap-value { font-size: 0.75rem; opacity: 0.95; }
+    .treemap-stats { font-size: 0.6875rem; opacity: 0.85; margin-top: 2px; }
   </style>
 </head>
 <body class="bg-slate-50 min-h-screen">
@@ -128,38 +135,46 @@ const dashboardHTML = `
         <button onclick="refreshZohoCache()" class="text-blue-600 hover:text-blue-800 font-medium">🔄 Refresh Zoho Data</button>
       </div>
 
-      <!-- Filters -->
-      <div class="flex items-center gap-4 mb-4">
-        <input type="text" id="searchBox" placeholder="Search PO#..." onkeyup="filterOrders()"
-          class="px-4 py-2 border border-slate-200 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <select id="customerFilter" onchange="filterOrders()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="">All Customers</option>
-        </select>
-        <select id="statusFilter" onchange="filterOrders()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-          <option value="">All Status</option>
-          <option value="pending">Pending</option>
-          <option value="partial">🟡 Partial (needs follow-up)</option>
-          <option value="amended">🔄 Amended</option>
-        </select>
-        <label class="flex items-center gap-2 text-sm text-slate-600 ml-auto">
-          <input type="checkbox" id="selectAll" onchange="toggleAll()" class="w-4 h-4 rounded border-slate-300">
-          Select All
-        </label>
-      </div>
-
-      <!-- Customer Treemap -->
-      <div class="mb-4">
-        <div class="flex items-center gap-2 text-slate-600 hover:text-slate-800 mb-2 cursor-pointer" onclick="toggleTreemap()">
-          <span id="treemapArrow">▼</span>
-          <span class="font-medium text-sm">📊 Orders by Customer</span>
-          <span class="text-xs text-slate-400">(click to filter)</span>
+      <!-- Two-column layout -->
+      <div class="inbox-layout">
+        <!-- Left Sidebar with Treemap -->
+        <div class="inbox-sidebar">
+          <div class="sidebar-section">
+            <div class="sidebar-header" onclick="toggleTreemap()">
+              <span id="treemapArrow">▼</span>
+              <span>📊 By Customer</span>
+              <span class="text-xs text-slate-400">(click to filter)</span>
+            </div>
+            <div id="customerTreemap" class="customer-treemap"></div>
+          </div>
         </div>
-        <div id="customerTreemap" class="customer-treemap"></div>
-      </div>
 
-      <!-- Order Cards -->
-      <div id="ordersContainer" class="space-y-3">
-        <div class="text-center py-12 text-slate-500">Loading orders...</div>
+        <!-- Main Content -->
+        <div class="inbox-main">
+          <!-- Filters -->
+          <div class="flex items-center gap-4 mb-4">
+            <input type="text" id="searchBox" placeholder="Search PO#..." onkeyup="filterOrders()"
+              class="px-4 py-2 border border-slate-200 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <select id="customerFilter" onchange="filterOrders()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">All Customers</option>
+            </select>
+            <select id="statusFilter" onchange="filterOrders()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="partial">🟡 Partial (needs follow-up)</option>
+              <option value="amended">🔄 Amended</option>
+            </select>
+            <label class="flex items-center gap-2 text-sm text-slate-600 ml-auto">
+              <input type="checkbox" id="selectAll" onchange="toggleAll()" class="w-4 h-4 rounded border-slate-300">
+              Select All
+            </label>
+          </div>
+
+          <!-- Order Cards -->
+          <div id="ordersContainer" class="space-y-3">
+            <div class="text-center py-12 text-slate-500">Loading orders...</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -951,25 +966,22 @@ const dashboardHTML = `
       }
     });
 
-    const sorted = Object.entries(customerData).sort((a, b) => {
-      const scoreA = a[1].count * 0.4 + (a[1].units / 1000) * 0.3 + (a[1].amount / 10000) * 0.3;
-      const scoreB = b[1].count * 0.4 + (b[1].units / 1000) * 0.3 + (b[1].amount / 10000) * 0.3;
-      return scoreB - scoreA;
-    });
-
-    const totalOrders = sorted.reduce((s, [_, d]) => s + d.count, 0);
+    const sorted = Object.entries(customerData).sort((a, b) => b[1].amount - a[1].amount);
+    const totalAmount = sorted.reduce((s, [_, d]) => s + d.amount, 0);
     const colors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#6366f1', '#14b8a6', '#ec4899'];
 
     let html = '';
     sorted.forEach(([customer, data], idx) => {
-      const pct = totalOrders > 0 ? (data.count / totalOrders * 100) : 0;
-      const size = Math.max(Math.sqrt(pct) * 12, 10);
       const isActive = treemapFilter === customer;
+      const pct = totalAmount > 0 ? (data.amount / totalAmount * 100).toFixed(1) : 0;
+      const amtStr = data.amount >= 1000000 ? '$' + (data.amount / 1000000).toFixed(2) + 'M'
+                   : data.amount >= 1000 ? '$' + (data.amount / 1000).toFixed(1) + 'K'
+                   : '$' + Math.round(data.amount).toLocaleString();
 
-      html += '<div class="treemap-item ' + (isActive ? 'active' : '') + '" style="flex-basis:' + size + '%;background:' + colors[idx % colors.length] + '" onclick="filterByCustomer(\\'' + customer.replace(/'/g, "\\\\'") + '\\')">';
+      html += '<div class="treemap-item ' + (isActive ? 'active' : '') + '" style="background:' + colors[idx % colors.length] + '" onclick="filterByCustomer(\\'' + customer.replace(/'/g, "\\\\'") + '\\')">';
       html += '<div class="treemap-label">' + customer + '</div>';
-      html += '<div class="treemap-value">' + data.count + ' orders</div>';
-      html += '<div class="treemap-stats">' + data.units.toLocaleString() + ' units · $' + Math.round(data.amount).toLocaleString() + '</div>';
+      html += '<div class="treemap-value">' + amtStr + '</div>';
+      html += '<div class="treemap-stats">' + data.count + ' orders · ' + data.units.toLocaleString() + ' units · ' + pct + '%</div>';
       html += '</div>';
     });
 
