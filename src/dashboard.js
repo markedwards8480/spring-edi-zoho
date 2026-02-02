@@ -3038,7 +3038,59 @@ const dashboardHTML = `
     }
 
     if (isNoMatch) {
-      contentEl.innerHTML = '<div class="text-center py-8"><div class="text-5xl mb-4">🔴</div><div class="text-xl font-semibold text-red-600 mb-2">No Zoho Match Found</div><div class="text-slate-500 mb-4">This EDI order does not have a matching draft in Zoho.</div><div class="bg-amber-50 border border-amber-200 rounded-lg p-4 max-w-md mx-auto text-left"><div class="font-medium text-amber-800 mb-2">Possible reasons:</div><ul class="text-sm text-amber-700 list-disc list-inside space-y-1"><li>Draft has not been created in Zoho yet</li><li>PO number does not match any draft reference</li><li>Customer name mismatch</li></ul></div></div>';
+      // Extract EDI details for "what we searched for"
+      const ediItems = edi?.items || [];
+      const ediStyles = [...new Set(ediItems.map(i => {
+        const sku = i.productIds?.sku || i.productIds?.vendorItemNumber || i.style || '';
+        const match = sku.match(/^(\\d{4,6}[A-Za-z]?)/);
+        return match ? match[1] : '';
+      }).filter(Boolean))];
+      const zohoCount = matchResults?.draftsChecked || 'unknown';
+
+      contentEl.innerHTML =
+        '<div class="text-center py-4">' +
+          '<div class="text-5xl mb-4">🔴</div>' +
+          '<div class="text-xl font-semibold text-red-600 mb-2">No Zoho Match Found</div>' +
+          '<div class="text-slate-500 mb-4">This EDI order does not have a matching draft in Zoho.</div>' +
+        '</div>' +
+
+        // What we searched for
+        '<div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">' +
+          '<div class="font-medium text-blue-800 mb-2">🔍 What we searched for:</div>' +
+          '<div class="text-sm text-blue-700 space-y-1">' +
+            '<div><strong>PO Number:</strong> ' + (edi?.poNumber || 'N/A') + '</div>' +
+            '<div><strong>Customer:</strong> ' + (edi?.customer || 'N/A') + '</div>' +
+            '<div><strong>Base Style(s):</strong> ' + (ediStyles.length > 0 ? ediStyles.join(', ') : 'None detected') + '</div>' +
+            '<div><strong>Ship Date:</strong> ' + (edi?.shipDate ? formatDate(edi.shipDate) : 'N/A') + '</div>' +
+          '</div>' +
+        '</div>' +
+
+        // Why no match
+        '<div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">' +
+          '<div class="font-medium text-amber-800 mb-2">❌ Why no match was found:</div>' +
+          '<div class="text-sm text-amber-700 space-y-2">' +
+            '<div class="flex items-start gap-2">' +
+              '<span class="text-red-500">✗</span>' +
+              '<span>No Zoho draft has PO/Reference = <strong>"' + (edi?.poNumber || '') + '"</strong></span>' +
+            '</div>' +
+            '<div class="flex items-start gap-2">' +
+              '<span class="text-red-500">✗</span>' +
+              '<span>No Zoho draft for <strong>' + (edi?.customer || 'this customer') + '</strong> with base style <strong>' + (ediStyles[0] || 'N/A') + '</strong></span>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+
+        // What to do
+        '<div class="bg-slate-50 border border-slate-200 rounded-lg p-4">' +
+          '<div class="font-medium text-slate-700 mb-2">💡 What to do:</div>' +
+          '<ul class="text-sm text-slate-600 space-y-1 list-disc list-inside">' +
+            '<li>Check if a draft exists in Zoho for this order</li>' +
+            '<li>Verify the PO number matches the Zoho reference field</li>' +
+            '<li>Ensure customer name and style match between systems</li>' +
+            '<li>Click <strong>Refresh Zoho Data</strong> if draft was just created</li>' +
+          '</ul>' +
+        '</div>';
+
       if (actionsEl) actionsEl.classList.add('hidden');
       return;
     }
