@@ -80,19 +80,7 @@ const dashboardHTML = `
 
         <svg class="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
 
-        <!-- Stage 2: Review -->
-        <button onclick="showStage('review')" id="stage-review"
-          class="stage-btn flex items-center gap-3 px-5 py-3 rounded-xl transition-all bg-blue-100 text-blue-700 border border-blue-300">
-          <span class="text-xl">🔍</span>
-          <div class="text-left">
-            <div class="font-medium">Review Matches</div>
-            <div class="text-sm opacity-70" id="review-count-container"><span id="review-count">—</span> <span id="review-count-label">click Find Matches</span></div>
-          </div>
-        </button>
-
-        <svg class="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-
-        <!-- Stage 3: Done -->
+        <!-- Stage 2: Done -->
         <button onclick="showStage('done')" id="stage-done"
           class="stage-btn flex items-center gap-3 px-5 py-3 rounded-xl transition-all bg-green-100 text-green-700 border border-green-300">
           <span class="text-xl">✅</span>
@@ -886,11 +874,28 @@ const dashboardHTML = `
       const fieldsPending = o.fields_pending || {};
       const pendingCount = Object.keys(fieldsPending).length;
 
+      // Check for match results
+      const match = matchResults?.matches?.find(m => m.ediOrder?.id === o.id);
+      const hasMatch = match && !match.isNoMatch && match.zohoDraft;
+      const matchConf = match?.confidence || 0;
+      const isNoMatch = match?.isNoMatch === true;
+
       // Determine border color priority: partial > amended > old > default
       let borderClass = 'border-slate-200';
       if (isPartial) borderClass = 'border-yellow-400 bg-yellow-50/30';
       else if (isAmended) borderClass = 'border-orange-300 bg-orange-50/30';
       else if (isOld) borderClass = 'border-amber-200 bg-amber-50/30';
+
+      // Match indicator badge
+      let matchBadge = '';
+      if (hasMatch) {
+        if (matchConf >= 100) matchBadge = '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">✓ 100% match</span>';
+        else if (matchConf >= 80) matchBadge = '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">✓ ' + matchConf + '% match</span>';
+        else if (matchConf >= 60) matchBadge = '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">⚠️ ' + matchConf + '% match</span>';
+        else matchBadge = '<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">⚠️ ' + matchConf + '% match</span>';
+      } else if (isNoMatch) {
+        matchBadge = '<span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">❌ No match</span>';
+      }
 
       return \`
         <div class="bg-white rounded-xl border \${borderClass} p-4 hover:border-slate-300 transition">
@@ -902,7 +907,8 @@ const dashboardHTML = `
                 <div class="font-semibold text-slate-800">\${o.edi_order_number || 'N/A'}</div>
                 <div class="text-sm text-slate-500">\${o.edi_customer_name || 'Unknown'}</div>
               </div>
-              <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">📅 Today</span>
+              \${ageBadge}
+              \${matchBadge}
               \${isPartial ? '<span class="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-medium">🟡 Partial' + (pendingCount > 0 ? ' (' + pendingCount + ' pending)' : '') + '</span>' : ''}
               \${isAmended ? '<span class="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">🔄 Amended' + (amendmentCount > 1 ? ' (' + amendmentCount + 'x)' : '') + '</span>' : ''}
               \${is860 ? '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">860 Change</span>' : ''}
@@ -1182,14 +1188,17 @@ const dashboardHTML = `
         updateReviewCustomerFilter();
         loadCacheStatus(); // Refresh the cache status display
         currentReviewCustomerFilter = ''; // Reset customer filter for new results
-        showStage('review');
-        showListView();
+
+        // Stay on inbox - user can click orders to see matches in modal
+        loadOrders(); // Refresh order list to show match indicators
 
         // Show appropriate toast message
+        const matchCount = data.matches?.length || 0;
+        const perfectCount = data.matches?.filter(m => m.confidence >= 100).length || 0;
         if (data.cacheRefreshed) {
-          toast('Zoho data refreshed • Found ' + (data.matches?.length || 0) + ' matches');
+          toast('Zoho data refreshed • Found ' + matchCount + ' matches (' + perfectCount + ' perfect)');
         } else {
-          toast('Found ' + (data.matches?.length || 0) + ' matches');
+          toast('✓ Found ' + matchCount + ' matches (' + perfectCount + ' perfect) - Click orders to review');
         }
       } else {
         toast('Error: ' + (data.error || 'Unknown'));
