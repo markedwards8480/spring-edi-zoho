@@ -2596,6 +2596,7 @@ const dashboardHTML = `
               <div class="flex gap-6">
                 <button onclick="showEdiTab('summary')" class="tab-btn active py-3 text-sm font-medium" data-tab="summary">Summary</button>
                 <button onclick="showEdiTab('lineitems')" class="tab-btn py-3 text-sm font-medium text-slate-500" data-tab="lineitems">📦 Line Items</button>
+                <button onclick="showEdiTab('matches'); loadOrderMatch(\${order.id})" class="tab-btn py-3 text-sm font-medium text-slate-500" data-tab="matches" id="matchesTab-\${order.id}">🔍 Matches</button>
                 \${order.is_amended ? '<button onclick="showEdiTab(\\'changes\\')" class="tab-btn py-3 text-sm font-medium text-orange-500" data-tab="changes">🔄 Changes (' + (order.amendment_count || 1) + ')</button>' : ''}
                 <button onclick="showEdiTab('raw')" class="tab-btn py-3 text-sm font-medium text-slate-500" data-tab="raw">All Raw Data</button>
               </div>
@@ -2878,10 +2879,28 @@ const dashboardHTML = `
                   </div>
                 </div>
               </div>
+
+              <!-- Matches Tab -->
+              <div id="edi-tab-matches" class="edi-tab-content hidden">
+                <div id="matchesContent-\${order.id}" class="matches-content">
+                  <div class="text-center py-8 text-slate-500">
+                    <div class="text-4xl mb-3">🔍</div>
+                    <div class="font-medium">Click to Find Zoho Match</div>
+                    <button onclick="loadOrderMatch(\${order.id})" class="mt-4 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-medium">
+                      Find Match
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div class="px-6 py-4 bg-slate-50 border-t">
+            <div class="px-6 py-4 bg-slate-50 border-t flex justify-between items-center">
               <button onclick="closeModal()" class="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700">Close</button>
+              <div id="matchActions-\${order.id}" class="hidden">
+                <button onclick="processMatchFromModal(\${order.id})" class="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-medium flex items-center gap-2">
+                  ✓ Process Match
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2912,6 +2931,169 @@ const dashboardHTML = `
       const searchInput = document.getElementById('rawDataSearch');
       if (searchInput) searchInput.value = '';
       filterRawDataTable('');
+    }
+  }
+
+  // Store matches found for individual orders in modal
+  let modalMatchCache = new Map();
+
+  // Load match for a single order (used in modal)
+  async function loadOrderMatch(orderId) {
+    const contentEl = document.getElementById('matchesContent-' + orderId);
+    const actionsEl = document.getElementById('matchActions-' + orderId);
+    const tabEl = document.getElementById('matchesTab-' + orderId);
+
+    if (!contentEl) return;
+
+    // Check if we already have cached results
+    if (modalMatchCache.has(orderId)) {
+      renderModalMatch(orderId, modalMatchCache.get(orderId));
+      return;
+    }
+
+    // Show loading state
+    contentEl.innerHTML = '<div class="text-center py-8"><div class="spinner border-blue-500 border-t-transparent w-8 h-8 mx-auto mb-3"></div><div class="text-slate-500">Finding Zoho match...</div></div>';
+
+    try {
+      const res = await fetch('/find-matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderIds: [orderId] })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        const match = data.matches?.find(m => m.ediOrder.id === orderId);
+        const noMatch = data.noMatches?.find(m => m.ediOrder.id === orderId);
+        const result = match || noMatch || null;
+
+        modalMatchCache.set(orderId, result);
+        renderModalMatch(orderId, result);
+      } else {
+        contentEl.innerHTML = '<div class="text-center py-8 text-red-500"><div class="text-4xl mb-3">⚠️</div><div>Error: ' + (data.error || 'Unknown error') + '</div></div>';
+      }
+    } catch (e) {
+      contentEl.innerHTML = '<div class="text-center py-8 text-red-500"><div class="text-4xl mb-3">⚠️</div><div>Error: ' + e.message + '</div></div>';
+    }
+  }
+
+  // Render match result in modal
+  function renderModalMatch(orderId, result) {
+    const contentEl = document.getElementById('matchesContent-' + orderId);
+    const actionsEl = document.getElementById('matchActions-' + orderId);
+    const tabEl = document.getElementById('matchesTab-' + orderId);
+
+    if (!contentEl) return;
+
+    if (!result) {
+      contentEl.innerHTML = '<div class="text-center py-8 text-slate-500"><div class="text-4xl mb-3">🤷</div><div class="font-medium">No match data available</div></div>';
+      if (actionsEl) actionsEl.classList.add('hidden');
+      return;
+    }
+
+    const edi = result.ediOrder;
+    const zoho = result.zohoDraft;
+    const conf = result.confidence || 0;
+    const isNoMatch = result.isNoMatch || !zoho;
+
+    // Update tab with confidence badge
+    if (tabEl) {
+      let confColor = conf >= 100 ? 'text-green-600' : conf >= 80 ? 'text-blue-600' : conf >= 60 ? 'text-amber-600' : 'text-red-600';
+      tabEl.innerHTML = '🔍 Matches <span class="ml-1 ' + confColor + ' font-bold">' + (isNoMatch ? '⚠️' : conf + '%') + '</span>';
+    }
+
+    if (isNoMatch) {
+      contentEl.innerHTML = '<div class="text-center py-8"><div class="text-5xl mb-4">🔴</div><div class="text-xl font-semibold text-red-600 mb-2">No Zoho Match Found</div><div class="text-slate-500 mb-4">This EDI order does not have a matching draft in Zoho.</div><div class="bg-amber-50 border border-amber-200 rounded-lg p-4 max-w-md mx-auto text-left"><div class="font-medium text-amber-800 mb-2">Possible reasons:</div><ul class="text-sm text-amber-700 list-disc list-inside space-y-1"><li>Draft has not been created in Zoho yet</li><li>PO number does not match any draft reference</li><li>Customer name mismatch</li></ul></div></div>';
+      if (actionsEl) actionsEl.classList.add('hidden');
+      return;
+    }
+
+    // Confidence styling
+    let confBg, confIcon;
+    if (conf >= 100) { confBg = 'bg-green-100 text-green-700 border-green-300'; confIcon = '🟢'; }
+    else if (conf >= 80) { confBg = 'bg-blue-100 text-blue-700 border-blue-300'; confIcon = '🔵'; }
+    else if (conf >= 60) { confBg = 'bg-amber-100 text-amber-700 border-amber-300'; confIcon = '🟡'; }
+    else { confBg = 'bg-red-100 text-red-700 border-red-300'; confIcon = '🔴'; }
+
+    const reviewNote = conf < 100
+      ? '<div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm"><div class="font-medium text-amber-800 mb-1">⚠️ Review Recommended</div><div class="text-amber-700">Confidence is below 100%. Please verify the match before processing.</div></div>'
+      : '<div class="bg-green-50 border border-green-200 rounded-lg p-3 text-sm"><div class="font-medium text-green-800">✓ Perfect Match</div><div class="text-green-700">All fields match. Ready to process.</div></div>';
+
+    contentEl.innerHTML = '<div class="mb-6">' +
+      '<div class="flex items-center justify-between mb-4">' +
+        '<h4 class="font-semibold text-slate-700">Match Found</h4>' +
+        '<div class="px-4 py-2 rounded-lg border ' + confBg + ' font-bold text-xl">' + confIcon + ' ' + conf + '% Match</div>' +
+      '</div>' +
+      '<div class="grid grid-cols-2 gap-4 mb-4">' +
+        '<div class="bg-blue-50 rounded-lg p-4 border border-blue-200">' +
+          '<div class="text-xs text-blue-600 uppercase font-medium mb-2">📥 EDI Order</div>' +
+          '<div class="space-y-2 text-sm">' +
+            '<div><span class="text-slate-500">PO#:</span> <strong>' + edi.poNumber + '</strong></div>' +
+            '<div><span class="text-slate-500">Customer:</span> <strong>' + edi.customer + '</strong></div>' +
+            '<div><span class="text-slate-500">Amount:</span> <strong>$' + (edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2}) + '</strong></div>' +
+            '<div><span class="text-slate-500">Units:</span> <strong>' + (edi.totalUnits || 0).toLocaleString() + '</strong></div>' +
+            '<div><span class="text-slate-500">Items:</span> <strong>' + (edi.items?.length || 0) + '</strong></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="bg-green-50 rounded-lg p-4 border border-green-200">' +
+          '<div class="text-xs text-green-600 uppercase font-medium mb-2">📤 Zoho Draft</div>' +
+          '<div class="space-y-2 text-sm">' +
+            '<div><span class="text-slate-500">Ref#:</span> <strong>' + (zoho.reference || zoho.number || 'N/A') + '</strong></div>' +
+            '<div><span class="text-slate-500">Customer:</span> <strong>' + (zoho.customer_name || zoho.customer || 'N/A') + '</strong></div>' +
+            '<div><span class="text-slate-500">Amount:</span> <strong>$' + (zoho.total || 0).toLocaleString('en-US', {minimumFractionDigits: 2}) + '</strong></div>' +
+            '<div><span class="text-slate-500">Status:</span> <strong>' + (zoho.status || 'Draft') + '</strong></div>' +
+            '<div><span class="text-slate-500">Items:</span> <strong>' + (zoho.line_items?.length || 0) + '</strong></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      reviewNote +
+    '</div>';
+
+    // Show process button
+    if (actionsEl) {
+      actionsEl.classList.remove('hidden');
+      actionsEl.setAttribute('data-zoho-id', zoho.id || '');
+    }
+  }
+
+  // Process match directly from modal
+  async function processMatchFromModal(orderId) {
+    const actionsEl = document.getElementById('matchActions-' + orderId);
+    const zohoId = actionsEl?.getAttribute('data-zoho-id');
+
+    if (!zohoId) {
+      toast('No Zoho draft selected');
+      return;
+    }
+
+    const btn = actionsEl.querySelector('button');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Processing...';
+    }
+
+    try {
+      const res = await fetch('/process-matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          matches: [{ ediOrderId: orderId, zohoDraftId: zohoId }]
+        })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        toast('✓ Order processed successfully!');
+        closeModal();
+        loadOrders();
+        modalMatchCache.delete(orderId);
+      } else {
+        toast('Error: ' + (data.error || 'Processing failed'));
+        if (btn) { btn.disabled = false; btn.innerHTML = '✓ Process Match'; }
+      }
+    } catch (e) {
+      toast('Error: ' + e.message);
+      if (btn) { btn.disabled = false; btn.innerHTML = '✓ Process Match'; }
     }
   }
 
