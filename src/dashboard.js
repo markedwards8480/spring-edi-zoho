@@ -874,11 +874,12 @@ const dashboardHTML = `
       const fieldsPending = o.fields_pending || {};
       const pendingCount = Object.keys(fieldsPending).length;
 
-      // Check for match results
+      // Check for match results (check both matches and noMatches arrays)
       const match = matchResults?.matches?.find(m => m.ediOrder?.id === o.id);
-      const hasMatch = match && !match.isNoMatch && match.zohoDraft;
+      const noMatchResult = matchResults?.noMatches?.find(m => m.ediOrder?.id === o.id);
+      const hasMatch = match && match.zohoDraft;
       const matchConf = match?.confidence || 0;
-      const isNoMatch = match?.isNoMatch === true;
+      const isNoMatch = !!noMatchResult;
 
       // Determine border color priority: partial > amended > old > default
       let borderClass = 'border-slate-200';
@@ -2954,27 +2955,46 @@ const dashboardHTML = `
 
     if (!contentEl) return;
 
-    // Check if we already have cached results
+    // Check if we already have cached modal results
     if (modalMatchCache.has(orderId)) {
       renderModalMatch(orderId, modalMatchCache.get(orderId));
       return;
+    }
+
+    // Check if we have bulk results from "Find Matches for X orders"
+    if (matchResults && (matchResults.matches || matchResults.noMatches)) {
+      const match = matchResults.matches?.find(m => m.ediOrder?.id === orderId);
+      const noMatch = matchResults.noMatches?.find(m => m.ediOrder?.id === orderId);
+      const result = match || (noMatch ? { ...noMatch, isNoMatch: true } : null);
+      if (result) {
+        modalMatchCache.set(orderId, result);
+        renderModalMatch(orderId, result);
+        return;
+      }
     }
 
     // Show loading state
     contentEl.innerHTML = '<div class="text-center py-8"><div class="spinner border-blue-500 border-t-transparent w-8 h-8 mx-auto mb-3"></div><div class="text-slate-500">Finding Zoho match...</div></div>';
 
     try {
+      // Add timeout to prevent infinite waiting
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
       const res = await fetch('/find-matches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderIds: [orderId] })
+        body: JSON.stringify({ orderIds: [orderId] }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
+
       const data = await res.json();
 
       if (data.success) {
         const match = data.matches?.find(m => m.ediOrder.id === orderId);
         const noMatch = data.noMatches?.find(m => m.ediOrder.id === orderId);
-        const result = match || noMatch || null;
+        const result = match || (noMatch ? { ...noMatch, isNoMatch: true } : null);
 
         modalMatchCache.set(orderId, result);
         renderModalMatch(orderId, result);
@@ -2982,7 +3002,11 @@ const dashboardHTML = `
         contentEl.innerHTML = '<div class="text-center py-8 text-red-500"><div class="text-4xl mb-3">⚠️</div><div>Error: ' + (data.error || 'Unknown error') + '</div></div>';
       }
     } catch (e) {
-      contentEl.innerHTML = '<div class="text-center py-8 text-red-500"><div class="text-4xl mb-3">⚠️</div><div>Error: ' + e.message + '</div></div>';
+      if (e.name === 'AbortError') {
+        contentEl.innerHTML = '<div class="text-center py-8 text-red-500"><div class="text-4xl mb-3">⏱️</div><div>Request timed out. Try clicking "Find Matches" on the main screen first.</div></div>';
+      } else {
+        contentEl.innerHTML = '<div class="text-center py-8 text-red-500"><div class="text-4xl mb-3">⚠️</div><div>Error: ' + e.message + '</div></div>';
+      }
     }
   }
 
