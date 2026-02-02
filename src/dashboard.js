@@ -2977,7 +2977,7 @@ const dashboardHTML = `
     }
   }
 
-  // Render match result in modal - FULL DETAILED VIEW
+  // Render match result in modal - FULL DETAILED VIEW with checkboxes and edit
   function renderModalMatch(orderId, result) {
     const contentEl = document.getElementById('matchesContent-' + orderId);
     const actionsEl = document.getElementById('matchActions-' + orderId);
@@ -3010,6 +3010,10 @@ const dashboardHTML = `
       return;
     }
 
+    // Initialize field selection for this order
+    initFieldSelection(orderId, edi, zoho);
+    const sel = fieldSelections.get(orderId) || { fields: {}, overrides: {}, lineItems: [] };
+
     // Confidence styling
     let confBg, confIcon, statusBg, statusTitle, statusDesc;
     if (conf >= 100) {
@@ -3036,79 +3040,88 @@ const dashboardHTML = `
     const ediItems = edi.items || [];
     const zohoItems = zoho?.line_items || zoho?.items || [];
 
-    // Extract base styles
-    const ediStyles = [...new Set(ediItems.map(i => {
-      const sku = i.productIds?.sku || i.productIds?.vendorItemNumber || i.style || '';
-      const match = sku.match(/^(\\d{4,6}[A-Za-z]?)/);
-      return match ? match[1] : '';
-    }).filter(Boolean))];
-    const zohoStyles = [...new Set(zohoItems.map(i => {
-      const name = i.name || '';
-      const match = name.match(/^(\\d{4,6}[A-Za-z]?)/);
-      return match ? match[1] : '';
-    }).filter(Boolean))];
-
     // Check for prepacks
     const prepackItems = ediItems.filter(i =>
       (i.isPrepack || i.unitOfMeasure === 'AS' || i.unitOfMeasure === 'ST') && i.packQty > 1
     );
     const hasPrepack = prepackItems.length > 0;
 
-    // Build field comparison rows
+    // Build field comparison rows with checkboxes
     const fieldRows = [
-      { label: 'PO / Ref', ediVal: edi.poNumber, zohoVal: zoho?.reference || zoho?.number || '-', match: details.po },
-      { label: 'Customer', ediVal: edi.customer, zohoVal: zoho?.customer || zoho?.customer_name || '-', match: details.customer },
-      { label: 'Ship Date', ediVal: ediShipDate, zohoVal: zohoShipDate, match: details.shipDate },
-      { label: 'Cancel Date', ediVal: ediCancelDate, zohoVal: zohoCancelDate, match: details.cancelDate }
+      { key: 'poNumber', label: 'PO / Ref', ediVal: edi.poNumber, zohoVal: zoho?.reference || zoho?.number || '-', match: details.po, editable: true, rawVal: edi.poNumber },
+      { key: 'customer', label: 'Customer', ediVal: edi.customer, zohoVal: zoho?.customer || zoho?.customer_name || '-', match: details.customer, editable: false },
+      { key: 'shipDate', label: 'Ship Date', ediVal: ediShipDate, zohoVal: zohoShipDate, match: details.shipDate, editable: true, rawVal: edi.shipDate },
+      { key: 'cancelDate', label: 'Cancel', ediVal: ediCancelDate, zohoVal: zohoCancelDate, match: details.cancelDate, editable: true, rawVal: edi.cancelDate }
     ];
 
-    let fieldTableHTML = fieldRows.map(r =>
-      '<tr class="border-b border-slate-100">' +
+    let fieldTableHTML = fieldRows.map(r => {
+      const isChecked = sel.fields[r.key] !== false;
+      const hasOverride = sel.overrides[r.key] !== undefined;
+      const sendVal = hasOverride ? sel.overrides[r.key] : r.ediVal;
+      return '<tr class="border-b border-slate-100 ' + (!isChecked ? 'opacity-40 bg-slate-50' : '') + '">' +
+        '<td class="py-2 text-center">' +
+          '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onchange="toggleModalFieldSelection(' + orderId + ', \\'' + r.key + '\\')" class="w-4 h-4 rounded border-slate-300 text-blue-500 cursor-pointer">' +
+        '</td>' +
         '<td class="py-2 text-slate-500 text-xs">' + (r.match ? '<span class="text-green-600 mr-1">✓</span>' : '<span class="text-red-500 mr-1">✗</span>') + r.label + '</td>' +
-        '<td class="py-2 bg-blue-50/30 px-2 text-slate-700 text-xs font-medium">' + r.ediVal + '</td>' +
+        '<td class="py-2 bg-blue-50/30 px-2 text-slate-700 text-xs">' + r.ediVal + '</td>' +
         '<td class="py-2 bg-green-50/30 px-2 text-xs">' + r.zohoVal + '</td>' +
-      '</tr>'
-    ).join('');
+        '<td class="py-2 bg-purple-50/30 px-2" id="modal-field-cell-' + orderId + '-' + r.key + '">' +
+          (isChecked ?
+            (hasOverride ?
+              '<span class="text-purple-700 font-semibold text-xs">' + sendVal + '</span> <span class="text-xs text-purple-400">(custom)</span>' :
+              '<span class="text-purple-600 text-xs">' + sendVal + '</span>') :
+            '<span class="text-slate-400 italic text-xs">skip</span>') +
+        '</td>' +
+        '<td class="py-2 text-center">' +
+          (r.editable && isChecked ? '<button onclick="showModalFieldEdit(' + orderId + ', \\'' + r.key + '\\', \\'' + (sendVal || '').replace(/'/g, "\\\\'") + '\\')" class="text-slate-400 hover:text-purple-600 text-xs">✏️</button>' : '') +
+        '</td>' +
+      '</tr>';
+    }).join('');
 
-    // Add units and amount rows
+    // Add units and amount rows (read-only)
     fieldTableHTML += '<tr class="border-b border-slate-100 bg-slate-50/50">' +
+      '<td class="py-2 text-center text-slate-300">—</td>' +
       '<td class="py-2 text-slate-500 text-xs">Units</td>' +
       '<td class="py-2 bg-blue-50/30 px-2 font-semibold text-xs">' + (edi.totalUnits || 0).toLocaleString() + '</td>' +
       '<td class="py-2 bg-green-50/30 px-2 font-semibold text-xs">' + (zoho?.totalUnits || 0).toLocaleString() + '</td>' +
+      '<td class="py-2 bg-purple-50/30 px-2 text-purple-600 text-xs">' + (edi.totalUnits || 0).toLocaleString() + '</td>' +
+      '<td class="py-2"></td>' +
     '</tr>';
     fieldTableHTML += '<tr class="border-b border-slate-100 bg-slate-50">' +
+      '<td class="py-2 text-center text-slate-300">—</td>' +
       '<td class="py-2 text-slate-500 text-xs">Amount</td>' +
       '<td class="py-2 bg-blue-50/30 px-2 font-semibold text-xs">$' + (edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2}) + '</td>' +
       '<td class="py-2 bg-green-50/30 px-2 font-semibold text-xs">$' + (zoho?.total || zoho?.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2}) + ' ' + (details.totalAmount ? '<span class="text-green-600">✓</span>' : '<span class="text-amber-500">⚠️</span>') + '</td>' +
+      '<td class="py-2 bg-purple-50/30 px-2 text-purple-600 text-xs">$' + (edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2}) + '</td>' +
+      '<td class="py-2"></td>' +
     '</tr>';
 
-    // Style row
-    fieldTableHTML += '<tr class="border-b border-slate-100">' +
-      '<td class="py-2 text-slate-500 text-xs">Base Style</td>' +
-      '<td class="py-2 bg-blue-50/30 px-2">' + (ediStyles.length > 0 ? ediStyles.map(s => '<span class="inline-block bg-blue-100 px-1.5 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-') + '</td>' +
-      '<td class="py-2 bg-green-50/30 px-2">' + (zohoStyles.length > 0 ? zohoStyles.map(s => '<span class="inline-block bg-green-100 px-1.5 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-') + ' ' + (details.baseStyle ? '<span class="text-green-600">✓</span>' : '<span class="text-amber-500">⚠️</span>') + '</td>' +
-    '</tr>';
-
-    // Build EDI items table
-    let ediItemsHTML = ediItems.slice(0, 10).map(item => {
+    // Build EDI items table with checkboxes
+    let ediItemsHTML = ediItems.slice(0, 15).map((item, idx) => {
       const uom = item.unitOfMeasure || 'EA';
       const isPrepack = item.isPrepack || uom === 'AS' || uom === 'ST';
       const sku = item.productIds?.sku || item.productIds?.vendorItemNumber || item.style || '';
       const packQty = item.packQty || 1;
       const unitPrice = item.unitPrice || 0;
-      return '<tr class="border-t border-slate-100 ' + (isPrepack ? 'bg-purple-50/30' : '') + '">' +
+      const isSelected = sel.lineItems ? sel.lineItems.includes(idx) : true;
+      return '<tr class="border-t border-slate-100 ' + (isPrepack ? 'bg-purple-50/30' : '') + ' ' + (!isSelected ? 'opacity-40 bg-slate-50' : '') + '">' +
+        '<td class="px-1 py-1 text-center">' +
+          '<input type="checkbox" ' + (isSelected ? 'checked' : '') + ' onchange="toggleModalLineItem(' + orderId + ', ' + idx + ')" class="w-3 h-3 rounded border-slate-300 text-blue-500 cursor-pointer">' +
+        '</td>' +
         '<td class="px-2 py-1 text-xs">' + (sku || '-') + '</td>' +
         '<td class="px-2 py-1 text-xs">' + (item.color || '-') + '</td>' +
         '<td class="px-2 py-1 text-center">' +
           '<span class="' + (isPrepack ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600') + ' px-1.5 py-0.5 rounded text-xs">' + uom + '</span>' +
           (isPrepack && packQty > 1 ? '<div class="text-xs text-purple-500">' + packQty + '/pk</div>' : '') +
         '</td>' +
-        '<td class="px-2 py-1 text-right text-xs">' + (item.quantityOrdered || 0) + '</td>' +
+        '<td class="px-2 py-1 text-right text-xs">' + (item.quantityOrdered || 0) +
+          (isPrepack && packQty > 1 ? '<div class="text-xs text-slate-400">=' + (item.totalUnits || item.quantityOrdered * packQty) + ' ea</div>' : '') +
+        '</td>' +
         '<td class="px-2 py-1 text-right font-medium text-xs ' + (item.unitPriceCalculated ? 'text-blue-600' : '') + '">$' + unitPrice.toFixed(2) + '</td>' +
       '</tr>';
     }).join('');
-    if (ediItems.length > 10) {
-      ediItemsHTML += '<tr><td colspan="5" class="px-2 py-1 text-center text-slate-400 text-xs">... and ' + (ediItems.length - 10) + ' more</td></tr>';
+    if (ediItems.length > 15) {
+      ediItemsHTML += '<tr><td colspan="6" class="px-2 py-1 text-center text-slate-400 text-xs">... and ' + (ediItems.length - 15) + ' more</td></tr>';
     }
 
     // Build Zoho items table
@@ -3153,7 +3166,7 @@ const dashboardHTML = `
         '</div></div>';
     }
 
-    // Prepack explanation
+    // Prepack explanation - more detailed
     let prepackHTML = '';
     if (hasPrepack) {
       prepackHTML = '<div class="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3">' +
@@ -3161,10 +3174,24 @@ const dashboardHTML = `
         '<div class="text-xs text-purple-600 space-y-1">' +
           '<p><strong>How it works:</strong> Customer orders by pack, we match by unit price</p>' +
           '<p>• <strong>Pack Price</strong> ÷ <strong>Pack Qty</strong> = <strong>Unit Price</strong> (what we match to Zoho)</p>' +
-          prepackItems.slice(0, 2).map(item =>
+          prepackItems.slice(0, 3).map(item =>
             '<p class="bg-white/50 rounded px-2 py-1 mt-1">Example: $' + (item.packPrice || 0).toFixed(2) + ' ÷ ' + (item.packQty || 1) + ' units = <strong>$' + (item.unitPrice || 0).toFixed(2) + '/ea</strong>' + (item.unitPriceCalculated ? ' <span class="text-purple-500">(calculated)</span>' : '') + '</p>'
           ).join('') +
         '</div></div>';
+    }
+
+    // Selection info banner
+    const counts = getSelectionCounts(orderId, ediItems.length);
+    const isFull = isFullSelection(orderId, ediItems.length);
+    let selectionInfoHTML = '';
+    if (!isFull) {
+      selectionInfoHTML = '<div class="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">' +
+        '<div class="flex items-center gap-2 text-sm text-amber-700">' +
+          '<span>⚡</span>' +
+          '<span><strong>Selective Processing:</strong> ' + counts.fields + '/4 fields, ' + counts.lines + '/' + ediItems.length + ' line items' + (counts.hasOverrides ? ', with overrides' : '') + '</span>' +
+        '</div>' +
+        '<button onclick="resetModalFieldSelection(' + orderId + ', ' + ediItems.length + ')" class="text-xs text-amber-600 hover:text-amber-800 underline">Reset to All</button>' +
+      '</div>';
     }
 
     // Build main HTML
@@ -3179,15 +3206,26 @@ const dashboardHTML = `
         '<div class="px-4 py-2 rounded-lg border ' + confBg + ' font-bold text-xl">' + conf + '%</div>' +
       '</div>' +
 
-      // Field Comparison Table
+      // Selection info
+      selectionInfoHTML +
+
+      // Instruction note
+      '<div class="text-xs text-slate-500 mb-2 flex items-center gap-2">' +
+        '<span>💡</span>' +
+        '<span>EDI stays unchanged. Click ✏️ to customize what gets sent to Zoho.</span>' +
+      '</div>' +
+
+      // Field Comparison Table with checkboxes
       '<div class="mb-4">' +
-        '<h5 class="text-sm font-semibold text-slate-600 mb-2">📋 Field Comparison</h5>' +
         '<table class="w-full text-sm">' +
           '<thead>' +
             '<tr class="border-b border-slate-200">' +
-              '<th class="text-left py-2 font-medium text-slate-500 w-28">Field</th>' +
-              '<th class="text-left py-2 font-medium text-blue-600 bg-blue-50/50 px-2">EDI Order</th>' +
-              '<th class="text-left py-2 font-medium text-green-600 bg-green-50/50 px-2">Zoho Draft</th>' +
+              '<th class="text-center py-2 font-medium text-slate-500 w-10">✓</th>' +
+              '<th class="text-left py-2 font-medium text-slate-500 w-24">Field</th>' +
+              '<th class="text-left py-2 font-medium text-blue-600 bg-blue-50/50 px-2">EDI (source)</th>' +
+              '<th class="text-left py-2 font-medium text-green-600 bg-green-50/50 px-2">Zoho Now</th>' +
+              '<th class="text-left py-2 font-medium text-purple-600 bg-purple-50/50 px-2">→ Send to Zoho</th>' +
+              '<th class="text-center py-2 font-medium text-slate-500 w-10">✏️</th>' +
             '</tr>' +
           '</thead>' +
           '<tbody>' + fieldTableHTML + '</tbody>' +
@@ -3199,16 +3237,22 @@ const dashboardHTML = `
 
       // Line Items Comparison
       '<div class="mb-4">' +
-        '<h5 class="text-sm font-semibold text-slate-600 mb-2 cursor-pointer" onclick="toggleModalLineItems(' + orderId + ')">' +
-          '<span id="lineItemsToggle-' + orderId + '">▼</span> Line Items (' + ediItems.length + ' EDI → ' + zohoItems.length + ' Zoho)' +
-        '</h5>' +
+        '<div class="flex items-center justify-between mb-2">' +
+          '<h5 class="text-sm font-semibold text-slate-600 cursor-pointer" onclick="toggleModalLineItems(' + orderId + ')">' +
+            '<span id="lineItemsToggle-' + orderId + '">▼</span> Line Items (' + ediItems.length + ' EDI → ' + zohoItems.length + ' Zoho)' +
+          '</h5>' +
+          '<label class="flex items-center gap-1 text-xs font-normal text-slate-500 cursor-pointer">' +
+            '<input type="checkbox" ' + (sel.lineItems && sel.lineItems.length === ediItems.length ? 'checked' : '') + ' onchange="toggleAllModalLineItems(' + orderId + ', ' + ediItems.length + ')" class="w-3 h-3 rounded"> All' +
+          '</label>' +
+        '</div>' +
         '<div id="lineItemsContainer-' + orderId + '" class="grid grid-cols-2 gap-3">' +
           // EDI Items
           '<div>' +
-            '<div class="text-xs font-semibold text-blue-600 mb-1">EDI Order Items</div>' +
+            '<div class="text-xs font-semibold text-blue-600 mb-1">EDI Order Line Items</div>' +
             '<table class="w-full text-xs">' +
               '<thead class="bg-blue-50">' +
                 '<tr>' +
+                  '<th class="text-center px-1 py-1 w-6">✓</th>' +
                   '<th class="text-left px-2 py-1">Style</th>' +
                   '<th class="text-left px-2 py-1">Color</th>' +
                   '<th class="text-center px-2 py-1">UOM</th>' +
@@ -3221,11 +3265,14 @@ const dashboardHTML = `
           '</div>' +
           // Zoho Items
           '<div>' +
-            '<div class="text-xs font-semibold text-green-600 mb-1">Zoho Draft Items</div>' +
+            '<div class="text-xs font-semibold text-green-600 mb-1 flex items-center gap-2">' +
+              '<span>Zoho Draft Items</span>' +
+              '<span class="text-xs font-normal text-green-500 bg-green-100 px-1.5 py-0.5 rounded">🔒 Items preserved</span>' +
+            '</div>' +
             '<table class="w-full text-xs">' +
               '<thead class="bg-green-50">' +
                 '<tr>' +
-                  '<th class="text-left px-2 py-1">Item</th>' +
+                  '<th class="text-left px-2 py-1">Item 🔒</th>' +
                   '<th class="text-left px-2 py-1">UPC</th>' +
                   '<th class="text-right px-2 py-1">Qty</th>' +
                   '<th class="text-right px-2 py-1">Rate</th>' +
@@ -3244,6 +3291,69 @@ const dashboardHTML = `
     if (actionsEl) {
       actionsEl.classList.remove('hidden');
       actionsEl.setAttribute('data-zoho-id', zoho.id || '');
+    }
+  }
+
+  // Modal-specific field selection toggle
+  function toggleModalFieldSelection(orderId, fieldKey) {
+    toggleFieldSelection(orderId, fieldKey);
+    const cached = modalMatchCache.get(orderId);
+    if (cached) renderModalMatch(orderId, cached);
+  }
+
+  // Modal-specific line item toggle
+  function toggleModalLineItem(orderId, lineIndex) {
+    toggleLineItemSelection(orderId, lineIndex);
+    const cached = modalMatchCache.get(orderId);
+    if (cached) renderModalMatch(orderId, cached);
+  }
+
+  // Toggle all line items in modal
+  function toggleAllModalLineItems(orderId, totalLines) {
+    toggleAllLineItems(orderId, totalLines);
+    const cached = modalMatchCache.get(orderId);
+    if (cached) renderModalMatch(orderId, cached);
+  }
+
+  // Reset field selection in modal
+  function resetModalFieldSelection(orderId, totalLines) {
+    resetFieldSelection(orderId, totalLines);
+    const cached = modalMatchCache.get(orderId);
+    if (cached) renderModalMatch(orderId, cached);
+  }
+
+  // Show field edit in modal
+  function showModalFieldEdit(orderId, fieldName, currentValue) {
+    const inputId = 'modal-edit-' + orderId + '-' + fieldName;
+    const existingInput = document.getElementById(inputId);
+    if (existingInput) {
+      existingInput.focus();
+      return;
+    }
+
+    const container = document.getElementById('modal-field-cell-' + orderId + '-' + fieldName);
+    if (container) {
+      const isDate = fieldName.toLowerCase().includes('date');
+      container.innerHTML =
+        '<input type="' + (isDate ? 'date' : 'text') + '" id="' + inputId + '" ' +
+          'value="' + (currentValue || '') + '" ' +
+          'class="w-full px-2 py-1 border border-purple-400 rounded text-xs focus:outline-none focus:ring-2 focus:ring-purple-500" ' +
+          'onblur="saveModalFieldEdit(' + orderId + ', \\'' + fieldName + '\\')" ' +
+          'onkeydown="if(event.key===\\'Enter\\'){saveModalFieldEdit(' + orderId + ', \\'' + fieldName + '\\')}"' +
+        '>';
+      document.getElementById(inputId).focus();
+    }
+  }
+
+  // Save field edit in modal
+  function saveModalFieldEdit(orderId, fieldName) {
+    const inputId = 'modal-edit-' + orderId + '-' + fieldName;
+    const input = document.getElementById(inputId);
+    if (input) {
+      const newValue = input.value;
+      setFieldOverride(orderId, fieldName, newValue);
+      const cached = modalMatchCache.get(orderId);
+      if (cached) renderModalMatch(orderId, cached);
     }
   }
 
