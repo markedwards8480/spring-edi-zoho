@@ -2977,7 +2977,7 @@ const dashboardHTML = `
     }
   }
 
-  // Render match result in modal
+  // Render match result in modal - FULL DETAILED VIEW
   function renderModalMatch(orderId, result) {
     const contentEl = document.getElementById('matchesContent-' + orderId);
     const actionsEl = document.getElementById('matchActions-' + orderId);
@@ -2994,6 +2994,8 @@ const dashboardHTML = `
     const edi = result.ediOrder;
     const zoho = result.zohoDraft;
     const conf = result.confidence || 0;
+    const score = result.score || {};
+    const details = score.details || {};
     const isNoMatch = result.isNoMatch || !zoho;
 
     // Update tab with confidence badge
@@ -3009,51 +3011,279 @@ const dashboardHTML = `
     }
 
     // Confidence styling
-    let confBg, confIcon;
-    if (conf >= 100) { confBg = 'bg-green-100 text-green-700 border-green-300'; confIcon = '🟢'; }
-    else if (conf >= 80) { confBg = 'bg-blue-100 text-blue-700 border-blue-300'; confIcon = '🔵'; }
-    else if (conf >= 60) { confBg = 'bg-amber-100 text-amber-700 border-amber-300'; confIcon = '🟡'; }
-    else { confBg = 'bg-red-100 text-red-700 border-red-300'; confIcon = '🔴'; }
+    let confBg, confIcon, statusBg, statusTitle, statusDesc;
+    if (conf >= 100) {
+      confBg = 'bg-green-100 text-green-700 border-green-300'; confIcon = '🟢';
+      statusBg = 'bg-green-50 border-green-500'; statusTitle = 'Perfect Match'; statusDesc = 'All fields match - safe to approve';
+    } else if (conf >= 80) {
+      confBg = 'bg-blue-100 text-blue-700 border-blue-300'; confIcon = '🔵';
+      statusBg = 'bg-blue-50 border-blue-500'; statusTitle = 'High Confidence'; statusDesc = 'Most fields match';
+    } else if (conf >= 60) {
+      confBg = 'bg-amber-100 text-amber-700 border-amber-300'; confIcon = '🟡';
+      statusBg = 'bg-amber-50 border-amber-500'; statusTitle = 'Review Recommended'; statusDesc = 'Some differences found';
+    } else {
+      confBg = 'bg-red-100 text-red-700 border-red-300'; confIcon = '🔴';
+      statusBg = 'bg-red-50 border-red-500'; statusTitle = 'Low Confidence'; statusDesc = 'Significant differences - verify carefully';
+    }
 
-    const reviewNote = conf < 100
-      ? '<div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm"><div class="font-medium text-amber-800 mb-1">⚠️ Review Recommended</div><div class="text-amber-700">Confidence is below 100%. Please verify the match before processing.</div></div>'
-      : '<div class="bg-green-50 border border-green-200 rounded-lg p-3 text-sm"><div class="font-medium text-green-800">✓ Perfect Match</div><div class="text-green-700">All fields match. Ready to process.</div></div>';
+    // Format dates
+    const ediShipDate = edi.shipDate ? formatDate(edi.shipDate) : 'N/A';
+    const zohoShipDate = zoho?.shipDate ? formatDate(zoho.shipDate) : 'N/A';
+    const ediCancelDate = edi.cancelDate ? formatDate(edi.cancelDate) : 'N/A';
+    const zohoCancelDate = zoho?.cancelDate ? formatDate(zoho.cancelDate) : '—';
 
-    contentEl.innerHTML = '<div class="mb-6">' +
-      '<div class="flex items-center justify-between mb-4">' +
-        '<h4 class="font-semibold text-slate-700">Match Found</h4>' +
-        '<div class="px-4 py-2 rounded-lg border ' + confBg + ' font-bold text-xl">' + confIcon + ' ' + conf + '% Match</div>' +
+    // Extract items
+    const ediItems = edi.items || [];
+    const zohoItems = zoho?.line_items || zoho?.items || [];
+
+    // Extract base styles
+    const ediStyles = [...new Set(ediItems.map(i => {
+      const sku = i.productIds?.sku || i.productIds?.vendorItemNumber || i.style || '';
+      const match = sku.match(/^(\\d{4,6}[A-Za-z]?)/);
+      return match ? match[1] : '';
+    }).filter(Boolean))];
+    const zohoStyles = [...new Set(zohoItems.map(i => {
+      const name = i.name || '';
+      const match = name.match(/^(\\d{4,6}[A-Za-z]?)/);
+      return match ? match[1] : '';
+    }).filter(Boolean))];
+
+    // Check for prepacks
+    const prepackItems = ediItems.filter(i =>
+      (i.isPrepack || i.unitOfMeasure === 'AS' || i.unitOfMeasure === 'ST') && i.packQty > 1
+    );
+    const hasPrepack = prepackItems.length > 0;
+
+    // Build field comparison rows
+    const fieldRows = [
+      { label: 'PO / Ref', ediVal: edi.poNumber, zohoVal: zoho?.reference || zoho?.number || '-', match: details.po },
+      { label: 'Customer', ediVal: edi.customer, zohoVal: zoho?.customer || zoho?.customer_name || '-', match: details.customer },
+      { label: 'Ship Date', ediVal: ediShipDate, zohoVal: zohoShipDate, match: details.shipDate },
+      { label: 'Cancel Date', ediVal: ediCancelDate, zohoVal: zohoCancelDate, match: details.cancelDate }
+    ];
+
+    let fieldTableHTML = fieldRows.map(r =>
+      '<tr class="border-b border-slate-100">' +
+        '<td class="py-2 text-slate-500 text-xs">' + (r.match ? '<span class="text-green-600 mr-1">✓</span>' : '<span class="text-red-500 mr-1">✗</span>') + r.label + '</td>' +
+        '<td class="py-2 bg-blue-50/30 px-2 text-slate-700 text-xs font-medium">' + r.ediVal + '</td>' +
+        '<td class="py-2 bg-green-50/30 px-2 text-xs">' + r.zohoVal + '</td>' +
+      '</tr>'
+    ).join('');
+
+    // Add units and amount rows
+    fieldTableHTML += '<tr class="border-b border-slate-100 bg-slate-50/50">' +
+      '<td class="py-2 text-slate-500 text-xs">Units</td>' +
+      '<td class="py-2 bg-blue-50/30 px-2 font-semibold text-xs">' + (edi.totalUnits || 0).toLocaleString() + '</td>' +
+      '<td class="py-2 bg-green-50/30 px-2 font-semibold text-xs">' + (zoho?.totalUnits || 0).toLocaleString() + '</td>' +
+    '</tr>';
+    fieldTableHTML += '<tr class="border-b border-slate-100 bg-slate-50">' +
+      '<td class="py-2 text-slate-500 text-xs">Amount</td>' +
+      '<td class="py-2 bg-blue-50/30 px-2 font-semibold text-xs">$' + (edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2}) + '</td>' +
+      '<td class="py-2 bg-green-50/30 px-2 font-semibold text-xs">$' + (zoho?.total || zoho?.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2}) + ' ' + (details.totalAmount ? '<span class="text-green-600">✓</span>' : '<span class="text-amber-500">⚠️</span>') + '</td>' +
+    '</tr>';
+
+    // Style row
+    fieldTableHTML += '<tr class="border-b border-slate-100">' +
+      '<td class="py-2 text-slate-500 text-xs">Base Style</td>' +
+      '<td class="py-2 bg-blue-50/30 px-2">' + (ediStyles.length > 0 ? ediStyles.map(s => '<span class="inline-block bg-blue-100 px-1.5 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-') + '</td>' +
+      '<td class="py-2 bg-green-50/30 px-2">' + (zohoStyles.length > 0 ? zohoStyles.map(s => '<span class="inline-block bg-green-100 px-1.5 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-') + ' ' + (details.baseStyle ? '<span class="text-green-600">✓</span>' : '<span class="text-amber-500">⚠️</span>') + '</td>' +
+    '</tr>';
+
+    // Build EDI items table
+    let ediItemsHTML = ediItems.slice(0, 10).map(item => {
+      const uom = item.unitOfMeasure || 'EA';
+      const isPrepack = item.isPrepack || uom === 'AS' || uom === 'ST';
+      const sku = item.productIds?.sku || item.productIds?.vendorItemNumber || item.style || '';
+      const packQty = item.packQty || 1;
+      const unitPrice = item.unitPrice || 0;
+      return '<tr class="border-t border-slate-100 ' + (isPrepack ? 'bg-purple-50/30' : '') + '">' +
+        '<td class="px-2 py-1 text-xs">' + (sku || '-') + '</td>' +
+        '<td class="px-2 py-1 text-xs">' + (item.color || '-') + '</td>' +
+        '<td class="px-2 py-1 text-center">' +
+          '<span class="' + (isPrepack ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600') + ' px-1.5 py-0.5 rounded text-xs">' + uom + '</span>' +
+          (isPrepack && packQty > 1 ? '<div class="text-xs text-purple-500">' + packQty + '/pk</div>' : '') +
+        '</td>' +
+        '<td class="px-2 py-1 text-right text-xs">' + (item.quantityOrdered || 0) + '</td>' +
+        '<td class="px-2 py-1 text-right font-medium text-xs ' + (item.unitPriceCalculated ? 'text-blue-600' : '') + '">$' + unitPrice.toFixed(2) + '</td>' +
+      '</tr>';
+    }).join('');
+    if (ediItems.length > 10) {
+      ediItemsHTML += '<tr><td colspan="5" class="px-2 py-1 text-center text-slate-400 text-xs">... and ' + (ediItems.length - 10) + ' more</td></tr>';
+    }
+
+    // Build Zoho items table
+    let zohoItemsHTML = zohoItems.slice(0, 10).map(item => {
+      const zohoUpc = item.cf_upc || item.upc || item.item?.upc || '';
+      return '<tr class="border-t border-slate-100">' +
+        '<td class="px-2 py-1 text-xs">' + (item.name || item.sku || '-') + '</td>' +
+        '<td class="px-2 py-1 font-mono text-xs">' + (zohoUpc || '-') + '</td>' +
+        '<td class="px-2 py-1 text-right text-xs">' + (item.quantity || 0) + '</td>' +
+        '<td class="px-2 py-1 text-right text-xs">$' + (item.rate || 0).toFixed(2) + '</td>' +
+      '</tr>';
+    }).join('');
+    if (zohoItems.length > 10) {
+      zohoItemsHTML += '<tr><td colspan="4" class="px-2 py-1 text-center text-slate-400 text-xs">... and ' + (zohoItems.length - 10) + ' more</td></tr>';
+    }
+
+    // Build alternative matches section
+    let altMatchesHTML = '';
+    if (result.alternativeMatches && result.alternativeMatches.length > 0) {
+      altMatchesHTML = '<div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">' +
+        '<div class="text-sm font-medium text-amber-700 mb-2">🔄 Alternative Matches (' + result.alternativeMatches.length + ' other potential matches)</div>' +
+        '<div class="space-y-2">' +
+        result.alternativeMatches.map((alt, idx) =>
+          '<div class="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-amber-200">' +
+            '<div class="flex items-center gap-3">' +
+              '<span class="text-xs text-slate-400">#' + (idx + 2) + '</span>' +
+              '<div>' +
+                '<div class="font-medium text-sm text-slate-700">' + alt.zohoDraft.customer + '</div>' +
+                '<div class="text-xs text-slate-500">' +
+                  'Ref# ' + (alt.zohoDraft.reference || alt.zohoDraft.number) +
+                  ' • ' + (alt.zohoDraft.itemCount || 0) + ' items' +
+                  ' • $' + (alt.zohoDraft.totalAmount || 0).toLocaleString() +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="flex items-center gap-2">' +
+              '<span class="px-2 py-1 rounded text-xs font-medium ' + (alt.confidence >= 60 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600') + '">' + alt.confidence + '%</span>' +
+              '<button onclick="switchModalMatch(' + orderId + ', ' + idx + ')" class="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition">Use This</button>' +
+            '</div>' +
+          '</div>'
+        ).join('') +
+        '</div></div>';
+    }
+
+    // Prepack explanation
+    let prepackHTML = '';
+    if (hasPrepack) {
+      prepackHTML = '<div class="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-3">' +
+        '<div class="flex items-center gap-2 text-purple-700 font-medium text-sm mb-2">📦 Pre-Pack Order (' + prepackItems.length + ' prepack line' + (prepackItems.length > 1 ? 's' : '') + ')</div>' +
+        '<div class="text-xs text-purple-600 space-y-1">' +
+          '<p><strong>How it works:</strong> Customer orders by pack, we match by unit price</p>' +
+          '<p>• <strong>Pack Price</strong> ÷ <strong>Pack Qty</strong> = <strong>Unit Price</strong> (what we match to Zoho)</p>' +
+          prepackItems.slice(0, 2).map(item =>
+            '<p class="bg-white/50 rounded px-2 py-1 mt-1">Example: $' + (item.packPrice || 0).toFixed(2) + ' ÷ ' + (item.packQty || 1) + ' units = <strong>$' + (item.unitPrice || 0).toFixed(2) + '/ea</strong>' + (item.unitPriceCalculated ? ' <span class="text-purple-500">(calculated)</span>' : '') + '</p>'
+          ).join('') +
+        '</div></div>';
+    }
+
+    // Build main HTML
+    contentEl.innerHTML =
+      // Status Banner
+      '<div class="px-4 py-3 flex items-center gap-3 ' + statusBg + ' border-b-2 rounded-t-lg -mx-4 -mt-4 mb-4">' +
+        '<span class="text-xl">' + confIcon + '</span>' +
+        '<div class="flex-1">' +
+          '<div class="font-semibold">' + statusTitle + '</div>' +
+          '<div class="text-sm opacity-80">' + statusDesc + '</div>' +
+        '</div>' +
+        '<div class="px-4 py-2 rounded-lg border ' + confBg + ' font-bold text-xl">' + conf + '%</div>' +
       '</div>' +
-      '<div class="grid grid-cols-2 gap-4 mb-4">' +
-        '<div class="bg-blue-50 rounded-lg p-4 border border-blue-200">' +
-          '<div class="text-xs text-blue-600 uppercase font-medium mb-2">📥 EDI Order</div>' +
-          '<div class="space-y-2 text-sm">' +
-            '<div><span class="text-slate-500">PO#:</span> <strong>' + edi.poNumber + '</strong></div>' +
-            '<div><span class="text-slate-500">Customer:</span> <strong>' + edi.customer + '</strong></div>' +
-            '<div><span class="text-slate-500">Amount:</span> <strong>$' + (edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2}) + '</strong></div>' +
-            '<div><span class="text-slate-500">Units:</span> <strong>' + (edi.totalUnits || 0).toLocaleString() + '</strong></div>' +
-            '<div><span class="text-slate-500">Items:</span> <strong>' + (edi.items?.length || 0) + '</strong></div>' +
+
+      // Field Comparison Table
+      '<div class="mb-4">' +
+        '<h5 class="text-sm font-semibold text-slate-600 mb-2">📋 Field Comparison</h5>' +
+        '<table class="w-full text-sm">' +
+          '<thead>' +
+            '<tr class="border-b border-slate-200">' +
+              '<th class="text-left py-2 font-medium text-slate-500 w-28">Field</th>' +
+              '<th class="text-left py-2 font-medium text-blue-600 bg-blue-50/50 px-2">EDI Order</th>' +
+              '<th class="text-left py-2 font-medium text-green-600 bg-green-50/50 px-2">Zoho Draft</th>' +
+            '</tr>' +
+          '</thead>' +
+          '<tbody>' + fieldTableHTML + '</tbody>' +
+        '</table>' +
+      '</div>' +
+
+      // Pre-pack explanation
+      prepackHTML +
+
+      // Line Items Comparison
+      '<div class="mb-4">' +
+        '<h5 class="text-sm font-semibold text-slate-600 mb-2 cursor-pointer" onclick="toggleModalLineItems(' + orderId + ')">' +
+          '<span id="lineItemsToggle-' + orderId + '">▼</span> Line Items (' + ediItems.length + ' EDI → ' + zohoItems.length + ' Zoho)' +
+        '</h5>' +
+        '<div id="lineItemsContainer-' + orderId + '" class="grid grid-cols-2 gap-3">' +
+          // EDI Items
+          '<div>' +
+            '<div class="text-xs font-semibold text-blue-600 mb-1">EDI Order Items</div>' +
+            '<table class="w-full text-xs">' +
+              '<thead class="bg-blue-50">' +
+                '<tr>' +
+                  '<th class="text-left px-2 py-1">Style</th>' +
+                  '<th class="text-left px-2 py-1">Color</th>' +
+                  '<th class="text-center px-2 py-1">UOM</th>' +
+                  '<th class="text-right px-2 py-1">Qty</th>' +
+                  '<th class="text-right px-2 py-1">Unit $</th>' +
+                '</tr>' +
+              '</thead>' +
+              '<tbody>' + ediItemsHTML + '</tbody>' +
+            '</table>' +
+          '</div>' +
+          // Zoho Items
+          '<div>' +
+            '<div class="text-xs font-semibold text-green-600 mb-1">Zoho Draft Items</div>' +
+            '<table class="w-full text-xs">' +
+              '<thead class="bg-green-50">' +
+                '<tr>' +
+                  '<th class="text-left px-2 py-1">Item</th>' +
+                  '<th class="text-left px-2 py-1">UPC</th>' +
+                  '<th class="text-right px-2 py-1">Qty</th>' +
+                  '<th class="text-right px-2 py-1">Rate</th>' +
+                '</tr>' +
+              '</thead>' +
+              '<tbody>' + zohoItemsHTML + '</tbody>' +
+            '</table>' +
           '</div>' +
         '</div>' +
-        '<div class="bg-green-50 rounded-lg p-4 border border-green-200">' +
-          '<div class="text-xs text-green-600 uppercase font-medium mb-2">📤 Zoho Draft</div>' +
-          '<div class="space-y-2 text-sm">' +
-            '<div><span class="text-slate-500">Ref#:</span> <strong>' + (zoho.reference || zoho.number || 'N/A') + '</strong></div>' +
-            '<div><span class="text-slate-500">Customer:</span> <strong>' + (zoho.customer_name || zoho.customer || 'N/A') + '</strong></div>' +
-            '<div><span class="text-slate-500">Amount:</span> <strong>$' + (zoho.total || 0).toLocaleString('en-US', {minimumFractionDigits: 2}) + '</strong></div>' +
-            '<div><span class="text-slate-500">Status:</span> <strong>' + (zoho.status || 'Draft') + '</strong></div>' +
-            '<div><span class="text-slate-500">Items:</span> <strong>' + (zoho.line_items?.length || 0) + '</strong></div>' +
-          '</div>' +
-        '</div>' +
       '</div>' +
-      reviewNote +
-    '</div>';
+
+      // Alternative matches
+      altMatchesHTML;
 
     // Show process button
     if (actionsEl) {
       actionsEl.classList.remove('hidden');
       actionsEl.setAttribute('data-zoho-id', zoho.id || '');
     }
+  }
+
+  // Toggle line items in modal
+  function toggleModalLineItems(orderId) {
+    const container = document.getElementById('lineItemsContainer-' + orderId);
+    const toggle = document.getElementById('lineItemsToggle-' + orderId);
+    if (container.classList.contains('hidden')) {
+      container.classList.remove('hidden');
+      toggle.textContent = '▼';
+    } else {
+      container.classList.add('hidden');
+      toggle.textContent = '▶';
+    }
+  }
+
+  // Switch to alternative match in modal
+  function switchModalMatch(orderId, altIndex) {
+    const cached = modalMatchCache.get(orderId);
+    if (!cached || !cached.alternativeMatches || !cached.alternativeMatches[altIndex]) {
+      toast('Alternative match not found');
+      return;
+    }
+
+    const alt = cached.alternativeMatches[altIndex];
+    // Swap the primary match with the alternative
+    const newResult = {
+      ...cached,
+      zohoDraft: alt.zohoDraft,
+      confidence: alt.confidence,
+      score: alt.score,
+      alternativeMatches: [
+        { zohoDraft: cached.zohoDraft, confidence: cached.confidence, score: cached.score },
+        ...cached.alternativeMatches.filter((_, i) => i !== altIndex)
+      ]
+    };
+
+    modalMatchCache.set(orderId, newResult);
+    renderModalMatch(orderId, newResult);
+    toast('Switched to alternative match');
   }
 
   // Process match directly from modal
