@@ -2404,23 +2404,24 @@ async function startServer() {
     });
     logger.info('SFTP cron job scheduled: ' + schedule);
     
-    // Zoho cache refresh cron job (every 30 min)
-    cron.schedule('*/30 * * * *', async () => {
-      logger.info('Scheduled Zoho cache refresh triggered');
+    // Zoho cache refresh cron job - once daily at 1am to reduce API calls
+    // Manual refresh available via "Refresh Zoho Data" button anytime
+    cron.schedule('0 1 * * *', async () => {
+      logger.info('Scheduled Zoho cache refresh triggered (daily 1am)');
       try {
         const ZohoClient = require('./zoho');
         const zoho = new ZohoClient();
         const result = await zohoDraftsCache.refreshCache(zoho);
         await auditLogger.log('cache_refreshed', {
           severity: SEVERITY.INFO,
-          details: { draftsCount: result.draftsCount, durationMs: result.durationMs, trigger: 'scheduled' }
+          details: { draftsCount: result.draftsCount, durationMs: result.durationMs, trigger: 'scheduled_daily' }
         });
         logger.info('Zoho cache refreshed', { draftsCount: result.draftsCount });
       } catch (error) {
         logger.error('Scheduled cache refresh failed', { error: error.message });
       }
     });
-    logger.info('Zoho cache refresh cron scheduled: every 30 minutes');
+    logger.info('Zoho cache refresh cron scheduled: daily at 1am (use Refresh Zoho Data button for manual sync)');
     
     const port = process.env.PORT || 3000;
     app.listen(port, () => {
