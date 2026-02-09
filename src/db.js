@@ -251,16 +251,23 @@ async function initDatabase() {
 
       CREATE INDEX IF NOT EXISTS idx_customer_rules_name ON customer_matching_rules(customer_name);
       CREATE INDEX IF NOT EXISTS idx_customer_rules_default ON customer_matching_rules(is_default);
-
-      -- Insert default rule if not exists
-      INSERT INTO customer_matching_rules (
-        customer_name, is_default, bulk_order_status, bulk_order_category,
-        match_by_style_customer, action_on_match, notes
-      ) VALUES (
-        NULL, TRUE, 'draft', 'unconfirmed',
-        TRUE, 'update_bulk', 'Default rule for all customers without specific rules'
-      ) ON CONFLICT DO NOTHING;
     `);
+
+    // Insert default rule if not exists (separate query to handle NULL properly)
+    const defaultExists = await client.query(
+      'SELECT id FROM customer_matching_rules WHERE is_default = TRUE LIMIT 1'
+    );
+    if (defaultExists.rows.length === 0) {
+      await client.query(`
+        INSERT INTO customer_matching_rules (
+          customer_name, is_default, bulk_order_status, bulk_order_category,
+          match_by_style_customer, action_on_match, notes
+        ) VALUES (
+          NULL, TRUE, 'draft', 'unconfirmed',
+          TRUE, 'update_bulk', 'Default rule for all customers without specific rules'
+        )
+      `);
+    }
 
     logger.info('Database tables initialized');
   } finally {
