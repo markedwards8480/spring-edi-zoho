@@ -89,6 +89,9 @@ class EDI850Parser {
     const gs = this.getSegment('GS');
     const st = this.getSegment('ST');
 
+    // Parse REF segments for contract/release references
+    const references = this.parseReferences();
+
     return {
       // BEG01: Transaction Set Purpose Code (00=Original, 05=Replace)
       // BEG02: Purchase Order Type Code
@@ -98,16 +101,58 @@ class EDI850Parser {
       poDate: beg ? this.parseDate(beg[5]) : null,
       poType: beg ? beg[2] : null,
       purposeCode: beg ? beg[1] : null,
-      
+
       // ISA sender/receiver
       senderId: isa ? (isa[6] || '').trim() : null,
       receiverId: isa ? (isa[8] || '').trim() : null,
-      
+
       // Control numbers
       interchangeControlNumber: isa ? isa[13] : null,
       groupControlNumber: gs ? gs[6] : null,
-      transactionControlNumber: st ? st[2] : null
+      transactionControlNumber: st ? st[2] : null,
+
+      // Reference numbers from REF segments (for JCP po_rel_num, etc.)
+      ...references
     };
+  }
+
+  /**
+   * Parse REF segments for various reference numbers
+   * REF01 = Qualifier, REF02 = Reference ID, REF03 = Description
+   *
+   * Common qualifiers:
+   * - CT: Contract Number
+   * - PO: Purchase Order Number (original/related)
+   * - RQ: Purchase Requisition Number
+   * - CO: Customer Order Number
+   * - VN: Vendor Order Number
+   * - ON: Dealer Order Number
+   * - KK: Release Number (JCP uses this for po_rel_num)
+   * - ZZ: Mutually Defined
+   */
+  parseReferences() {
+    const refs = {};
+    const refSegments = this.getSegments('REF');
+
+    for (const ref of refSegments) {
+      const qualifier = ref[1];
+      const value = ref[2];
+      const description = ref[3] || '';
+
+      switch (qualifier) {
+        case 'CT': refs.contractNumber = value; break;
+        case 'PO': refs.po_rel_num = value; break;  // Related PO - JCP contract reference
+        case 'RQ': refs.requisitionNumber = value; break;
+        case 'CO': refs.customerOrderNumber = value; break;
+        case 'VN': refs.vendorOrderNumber = value; break;
+        case 'ON': refs.dealerOrderNumber = value; break;
+        case 'KK': refs.releaseNumber = value; refs.po_rel_num = refs.po_rel_num || value; break;
+        case 'ZZ': refs.mutuallyDefined = value; refs.mutuallyDefinedDesc = description; break;
+        default: refs[`ref_${qualifier}`] = value;
+      }
+    }
+
+    return refs;
   }
 
   parseDates() {
