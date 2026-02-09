@@ -388,12 +388,14 @@ class ZohoClient {
   /**
    * Find matches using pre-cached draft data (no API calls)
    * This is the optimized version that uses cached Zoho drafts
+   * Now supports customer-specific matching rules
    */
-  async findMatchingDraftsFromCache(ediOrders, cachedDrafts, customerMappings = []) {
+  async findMatchingDraftsFromCache(ediOrders, cachedDrafts, customerMappings = [], customerRules = []) {
     logger.info('Starting draft matching from cache', {
       ediOrderCount: ediOrders.length,
       cachedDraftsCount: cachedDrafts.length,
-      customerMappingsCount: customerMappings.length
+      customerMappingsCount: customerMappings.length,
+      customerRulesCount: customerRules.length
     });
 
     // Build lookup map for customer mappings (EDI name -> Zoho customer ID)
@@ -403,6 +405,24 @@ class ZohoClient {
         customerMappingLookup.set(m.edi_customer_name.toLowerCase().trim(), m.zoho_customer_id);
       }
     });
+
+    // Helper function to find the applicable rule for a customer
+    const findRuleForCustomer = (customerName) => {
+      if (!customerName) return customerRules.find(r => r.is_default) || null;
+      const customerLower = customerName.toLowerCase().trim();
+      // First try exact match
+      const exactMatch = customerRules.find(r =>
+        !r.is_default && r.customer_name?.toLowerCase().trim() === customerLower
+      );
+      if (exactMatch) return exactMatch;
+      // Then try partial match (customer name contains rule's customer_name)
+      const partialMatch = customerRules.find(r =>
+        !r.is_default && customerLower.includes(r.customer_name?.toLowerCase().trim())
+      );
+      if (partialMatch) return partialMatch;
+      // Fall back to default rule
+      return customerRules.find(r => r.is_default) || null;
+    };
 
     const matches = [];
     const noMatches = [];
@@ -416,10 +436,32 @@ class ZohoClient {
         sum + ((item.quantityOrdered || 0) * (item.unitPrice || 0)), 0);
       const ediShipDate = parsed.dates?.shipNotBefore || '';
 
+      // Find the applicable matching rule for this customer
+      const rule = findRuleForCustomer(ediCustomer);
+      const ruleInfo = rule ? {
+        id: rule.id,
+        customerName: rule.customer_name,
+        isDefault: rule.is_default,
+        matchMethod: rule.match_by_customer_po ? 'customer_po' :
+                     rule.match_by_contract_ref ? 'contract_ref' : 'style_customer',
+        contractRefField: rule.contract_ref_field,
+        actionOnMatch: rule.action_on_match,
+        edi860Action: rule.edi_860_action,
+        bulkOrderStatus: rule.bulk_order_status,
+        bulkOrderCategory: rule.bulk_order_category
+      } : null;
+
       // Collect ALL potential matches, not just the best one
       const potentialMatches = [];
 
       for (const draft of cachedDrafts) {
+        // If rule specifies bulk order status filter, apply it
+        if (rule && rule.bulk_order_status) {
+          const draftStatus = (draft.status || '').toLowerCase();
+          const ruleStatus = rule.bulk_order_status.toLowerCase();
+          if (draftStatus !== ruleStatus) continue; // Skip drafts that don't match the expected status
+        }
+
         // Convert cached draft format to match expected format
         const draftForScoring = {
           salesorder_id: draft.salesorder_id,
@@ -430,22 +472,39 @@ class ZohoClient {
           status: draft.status,
           total: draft.total,
           shipment_date: draft.shipment_date,
-          line_items: draft.line_items || []
+          line_items: draft.line_items || [],
+          // Include contract reference field if needed for rule-based matching
+          po_rel_num: draft.po_rel_num || draft.custom_field_hash?.cf_po_rel_num || ''
         };
 
-        const score = this.scoreMatch(ediOrder, draftForScoring, customerMappingLookup);
+        const score = this.scoreMatch(ediOrder, draftForScoring, customerMappingLookup, rule);
 
-        // MATCHING RULES:
-        // Option 1: PO number matches (strongest signal)
-        // Option 2: Customer + Base Style BOTH match (required - customer alone is not enough)
-        // Minimum threshold: 25 points to be considered a potential match
-        const poMatches = score.details.po;
-        const customerAndStyleMatch = score.details.customer && score.details.baseStyle;
+        // MATCHING RULES - Now based on customer-specific rules if available
+        let shouldInclude = false;
         const meetsThreshold = score.total >= 25;
 
-        // Include ONLY if: PO matches OR (customer AND base style both match)
-        // Customer alone is NOT sufficient - base style must match to avoid wrong orders
-        if (meetsThreshold && (poMatches || customerAndStyleMatch)) {
+        if (rule && rule.match_by_customer_po) {
+          // RULE: Match by Customer PO (e.g., Kohls)
+          // EDI PO number should match Zoho reference_number
+          shouldInclude = meetsThreshold && score.details.po;
+        } else if (rule && rule.match_by_contract_ref) {
+          // RULE: Match by Contract Reference field (e.g., JCP uses po_rel_num)
+          // Check if contract ref field matches
+          const contractRef = rule.contract_ref_field || 'po_rel_num';
+          const ediContractRef = parsed[contractRef] || parsed.header?.[contractRef] || ediPoNumber;
+          const zohoContractRef = draft[contractRef] || draft.custom_field_hash?.[`cf_${contractRef}`] || draft.reference_number || '';
+          const contractRefMatches = ediContractRef && zohoContractRef &&
+            ediContractRef.toLowerCase().trim() === zohoContractRef.toLowerCase().trim();
+          shouldInclude = meetsThreshold && (contractRefMatches || score.details.po);
+          if (contractRefMatches) score.details.contractRef = true;
+        } else {
+          // DEFAULT RULE: Match by Style + Customer (original behavior)
+          const poMatches = score.details.po;
+          const customerAndStyleMatch = score.details.customer && score.details.baseStyle;
+          shouldInclude = meetsThreshold && (poMatches || customerAndStyleMatch);
+        }
+
+        if (shouldInclude) {
           potentialMatches.push({
             draft,
             score,
@@ -495,8 +554,10 @@ class ZohoClient {
           score: bestMatch.score,
           confidence: bestMatch.score.total,
           confidenceLevel: bestMatch.score.total >= 80 ? 'high' : bestMatch.score.total >= 60 ? 'medium' : 'low',
-          // NEW: Include alternative matches
-          alternativeMatches: alternativeMatches
+          // Include alternative matches
+          alternativeMatches: alternativeMatches,
+          // Include applicable matching rule info for this customer
+          matchingRule: ruleInfo
         });
       } else {
         noMatches.push({
@@ -509,7 +570,9 @@ class ZohoClient {
             totalUnits: ediItems.reduce((s, i) => s + (i.quantityOrdered || 0), 0),
             totalAmount: ediTotal,
             items: ediItems
-          }
+          },
+          // Include rule info even for no-matches (to show what rule was applied)
+          matchingRule: ruleInfo
         });
       }
     }
@@ -536,8 +599,10 @@ class ZohoClient {
    * - Total Amount match: 7 points (within 5% = 7, within 15% = 3)
    *
    * 100% = All criteria match perfectly
+   *
+   * Now supports customer-specific rules for customized scoring
    */
-  scoreMatch(ediOrder, zohoDraft, customerMappingLookup = new Map()) {
+  scoreMatch(ediOrder, zohoDraft, customerMappingLookup = new Map(), rule = null) {
     const score = {
       total: 0,
       details: {
@@ -550,10 +615,12 @@ class ZohoClient {
         totalUnits: false,
         baseStyle: false,
         styleSuffix: false,
+        contractRef: false,
         shipDateDiffDays: null,
         cancelDateDiffDays: null,
         amountDiffPercent: null,
-        unitsDiffPercent: null
+        unitsDiffPercent: null,
+        matchMethod: rule ? (rule.match_by_customer_po ? 'customer_po' : rule.match_by_contract_ref ? 'contract_ref' : 'style_customer') : 'style_customer'
       }
     };
 

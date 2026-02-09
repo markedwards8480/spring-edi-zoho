@@ -881,8 +881,12 @@ app.post('/find-matches', async (req, res) => {
     const mappingsResult = await pool.query('SELECT * FROM customer_mappings');
     const customerMappings = mappingsResult.rows || [];
 
-    // Run matching against cached drafts (with customer mappings)
-    const matchResults = await zoho.findMatchingDraftsFromCache(orders, drafts, customerMappings);
+    // Load customer-specific matching rules
+    const rulesResult = await pool.query('SELECT * FROM customer_matching_rules ORDER BY is_default ASC, customer_name ASC');
+    const customerRules = rulesResult.rows || [];
+
+    // Run matching against cached drafts (with customer mappings and rules)
+    const matchResults = await zoho.findMatchingDraftsFromCache(orders, drafts, customerMappings, customerRules);
     
     // Save match results server-side
     const session = await auditLogger.saveMatchSession(

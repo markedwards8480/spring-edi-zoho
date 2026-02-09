@@ -3061,12 +3061,32 @@ const dashboardHTML = `
       }).filter(Boolean))];
       const zohoCount = matchResults?.draftsChecked || 'unknown';
 
+      // Rule info for no-match
+      const noMatchRuleInfo = result.matchingRule;
+      let noMatchRuleHTML = '';
+      if (noMatchRuleInfo) {
+        const ruleMethodLabel = noMatchRuleInfo.matchMethod === 'customer_po' ? 'Customer PO' :
+                                noMatchRuleInfo.matchMethod === 'contract_ref' ? 'Contract Ref (' + (noMatchRuleInfo.contractRefField || 'po_rel_num') + ')' :
+                                'Style + Customer';
+        noMatchRuleHTML = '<div class="bg-slate-100 border border-slate-200 rounded-lg p-3 mb-4">' +
+          '<div class="flex items-center gap-3 text-sm text-slate-600">' +
+            '<span class="font-medium">🔧 Matching Rule:</span>' +
+            '<span>' + (noMatchRuleInfo.isDefault ? 'Default (all customers)' : noMatchRuleInfo.customerName) + '</span>' +
+            '<span class="text-slate-400">|</span>' +
+            '<span>Searched by: <strong>' + ruleMethodLabel + '</strong></span>' +
+          '</div>' +
+        '</div>';
+      }
+
       contentEl.innerHTML =
         '<div class="text-center py-4">' +
           '<div class="text-5xl mb-4">🔴</div>' +
           '<div class="text-xl font-semibold text-red-600 mb-2">No Zoho Match Found</div>' +
           '<div class="text-slate-500 mb-4">This EDI order does not have a matching draft in Zoho.</div>' +
         '</div>' +
+
+        // Rule info (if available)
+        noMatchRuleHTML +
 
         // What we searched for
         '<div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">' +
@@ -3286,6 +3306,29 @@ const dashboardHTML = `
         '</div></div>';
     }
 
+    // Matching rule info banner
+    const ruleInfo = result.matchingRule;
+    let ruleInfoHTML = '';
+    if (ruleInfo) {
+      const ruleMethodLabel = ruleInfo.matchMethod === 'customer_po' ? '🔗 Customer PO' :
+                              ruleInfo.matchMethod === 'contract_ref' ? '📋 Contract Ref (' + (ruleInfo.contractRefField || 'po_rel_num') + ')' :
+                              '👤 Style + Customer';
+      const actionLabel = ruleInfo.actionOnMatch === 'create_new_drawdown' ?
+        '<span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs">Create New + Drawdown</span>' :
+        '<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs">Update Bulk</span>';
+      ruleInfoHTML = '<div class="mb-3 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg">' +
+        '<div class="flex items-center justify-between">' +
+          '<div class="flex items-center gap-3 text-sm text-slate-600">' +
+            '<span class="font-medium">🔧 Rule:</span>' +
+            '<span>' + (ruleInfo.isDefault ? 'Default (all customers)' : ruleInfo.customerName) + '</span>' +
+            '<span class="text-slate-400">|</span>' +
+            '<span>Match by: <strong>' + ruleMethodLabel + '</strong></span>' +
+          '</div>' +
+          '<div>' + actionLabel + '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
     // Selection info banner
     const counts = getSelectionCounts(orderId, ediItems.length);
     const isFull = isFullSelection(orderId, ediItems.length);
@@ -3311,6 +3354,9 @@ const dashboardHTML = `
         '</div>' +
         '<div class="px-4 py-2 rounded-lg border ' + confBg + ' font-bold text-xl">' + conf + '%</div>' +
       '</div>' +
+
+      // Matching rule info (if using customer rules)
+      ruleInfoHTML +
 
       // Selection info
       selectionInfoHTML +
