@@ -206,6 +206,62 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_discrepancies_type ON discrepancies(discrepancy_type);
     `);
 
+    // Create customer_matching_rules table for customer-specific EDI matching configuration
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS customer_matching_rules (
+        id SERIAL PRIMARY KEY,
+
+        -- Customer identification (NULL = default rule for all customers)
+        customer_name VARCHAR(500),
+        is_default BOOLEAN DEFAULT FALSE,
+
+        -- How to identify bulk/contract orders in Zoho
+        bulk_order_status VARCHAR(50) DEFAULT 'draft',           -- draft, confirmed
+        bulk_order_category VARCHAR(50) DEFAULT 'unconfirmed',   -- unconfirmed, confirmed
+        bulk_po_field_pattern VARCHAR(100) DEFAULT 'EDI',        -- Pattern to match in PO field
+
+        -- How to match EDI to bulk order
+        match_by_customer_po BOOLEAN DEFAULT FALSE,              -- Match by Customer PO number (Kohls)
+        match_by_contract_ref BOOLEAN DEFAULT FALSE,             -- Match by contract reference field (JCP)
+        contract_ref_field VARCHAR(100) DEFAULT 'po_rel_num',    -- Field name for contract reference
+        match_by_style_customer BOOLEAN DEFAULT TRUE,            -- Match by style + customer (default)
+
+        -- Matching criteria toggles
+        match_style BOOLEAN DEFAULT TRUE,
+        match_color BOOLEAN DEFAULT TRUE,
+        match_units BOOLEAN DEFAULT FALSE,
+        match_delivery_date BOOLEAN DEFAULT TRUE,
+
+        -- What happens on match
+        action_on_match VARCHAR(50) DEFAULT 'update_bulk',       -- update_bulk, create_new_drawdown
+        -- update_bulk: EDI updates the bulk order directly
+        -- create_new_drawdown: Create new order from EDI, reduce bulk quantities
+
+        -- 860 handling
+        edi_860_action VARCHAR(50) DEFAULT 'update_existing',    -- update_existing, create_amendment
+
+        -- Metadata
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        created_by VARCHAR(100),
+
+        UNIQUE(customer_name)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_customer_rules_name ON customer_matching_rules(customer_name);
+      CREATE INDEX IF NOT EXISTS idx_customer_rules_default ON customer_matching_rules(is_default);
+
+      -- Insert default rule if not exists
+      INSERT INTO customer_matching_rules (
+        customer_name, is_default, bulk_order_status, bulk_order_category,
+        match_by_style_customer, action_on_match, notes
+      ) VALUES (
+        NULL, TRUE, 'draft', 'unconfirmed',
+        TRUE, 'update_bulk', 'Default rule for all customers without specific rules'
+      ) ON CONFLICT DO NOTHING;
+    `);
+
     logger.info('Database tables initialized');
   } finally {
     client.release();

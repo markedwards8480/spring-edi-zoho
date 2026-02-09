@@ -359,6 +359,20 @@ const dashboardHTML = `
           <div id="mappingsContent">Loading...</div>
         </div>
 
+        <!-- Customer Matching Rules -->
+        <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-lg font-semibold text-slate-800">🔧 Customer Matching Rules</h3>
+              <p class="text-slate-500 text-sm">Configure how EDI orders are matched to Zoho bulk/contract orders per customer</p>
+            </div>
+            <button onclick="showAddRuleModal()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm font-medium">
+              + Add Customer Rule
+            </button>
+          </div>
+          <div id="customerRulesContent">Loading...</div>
+        </div>
+
         <!-- SFTP Browser -->
         <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
           <h3 class="text-lg font-semibold text-slate-800 mb-4">SFTP Browser</h3>
@@ -534,7 +548,7 @@ const dashboardHTML = `
     // Load data for specific stages
     if (stage === 'done') loadSentOrders();
     if (stage === 'history') { loadActivityLog(); loadAuditStats(); }
-    if (stage === 'settings') loadMappings();
+    if (stage === 'settings') { loadMappings(); loadCustomerRules(); }
     if (stage === 'review') {
       // If no matches in memory, try to load from session first
       if (!matchResults || (!matchResults.matches?.length && !matchResults.noMatches?.length)) {
@@ -4132,6 +4146,333 @@ const dashboardHTML = `
 
     btn.disabled = false;
     btn.innerHTML = '🔄 Re-parse All Orders';
+  }
+
+  // ============================================================
+  // CUSTOMER MATCHING RULES
+  // ============================================================
+  let customerRulesCache = [];
+
+  async function loadCustomerRules() {
+    try {
+      const res = await fetch('/customer-rules');
+      const data = await res.json();
+
+      if (!data.rules || data.rules.length === 0) {
+        document.getElementById('customerRulesContent').innerHTML = \`
+          <div class="text-center py-8 text-slate-500">
+            <p class="mb-2">No customer matching rules configured yet.</p>
+            <p class="text-sm">Click "Add Customer Rule" to set up matching rules for specific customers.</p>
+          </div>
+        \`;
+        return;
+      }
+
+      customerRulesCache = data.rules;
+
+      document.getElementById('customerRulesContent').innerHTML = \`
+        <div class="space-y-3">
+          \${data.rules.map(rule => {
+            const isDefault = rule.is_default;
+            const matchMethod = rule.match_by_customer_po ? 'Customer PO' :
+                               rule.match_by_contract_ref ? 'Contract Ref (' + rule.contract_ref_field + ')' :
+                               'Style + Customer';
+            const actionLabel = rule.action_on_match === 'create_new_drawdown' ? 'Create New + Drawdown' : 'Update Bulk';
+            const statusBadge = rule.bulk_order_status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
+
+            return \`
+              <div class="border border-slate-200 rounded-lg p-4 \${isDefault ? 'bg-blue-50/30 border-blue-200' : 'hover:bg-slate-50'}">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center gap-2">
+                    <span class="font-semibold text-slate-800">\${isDefault ? '📋 Default Rule (All Customers)' : '🏪 ' + rule.customer_name}</span>
+                    \${isDefault ? '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Default</span>' : ''}
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button onclick="editCustomerRule(\${rule.id})" class="text-blue-600 hover:text-blue-800 text-sm">Edit</button>
+                    \${!isDefault ? '<button onclick="deleteCustomerRule(' + rule.id + ', \\'' + escapeQuotes(rule.customer_name) + '\\')" class="text-red-600 hover:text-red-800 text-sm">Delete</button>' : ''}
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                  <div>
+                    <span class="text-slate-500">Match By:</span>
+                    <span class="font-medium text-slate-700 ml-1">\${matchMethod}</span>
+                  </div>
+                  <div>
+                    <span class="text-slate-500">Bulk Status:</span>
+                    <span class="px-2 py-0.5 rounded text-xs \${statusBadge} ml-1">\${rule.bulk_order_status}</span>
+                  </div>
+                  <div>
+                    <span class="text-slate-500">On Match:</span>
+                    <span class="font-medium text-slate-700 ml-1">\${actionLabel}</span>
+                  </div>
+                  <div>
+                    <span class="text-slate-500">860 Action:</span>
+                    <span class="font-medium text-slate-700 ml-1">\${rule.edi_860_action === 'update_existing' ? 'Update Existing' : 'Create Amendment'}</span>
+                  </div>
+                </div>
+                \${rule.notes ? '<div class="mt-2 text-xs text-slate-500 italic">' + rule.notes + '</div>' : ''}
+              </div>
+            \`;
+          }).join('')}
+        </div>
+      \`;
+    } catch (e) {
+      document.getElementById('customerRulesContent').innerHTML = '<p class="text-red-500">Failed to load rules: ' + e.message + '</p>';
+    }
+  }
+
+  async function showAddRuleModal(editId = null) {
+    // Load existing rule if editing
+    let rule = null;
+    if (editId) {
+      rule = customerRulesCache.find(r => r.id === editId);
+    }
+
+    const isEdit = editId !== null;
+    const isDefault = rule?.is_default;
+
+    const modalHtml = \`
+      <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onclick="closeModal(event)">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+          <div class="px-6 py-4 border-b border-slate-200 sticky top-0 bg-white">
+            <h3 class="text-lg font-semibold text-slate-800">\${isEdit ? 'Edit' : 'Add'} Customer Matching Rule</h3>
+          </div>
+          <div class="p-6 space-y-6">
+
+            <!-- Customer Name -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2">Customer Name</label>
+              \${isDefault ?
+                '<input type="text" value="Default Rule (All Customers)" disabled class="w-full px-4 py-2 border border-slate-300 rounded-lg bg-slate-100 text-slate-500">' :
+                '<input type="text" id="ruleCustomerName" value="' + (rule?.customer_name || '') + '" placeholder="e.g., Kohls, JC Penney, Burlington Coat Factory" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">'
+              }
+              <p class="text-xs text-slate-500 mt-1">Enter customer name exactly as it appears in EDI orders, or leave blank for default rule</p>
+            </div>
+
+            <!-- Bulk Order Identification -->
+            <div class="p-4 bg-slate-50 rounded-lg">
+              <h4 class="font-medium text-slate-700 mb-3">📦 How to Identify Bulk/Contract Orders in Zoho</h4>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm text-slate-600 mb-1">Bulk Order Status</label>
+                  <select id="ruleBulkStatus" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="draft" \${rule?.bulk_order_status === 'draft' ? 'selected' : ''}>Draft</option>
+                    <option value="confirmed" \${rule?.bulk_order_status === 'confirmed' ? 'selected' : ''}>Confirmed</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm text-slate-600 mb-1">Bulk Order Category</label>
+                  <select id="ruleBulkCategory" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                    <option value="unconfirmed" \${rule?.bulk_order_category === 'unconfirmed' ? 'selected' : ''}>Unconfirmed</option>
+                    <option value="confirmed" \${rule?.bulk_order_category === 'confirmed' ? 'selected' : ''}>Confirmed</option>
+                  </select>
+                </div>
+              </div>
+              <div class="mt-3">
+                <label class="block text-sm text-slate-600 mb-1">PO Field Pattern (optional)</label>
+                <input type="text" id="rulePOPattern" value="\${rule?.bulk_po_field_pattern || 'EDI'}" placeholder="e.g., EDI" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                <p class="text-xs text-slate-400 mt-1">Pattern to look for in the PO field to identify bulk orders</p>
+              </div>
+            </div>
+
+            <!-- Matching Method -->
+            <div class="p-4 bg-blue-50 rounded-lg">
+              <h4 class="font-medium text-slate-700 mb-3">🔗 How to Match EDI to Bulk Order</h4>
+              <div class="space-y-3">
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="matchMethod" value="style_customer" \${!rule?.match_by_customer_po && !rule?.match_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
+                  <div>
+                    <span class="font-medium text-slate-700">Match by Style + Customer</span>
+                    <p class="text-xs text-slate-500">Match using customer name, style, color, and delivery date</p>
+                  </div>
+                </label>
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="matchMethod" value="customer_po" \${rule?.match_by_customer_po ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
+                  <div>
+                    <span class="font-medium text-slate-700">Match by Customer PO Number</span>
+                    <p class="text-xs text-slate-500">EDI and bulk order share the same Customer PO number (e.g., Kohls)</p>
+                  </div>
+                </label>
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="matchMethod" value="contract_ref" \${rule?.match_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
+                  <div>
+                    <span class="font-medium text-slate-700">Match by Contract Reference Field</span>
+                    <p class="text-xs text-slate-500">EDI has a reference to the contract order number (e.g., JCP uses po_rel_num)</p>
+                  </div>
+                </label>
+                <div id="contractRefFieldContainer" class="ml-6 \${rule?.match_by_contract_ref ? '' : 'hidden'}">
+                  <label class="block text-sm text-slate-600 mb-1">Contract Reference Field Name</label>
+                  <input type="text" id="ruleContractRefField" value="\${rule?.contract_ref_field || 'po_rel_num'}" placeholder="e.g., po_rel_num" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                </div>
+              </div>
+            </div>
+
+            <!-- Matching Criteria -->
+            <div class="p-4 bg-green-50 rounded-lg">
+              <h4 class="font-medium text-slate-700 mb-3">✅ Matching Criteria</h4>
+              <div class="grid grid-cols-2 gap-3">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="ruleMatchStyle" \${rule?.match_style !== false ? 'checked' : ''} class="w-4 h-4 rounded">
+                  <span class="text-sm text-slate-700">Match Style</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="ruleMatchColor" \${rule?.match_color !== false ? 'checked' : ''} class="w-4 h-4 rounded">
+                  <span class="text-sm text-slate-700">Match Color</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="ruleMatchUnits" \${rule?.match_units ? 'checked' : ''} class="w-4 h-4 rounded">
+                  <span class="text-sm text-slate-700">Match Units</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="ruleMatchDelivery" \${rule?.match_delivery_date !== false ? 'checked' : ''} class="w-4 h-4 rounded">
+                  <span class="text-sm text-slate-700">Match Delivery Date</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Action on Match -->
+            <div class="p-4 bg-amber-50 rounded-lg">
+              <h4 class="font-medium text-slate-700 mb-3">⚡ Action When Match Found</h4>
+              <div class="space-y-3">
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="actionOnMatch" value="update_bulk" \${rule?.action_on_match !== 'create_new_drawdown' ? 'checked' : ''} class="mt-1">
+                  <div>
+                    <span class="font-medium text-slate-700">Update Bulk Order</span>
+                    <p class="text-xs text-slate-500">EDI data updates the bulk order directly (current behavior)</p>
+                  </div>
+                </label>
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="actionOnMatch" value="create_new_drawdown" \${rule?.action_on_match === 'create_new_drawdown' ? 'checked' : ''} class="mt-1">
+                  <div>
+                    <span class="font-medium text-slate-700">Create New Order + Draw Down Bulk</span>
+                    <p class="text-xs text-slate-500">Create new Zoho order from EDI, reduce quantities from bulk order (contract matching)</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- 860 Handling -->
+            <div class="p-4 bg-purple-50 rounded-lg">
+              <h4 class="font-medium text-slate-700 mb-3">🔄 EDI 860 (Change Order) Handling</h4>
+              <div class="space-y-3">
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="edi860Action" value="update_existing" \${rule?.edi_860_action !== 'create_amendment' ? 'checked' : ''} class="mt-1">
+                  <div>
+                    <span class="font-medium text-slate-700">Update Existing Order</span>
+                    <p class="text-xs text-slate-500">Find and update the Zoho order created from the original EDI</p>
+                  </div>
+                </label>
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="edi860Action" value="create_amendment" \${rule?.edi_860_action === 'create_amendment' ? 'checked' : ''} class="mt-1">
+                  <div>
+                    <span class="font-medium text-slate-700">Create Amendment Order</span>
+                    <p class="text-xs text-slate-500">Create a new amendment order linked to the original</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Notes -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 mb-2">Notes (optional)</label>
+              <textarea id="ruleNotes" rows="2" placeholder="Add any notes about this customer's matching rules..." class="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">\${rule?.notes || ''}</textarea>
+            </div>
+          </div>
+
+          <div class="px-6 py-4 bg-slate-50 rounded-b-xl flex justify-end gap-3 sticky bottom-0">
+            <button onclick="closeModal()" class="px-4 py-2 text-slate-600 hover:text-slate-800 transition">Cancel</button>
+            <button onclick="saveCustomerRule(\${editId}, \${isDefault})" class="px-5 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-medium">
+              \${isEdit ? 'Update' : 'Save'} Rule
+            </button>
+          </div>
+        </div>
+      </div>
+    \`;
+
+    document.getElementById('modalContainer').innerHTML = modalHtml;
+  }
+
+  function toggleContractRefField() {
+    const contractRefRadio = document.querySelector('input[name="matchMethod"][value="contract_ref"]');
+    const container = document.getElementById('contractRefFieldContainer');
+    if (contractRefRadio && container) {
+      container.classList.toggle('hidden', !contractRefRadio.checked);
+    }
+  }
+
+  function editCustomerRule(id) {
+    showAddRuleModal(id);
+  }
+
+  async function saveCustomerRule(editId = null, isDefault = false) {
+    const customerName = isDefault ? null : document.getElementById('ruleCustomerName')?.value.trim();
+
+    if (!isDefault && !customerName) {
+      toast('Please enter a customer name');
+      return;
+    }
+
+    const matchMethod = document.querySelector('input[name="matchMethod"]:checked')?.value || 'style_customer';
+    const actionOnMatch = document.querySelector('input[name="actionOnMatch"]:checked')?.value || 'update_bulk';
+    const edi860Action = document.querySelector('input[name="edi860Action"]:checked')?.value || 'update_existing';
+
+    const ruleData = {
+      customer_name: customerName,
+      is_default: isDefault,
+      bulk_order_status: document.getElementById('ruleBulkStatus')?.value || 'draft',
+      bulk_order_category: document.getElementById('ruleBulkCategory')?.value || 'unconfirmed',
+      bulk_po_field_pattern: document.getElementById('rulePOPattern')?.value || 'EDI',
+      match_by_customer_po: matchMethod === 'customer_po',
+      match_by_contract_ref: matchMethod === 'contract_ref',
+      contract_ref_field: document.getElementById('ruleContractRefField')?.value || 'po_rel_num',
+      match_by_style_customer: matchMethod === 'style_customer',
+      match_style: document.getElementById('ruleMatchStyle')?.checked !== false,
+      match_color: document.getElementById('ruleMatchColor')?.checked !== false,
+      match_units: document.getElementById('ruleMatchUnits')?.checked || false,
+      match_delivery_date: document.getElementById('ruleMatchDelivery')?.checked !== false,
+      action_on_match: actionOnMatch,
+      edi_860_action: edi860Action,
+      notes: document.getElementById('ruleNotes')?.value || null
+    };
+
+    try {
+      const res = await fetch('/customer-rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(ruleData)
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        toast('✓ Rule saved for ' + (isDefault ? 'Default' : customerName));
+        closeModal();
+        loadCustomerRules();
+      } else {
+        toast('Error: ' + (data.error || 'Failed to save rule'));
+      }
+    } catch (e) {
+      toast('Error: ' + e.message);
+    }
+  }
+
+  async function deleteCustomerRule(id, customerName) {
+    if (!confirm('Delete matching rule for "' + customerName + '"?\\n\\nThis customer will use the default rule instead.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch('/customer-rules/' + id, { method: 'DELETE' });
+      const data = await res.json();
+
+      if (data.success) {
+        toast('✓ Rule deleted');
+        loadCustomerRules();
+      } else {
+        toast('Error: ' + (data.error || 'Failed to delete'));
+      }
+    } catch (e) {
+      toast('Error: ' + e.message);
+    }
   }
 
   // ============================================================

@@ -1748,6 +1748,172 @@ app.get('/cache/drafts', async (req, res) => {
 });
 
 // ============================================================
+// CUSTOMER MATCHING RULES ENDPOINTS
+// ============================================================
+
+// Get all customer matching rules
+app.get('/customer-rules', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT * FROM customer_matching_rules
+      ORDER BY is_default DESC, customer_name ASC
+    `);
+    res.json({ success: true, rules: result.rows });
+  } catch (error) {
+    logger.error('Failed to get customer rules', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get rule for a specific customer (or default)
+app.get('/customer-rules/:customerName', async (req, res) => {
+  try {
+    const { customerName } = req.params;
+
+    // First try to find customer-specific rule
+    let result = await pool.query(
+      'SELECT * FROM customer_matching_rules WHERE customer_name = $1',
+      [customerName]
+    );
+
+    // If not found, get default rule
+    if (result.rows.length === 0) {
+      result = await pool.query(
+        'SELECT * FROM customer_matching_rules WHERE is_default = TRUE'
+      );
+    }
+
+    if (result.rows.length > 0) {
+      res.json({ success: true, rule: result.rows[0] });
+    } else {
+      res.json({ success: true, rule: null });
+    }
+  } catch (error) {
+    logger.error('Failed to get customer rule', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Create or update customer rule
+app.post('/customer-rules', async (req, res) => {
+  try {
+    const {
+      customer_name,
+      is_default,
+      bulk_order_status,
+      bulk_order_category,
+      bulk_po_field_pattern,
+      match_by_customer_po,
+      match_by_contract_ref,
+      contract_ref_field,
+      match_by_style_customer,
+      match_style,
+      match_color,
+      match_units,
+      match_delivery_date,
+      action_on_match,
+      edi_860_action,
+      notes
+    } = req.body;
+
+    const result = await pool.query(`
+      INSERT INTO customer_matching_rules (
+        customer_name, is_default, bulk_order_status, bulk_order_category,
+        bulk_po_field_pattern, match_by_customer_po, match_by_contract_ref,
+        contract_ref_field, match_by_style_customer, match_style, match_color,
+        match_units, match_delivery_date, action_on_match, edi_860_action, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      ON CONFLICT (customer_name) DO UPDATE SET
+        is_default = EXCLUDED.is_default,
+        bulk_order_status = EXCLUDED.bulk_order_status,
+        bulk_order_category = EXCLUDED.bulk_order_category,
+        bulk_po_field_pattern = EXCLUDED.bulk_po_field_pattern,
+        match_by_customer_po = EXCLUDED.match_by_customer_po,
+        match_by_contract_ref = EXCLUDED.match_by_contract_ref,
+        contract_ref_field = EXCLUDED.contract_ref_field,
+        match_by_style_customer = EXCLUDED.match_by_style_customer,
+        match_style = EXCLUDED.match_style,
+        match_color = EXCLUDED.match_color,
+        match_units = EXCLUDED.match_units,
+        match_delivery_date = EXCLUDED.match_delivery_date,
+        action_on_match = EXCLUDED.action_on_match,
+        edi_860_action = EXCLUDED.edi_860_action,
+        notes = EXCLUDED.notes,
+        updated_at = NOW()
+      RETURNING *
+    `, [
+      customer_name, is_default || false, bulk_order_status || 'draft',
+      bulk_order_category || 'unconfirmed', bulk_po_field_pattern || 'EDI',
+      match_by_customer_po || false, match_by_contract_ref || false,
+      contract_ref_field || 'po_rel_num', match_by_style_customer !== false,
+      match_style !== false, match_color !== false, match_units || false,
+      match_delivery_date !== false, action_on_match || 'update_bulk',
+      edi_860_action || 'update_existing', notes || null
+    ]);
+
+    await auditLogger.log('customer_rule_saved', {
+      severity: SEVERITY.INFO,
+      details: { customer_name, action: result.rowCount > 0 ? 'created/updated' : 'failed' }
+    });
+
+    res.json({ success: true, rule: result.rows[0] });
+  } catch (error) {
+    logger.error('Failed to save customer rule', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete a customer rule
+app.delete('/customer-rules/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Don't allow deleting the default rule
+    const checkResult = await pool.query(
+      'SELECT is_default, customer_name FROM customer_matching_rules WHERE id = $1',
+      [id]
+    );
+
+    if (checkResult.rows.length > 0 && checkResult.rows[0].is_default) {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot delete the default rule'
+      });
+    }
+
+    const customerName = checkResult.rows[0]?.customer_name;
+
+    await pool.query('DELETE FROM customer_matching_rules WHERE id = $1', [id]);
+
+    await auditLogger.log('customer_rule_deleted', {
+      severity: SEVERITY.INFO,
+      details: { id, customer_name: customerName }
+    });
+
+    res.json({ success: true, message: 'Rule deleted' });
+  } catch (error) {
+    logger.error('Failed to delete customer rule', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get distinct customer names from EDI orders (for dropdown)
+app.get('/customer-rules/customers/list', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT DISTINCT edi_customer_name as name
+      FROM edi_orders
+      WHERE edi_customer_name IS NOT NULL
+      ORDER BY edi_customer_name
+    `);
+    res.json({ success: true, customers: result.rows.map(r => r.name) });
+  } catch (error) {
+    logger.error('Failed to get customer list', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================
 // MATCH SESSION ENDPOINTS
 // ============================================================
 
