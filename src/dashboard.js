@@ -1,5 +1,5 @@
 // Dashboard with Matching System - Mark Edwards Apparel
-// Clean UI Design with Tailwind CSS
+// Mark Edwards Design System
 
 const dashboardHTML = `
 <!DOCTYPE html>
@@ -9,55 +9,99 @@ const dashboardHTML = `
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Spring EDI | Mark Edwards Apparel</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            me: {
+              dark: '#1e3a5f',
+              hover: '#2d5a7f',
+              accent: '#0088c2',
+              bg: '#f5f5f7',
+              border: '#e5e5e5',
+              'text-primary': '#1e3a5f',
+              'text-secondary': '#86868b',
+              'text-muted': '#6e6e73',
+              success: '#34c759',
+              error: '#ff3b30',
+              warning: '#ff9500',
+            }
+          },
+          fontFamily: {
+            sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
   <style>
+    * { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body { background: #f5f5f7; color: #1e3a5f; }
     @keyframes pulse-green { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .pulse-green { animation: pulse-green 2s infinite; }
-    kbd { display: inline-block; padding: 2px 6px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; font-family: monospace; }
-    .stage-btn.active { box-shadow: 0 4px 12px rgba(0,0,0,0.15); transform: scale(1.02); }
-    .toast { position: fixed; bottom: 24px; right: 24px; background: #1e293b; color: white; padding: 12px 20px; border-radius: 8px; font-size: 14px; z-index: 9999; animation: slideIn 0.3s ease; }
+    kbd { display: inline-block; padding: 2px 6px; background: #f5f5f7; border: 1px solid #d2d2d7; border-radius: 4px; font-size: 11px; font-family: monospace; }
+    .stage-btn { transition: all 0.2s ease; }
+    .stage-btn.active { box-shadow: 0 4px 12px rgba(0,0,0,0.12); transform: scale(1.02); }
+    .toast { position: fixed; bottom: 24px; right: 24px; background: #1e3a5f; color: white; padding: 12px 20px; border-radius: 8px; font-size: 14px; z-index: 9999; animation: slideIn 0.3s ease; }
     @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(4px); }
     .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .tab-btn.active { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
+    .tab-btn.active { border-bottom: 2px solid #0088c2; color: #0088c2; }
     .tab-btn { border-bottom: 2px solid transparent; }
     .inbox-layout { display: flex; gap: 24px; }
     .inbox-sidebar { width: 280px; flex-shrink: 0; }
     .inbox-main { flex: 1; min-width: 0; }
-    .sidebar-section { background: white; border-radius: 12px; border: 1px solid #e2e8f0; padding: 16px; margin-bottom: 16px; }
-    .sidebar-header { font-weight: 600; font-size: 0.875rem; color: #334155; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
-    .sidebar-header:hover { color: #1e293b; }
-    .sidebar-header .total { margin-left: auto; font-weight: 500; color: #64748b; }
+    .sidebar-section { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); padding: 16px; margin-bottom: 16px; }
+    .sidebar-header { font-weight: 600; font-size: 0.875rem; color: #1e3a5f; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    .sidebar-header:hover { color: #2d5a7f; }
+    .sidebar-header .total { margin-left: auto; font-weight: 500; color: #86868b; }
     .customer-treemap { display: flex; flex-direction: column; gap: 6px; }
     .treemap-item { padding: 10px 12px; color: white; border-radius: 8px; cursor: pointer; transition: all 0.15s; display: flex; flex-direction: column; }
     .treemap-item:hover { transform: translateX(4px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-    .treemap-item.active { outline: 2px solid #3b82f6; outline-offset: 2px; }
+    .treemap-item.active { outline: 2px solid #0088c2; outline-offset: 2px; }
     .treemap-label { font-weight: 600; font-size: 0.8125rem; margin-bottom: 2px; }
     .treemap-value { font-size: 0.75rem; opacity: 0.95; }
     .treemap-stats { font-size: 0.6875rem; opacity: 0.85; margin-top: 2px; }
+
+    /* Mark Edwards Card Style */
+    .me-card { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: transform 0.2s, box-shadow 0.2s; }
+    .me-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+    .me-btn-primary { background: #1e3a5f; color: white; border: none; border-radius: 8px; padding: 0.5rem 1rem; font-weight: 500; transition: background 0.15s; }
+    .me-btn-primary:hover { background: #2d5a7f; }
+    .me-btn-secondary { background: white; color: #1e3a5f; border: 1px solid #d2d2d7; border-radius: 8px; padding: 0.5rem 1rem; font-weight: 500; transition: all 0.15s; }
+    .me-btn-secondary:hover { background: #f5f5f7; }
+
+    /* Input focus states */
+    input:focus, select:focus { border-color: #1e3a5f !important; outline: none; box-shadow: 0 0 0 2px rgba(30,58,95,0.15) !important; }
+
+    /* Table styles */
+    thead { background: #f5f5f7; }
+    th { color: #86868b; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
   </style>
 </head>
-<body class="bg-slate-50 min-h-screen">
+<body class="min-h-screen" style="background: #f5f5f7; color: #1e3a5f;">
 
   <!-- Header -->
-  <header class="bg-slate-800 text-white px-6 py-4">
+  <header style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a7f 100%); box-shadow: 0 2px 8px rgba(0,0,0,0.15);" class="text-white px-6 py-4">
     <div class="flex items-center justify-between max-w-7xl mx-auto">
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-800 font-bold text-sm">ME</div>
+        <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center font-bold text-sm" style="color: #1e3a5f;">ME</div>
         <div>
-          <h1 class="font-semibold">Spring EDI Integration</h1>
-          <p class="text-slate-400 text-sm">Mark Edwards Apparel</p>
+          <h1 class="font-semibold text-lg">Spring EDI Integration</h1>
+          <p class="text-sm" style="opacity: 0.75;">Mark Edwards Apparel</p>
         </div>
       </div>
       <div class="flex items-center gap-6">
-        <button onclick="showStage('settings')" class="text-sm text-slate-400 hover:text-white transition flex items-center gap-1.5">
+        <button onclick="showStage('settings')" class="text-sm hover:text-white transition flex items-center gap-1.5" style="color: rgba(255,255,255,0.7);">
           ⚙️ Settings
         </button>
-        <button onclick="showStage('history')" class="text-sm text-slate-400 hover:text-white transition flex items-center gap-1.5">
+        <button onclick="showStage('history')" class="text-sm hover:text-white transition flex items-center gap-1.5" style="color: rgba(255,255,255,0.7);">
           📋 Activity Log
         </button>
-        <div class="flex items-center gap-2 text-sm text-slate-400">
-          <div class="w-2 h-2 bg-green-400 rounded-full pulse-green"></div>
+        <div class="flex items-center gap-2 text-sm" style="color: rgba(255,255,255,0.7);">
+          <div class="w-2 h-2 rounded-full pulse-green" style="background: #34c759;"></div>
           System Online
         </div>
       </div>
@@ -65,12 +109,12 @@ const dashboardHTML = `
   </header>
 
   <!-- WORKFLOW PROGRESS BAR -->
-  <div class="bg-white border-b shadow-sm">
+  <div style="background: white; border-bottom: 1px solid rgba(0,0,0,0.06); box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
     <div class="max-w-7xl mx-auto px-6 py-4">
       <div class="flex items-center justify-center gap-4">
         <!-- Stage 1: New Orders -->
         <button onclick="showStage('inbox')" id="stage-inbox"
-          class="stage-btn flex items-center gap-3 px-5 py-3 rounded-xl transition-all bg-amber-500 text-white shadow-lg shadow-amber-200 active">
+          class="stage-btn flex items-center gap-3 px-5 py-3 rounded-xl transition-all text-white active" style="background: #ff9500; box-shadow: 0 4px 12px rgba(255,149,0,0.3);">
           <span class="text-xl">📥</span>
           <div class="text-left">
             <div class="font-medium">New Orders</div>
@@ -78,11 +122,11 @@ const dashboardHTML = `
           </div>
         </button>
 
-        <svg class="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        <svg class="w-5 h-5" style="color: #d2d2d7;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
 
         <!-- Stage 2: Done -->
         <button onclick="showStage('done')" id="stage-done"
-          class="stage-btn flex items-center gap-3 px-5 py-3 rounded-xl transition-all bg-green-100 text-green-700 border border-green-300">
+          class="stage-btn flex items-center gap-3 px-5 py-3 rounded-xl transition-all" style="background: rgba(52,199,89,0.1); color: #34c759; border: 1px solid rgba(52,199,89,0.3);">
           <span class="text-xl">✅</span>
           <div class="text-left">
             <div class="font-medium">Sent to Zoho</div>
@@ -100,27 +144,27 @@ const dashboardHTML = `
     <div id="content-inbox" class="stage-content">
       <div class="flex items-center justify-between mb-6">
         <div>
-          <h2 class="text-xl font-semibold text-slate-800">New EDI Orders</h2>
-          <p class="text-slate-500">Orders imported from SFTP, ready to match with Zoho</p>
+          <h2 class="text-xl font-semibold text-me-text-primary">New EDI Orders</h2>
+          <p class="text-me-text-muted">Orders imported from SFTP, ready to match with Zoho</p>
         </div>
         <div class="flex gap-3">
-          <button onclick="fetchFromSftp()" id="fetchSftpBtn" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition flex items-center gap-2 text-slate-600">
+          <button onclick="fetchFromSftp()" id="fetchSftpBtn" class="px-4 py-2 bg-white border border-me-border rounded-lg hover:bg-me-bg transition flex items-center gap-2 text-me-text-secondary">
             🔄 Fetch from SFTP
           </button>
           <button onclick="findMatchesForSelected()" id="findMatchesBtn"
-            class="px-5 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2 font-medium">
+            class="px-5 py-2 bg-me-dark text-white rounded-lg hover:bg-me-hover transition flex items-center gap-2 font-medium">
             🔍 Find Matches for <span id="pendingCountBtn">0</span> orders
           </button>
         </div>
       </div>
 
       <!-- Zoho Cache Status -->
-      <div class="bg-slate-100 rounded-lg px-4 py-3 mb-4 flex items-center justify-between text-sm">
-        <div class="flex items-center gap-2 text-slate-600">
+      <div class="bg-me-bg rounded-lg px-4 py-3 mb-4 flex items-center justify-between text-sm">
+        <div class="flex items-center gap-2 text-me-text-secondary">
           <span id="cacheIndicator">🟢</span>
           Zoho Drafts: <strong id="cacheDraftsCount">0</strong> cached • Last updated: <strong id="cacheLastRefresh">-</strong>
         </div>
-        <button onclick="refreshZohoCache()" class="text-blue-600 hover:text-blue-800 font-medium">🔄 Refresh Zoho Data</button>
+        <button onclick="refreshZohoCache()" class="text-me-accent hover:text-me-dark font-medium">🔄 Refresh Zoho Data</button>
       </div>
 
       <!-- Two-column layout -->
@@ -131,7 +175,7 @@ const dashboardHTML = `
             <div class="sidebar-header" onclick="toggleTreemap()">
               <span id="treemapArrow">▼</span>
               <span>📊 By Customer</span>
-              <span class="text-xs text-slate-400">(click to filter)</span>
+              <span class="text-xs text-me-text-muted">(click to filter)</span>
             </div>
             <div id="customerTreemap" class="customer-treemap"></div>
           </div>
@@ -142,25 +186,25 @@ const dashboardHTML = `
           <!-- Filters -->
           <div class="flex items-center gap-4 mb-4">
             <input type="text" id="searchBox" placeholder="Search PO#..." onkeyup="filterOrders()"
-              class="px-4 py-2 border border-slate-200 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <select id="customerFilter" onchange="filterOrders()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              class="px-4 py-2 border border-me-border rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-me-dark">
+            <select id="customerFilter" onchange="filterOrders()" class="px-4 py-2 border border-me-border rounded-lg focus:outline-none focus:ring-2 focus:ring-me-dark">
               <option value="">All Customers</option>
             </select>
-            <select id="statusFilter" onchange="filterOrders()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <select id="statusFilter" onchange="filterOrders()" class="px-4 py-2 border border-me-border rounded-lg focus:outline-none focus:ring-2 focus:ring-me-dark">
               <option value="">All Status</option>
               <option value="pending">Pending</option>
               <option value="partial">🟡 Partial (needs follow-up)</option>
               <option value="amended">🔄 Amended</option>
             </select>
-            <label class="flex items-center gap-2 text-sm text-slate-600 ml-auto">
-              <input type="checkbox" id="selectAll" onchange="toggleAll()" class="w-4 h-4 rounded border-slate-300">
+            <label class="flex items-center gap-2 text-sm text-me-text-secondary ml-auto">
+              <input type="checkbox" id="selectAll" onchange="toggleAll()" class="w-4 h-4 rounded border-me-border">
               Select All
             </label>
           </div>
 
           <!-- Order Cards -->
           <div id="ordersContainer" class="space-y-3">
-            <div class="text-center py-12 text-slate-500">Loading orders...</div>
+            <div class="text-center py-12 text-me-text-muted">Loading orders...</div>
           </div>
         </div>
       </div>
@@ -172,44 +216,44 @@ const dashboardHTML = `
       <!-- Header with Title and Filters -->
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
-          <h2 class="text-xl font-semibold text-slate-800">Review Matches</h2>
+          <h2 class="text-xl font-semibold text-me-text-primary">Review Matches</h2>
 
           <!-- Customer Filter -->
-          <select id="reviewCustomerFilter" onchange="filterReviewMatches()" class="px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <select id="reviewCustomerFilter" onchange="filterReviewMatches()" class="px-3 py-1.5 border border-me-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-me-dark">
             <option value="">All Customers</option>
           </select>
 
           <!-- Confidence Filter Buttons -->
-          <div id="confidenceFilters" class="flex items-center gap-1 ml-2 bg-slate-100 p-1 rounded-lg">
-            <button onclick="setConfidenceFilter('')" data-filter="" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium bg-white shadow-sm text-slate-700">All (<span id="filter-count-all">0</span>)</button>
-            <button onclick="setConfidenceFilter('perfect')" data-filter="perfect" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">100% (<span id="filter-count-perfect">0</span>)</button>
-            <button onclick="setConfidenceFilter('high')" data-filter="high" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">80-99% (<span id="filter-count-high">0</span>)</button>
-            <button onclick="setConfidenceFilter('medium')" data-filter="medium" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">60-79% (<span id="filter-count-medium">0</span>)</button>
-            <button onclick="setConfidenceFilter('nomatch')" data-filter="nomatch" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-slate-500 hover:text-slate-700">No Match (<span id="filter-count-nomatch">0</span>)</button>
+          <div id="confidenceFilters" class="flex items-center gap-1 ml-2 bg-me-bg p-1 rounded-lg">
+            <button onclick="setConfidenceFilter('')" data-filter="" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium bg-white shadow-sm text-me-text-primary">All (<span id="filter-count-all">0</span>)</button>
+            <button onclick="setConfidenceFilter('perfect')" data-filter="perfect" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-me-text-muted hover:text-me-text-primary">100% (<span id="filter-count-perfect">0</span>)</button>
+            <button onclick="setConfidenceFilter('high')" data-filter="high" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-me-text-muted hover:text-me-text-primary">80-99% (<span id="filter-count-high">0</span>)</button>
+            <button onclick="setConfidenceFilter('medium')" data-filter="medium" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-me-text-muted hover:text-me-text-primary">60-79% (<span id="filter-count-medium">0</span>)</button>
+            <button onclick="setConfidenceFilter('nomatch')" data-filter="nomatch" class="conf-filter px-3 py-1.5 rounded-md text-sm font-medium text-me-text-muted hover:text-me-text-primary">No Match (<span id="filter-count-nomatch">0</span>)</button>
           </div>
         </div>
 
         <div class="flex items-center gap-3">
-          <span class="text-sm text-green-600 font-medium"><span id="selectedCountDisplay">0</span> selected</span>
-          <button onclick="clearMatchResults()" class="px-3 py-1.5 text-sm text-slate-500 hover:text-slate-700">Clear Results</button>
+          <span class="text-sm text-me-success font-medium"><span id="selectedCountDisplay">0</span> selected</span>
+          <button onclick="clearMatchResults()" class="px-3 py-1.5 text-sm text-me-text-muted hover:text-me-text-primary">Clear Results</button>
         </div>
       </div>
 
       <!-- Empty State -->
       <div id="reviewEmptyState" class="text-center py-16">
         <div class="text-6xl mb-4">🔍</div>
-        <h3 class="text-xl font-semibold text-slate-700 mb-2">No matches to review</h3>
-        <p class="text-slate-500">Go to <strong>New Orders</strong> and click <strong>Find Matches</strong> to search for matching Zoho drafts.</p>
+        <h3 class="text-xl font-semibold text-me-text-primary mb-2">No matches to review</h3>
+        <p class="text-me-text-muted">Go to <strong>New Orders</strong> and click <strong>Find Matches</strong> to search for matching Zoho drafts.</p>
       </div>
 
       <!-- List View Container -->
       <div id="listViewContainer" class="hidden">
         <!-- Progress indicator -->
         <div class="flex items-center justify-between mb-2">
-          <span class="text-sm text-slate-500">Match <strong class="text-slate-700" id="list-current-match">1</strong> of <strong class="text-slate-700" id="list-total-matches">0</strong></span>
+          <span class="text-sm text-me-text-muted">Match <strong class="text-me-text-primary" id="list-current-match">1</strong> of <strong class="text-me-text-primary" id="list-total-matches">0</strong></span>
         </div>
-        <div class="h-1.5 bg-slate-200 rounded-full mb-4">
-          <div id="list-progress-bar" class="h-full bg-blue-500 rounded-full transition-all" style="width: 0%"></div>
+        <div class="h-1.5 bg-gray-200 rounded-full mb-4">
+          <div id="list-progress-bar" class="h-full bg-me-dark rounded-full transition-all" style="width: 0%"></div>
         </div>
 
         <!-- Match Cards List -->
@@ -226,10 +270,10 @@ const dashboardHTML = `
       <!-- Bottom Action Bar (when items selected) -->
       <div id="reviewActionBar" class="hidden fixed bottom-0 left-0 right-0 bg-green-50 border-t border-green-200 px-6 py-4">
         <div class="max-w-7xl mx-auto flex items-center justify-between">
-          <div class="text-green-800">
+          <div class="text-me-success">
             <strong id="actionBarCount">0</strong> order(s) selected for Zoho
           </div>
-          <button onclick="sendSelectedToZoho()" class="px-6 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-medium">
+          <button onclick="sendSelectedToZoho()" class="px-6 py-2.5 bg-me-success text-white rounded-lg hover:bg-me-success transition font-medium">
             Finish & Send to Zoho →
           </button>
         </div>
@@ -240,10 +284,10 @@ const dashboardHTML = `
     <div id="content-done" class="stage-content hidden">
       <div class="flex items-center justify-between mb-6">
         <div>
-          <h2 class="text-xl font-semibold text-slate-800">Sent to Zoho</h2>
-          <p class="text-slate-500">Orders successfully processed and sent to Zoho</p>
+          <h2 class="text-xl font-semibold text-me-text-primary">Sent to Zoho</h2>
+          <p class="text-me-text-muted">Orders successfully processed and sent to Zoho</p>
         </div>
-        <button onclick="exportSentToExcel()" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition flex items-center gap-2 text-slate-600">
+        <button onclick="exportSentToExcel()" class="px-4 py-2 bg-white border border-me-border rounded-lg hover:bg-me-bg transition flex items-center gap-2 text-me-text-secondary">
           📊 Export Report
         </button>
       </div>
@@ -251,27 +295,27 @@ const dashboardHTML = `
       <!-- Filters -->
       <div class="flex items-center gap-4 mb-4">
         <input type="text" id="sentSearchBox" placeholder="Search PO#..." onkeyup="filterSentOrders()"
-          class="px-4 py-2 border border-slate-200 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-blue-500">
-        <select id="sentCustomerFilter" onchange="filterSentOrders()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+          class="px-4 py-2 border border-me-border rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-me-dark">
+        <select id="sentCustomerFilter" onchange="filterSentOrders()" class="px-4 py-2 border border-me-border rounded-lg focus:outline-none focus:ring-2 focus:ring-me-dark">
           <option value="">All Customers</option>
         </select>
-        <span id="sentOrderCount" class="text-sm text-slate-500 ml-auto"></span>
+        <span id="sentOrderCount" class="text-sm text-me-text-muted ml-auto"></span>
       </div>
 
-      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div class="bg-white rounded-xl border border-me-border overflow-hidden">
         <table class="w-full">
-          <thead class="bg-slate-50 border-b border-slate-200">
+          <thead class="bg-me-bg border-b border-me-border">
             <tr>
-              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">PO Number</th>
-              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Customer</th>
-              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Zoho SO#</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Value</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Sent At</th>
-              <th class="text-center px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Actions</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-me-text-muted uppercase">PO Number</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-me-text-muted uppercase">Customer</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-me-text-muted uppercase">Zoho SO#</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold text-me-text-muted uppercase">Value</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold text-me-text-muted uppercase">Sent At</th>
+              <th class="text-center px-4 py-3 text-xs font-semibold text-me-text-muted uppercase">Actions</th>
             </tr>
           </thead>
           <tbody id="sentOrdersTable">
-            <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No orders sent yet</td></tr>
+            <tr><td colspan="6" class="px-4 py-8 text-center text-me-text-muted">No orders sent yet</td></tr>
           </tbody>
         </table>
       </div>
@@ -281,60 +325,60 @@ const dashboardHTML = `
     <div id="content-history" class="stage-content hidden">
       <div class="flex items-center justify-between mb-6">
         <div>
-          <h2 class="text-xl font-semibold text-slate-800">Zoho Audit Trail</h2>
-          <p class="text-slate-500">Orders created and modified in Zoho</p>
+          <h2 class="text-xl font-semibold text-me-text-primary">Zoho Audit Trail</h2>
+          <p class="text-me-text-muted">Orders created and modified in Zoho</p>
         </div>
-        <button onclick="loadActivityLog()" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition flex items-center gap-2 text-slate-600">
+        <button onclick="loadActivityLog()" class="px-4 py-2 bg-white border border-me-border rounded-lg hover:bg-me-bg transition flex items-center gap-2 text-me-text-secondary">
           🔄 Refresh
         </button>
       </div>
 
       <!-- Stats -->
       <div class="grid grid-cols-4 gap-4 mb-6">
-        <div class="bg-white rounded-xl border border-slate-200 p-4">
-          <div class="text-xs text-slate-500 uppercase mb-1">Total Orders Sent</div>
-          <div class="text-2xl font-bold text-slate-800" id="statAllTimeSent">-</div>
+        <div class="bg-white rounded-xl border border-me-border p-4">
+          <div class="text-xs text-me-text-muted uppercase mb-1">Total Orders Sent</div>
+          <div class="text-2xl font-bold text-me-text-primary" id="statAllTimeSent">-</div>
         </div>
-        <div class="bg-white rounded-xl border border-slate-200 p-4">
-          <div class="text-xs text-slate-500 uppercase mb-1">Total Value</div>
-          <div class="text-2xl font-bold text-green-600" id="statAllTimeValue">-</div>
+        <div class="bg-white rounded-xl border border-me-border p-4">
+          <div class="text-xs text-me-text-muted uppercase mb-1">Total Value</div>
+          <div class="text-2xl font-bold text-me-success" id="statAllTimeValue">-</div>
         </div>
-        <div class="bg-white rounded-xl border border-slate-200 p-4">
-          <div class="text-xs text-slate-500 uppercase mb-1">New Orders Created</div>
-          <div class="text-2xl font-bold text-blue-600" id="statNewOrders">-</div>
+        <div class="bg-white rounded-xl border border-me-border p-4">
+          <div class="text-xs text-me-text-muted uppercase mb-1">New Orders Created</div>
+          <div class="text-2xl font-bold text-me-accent" id="statNewOrders">-</div>
         </div>
-        <div class="bg-white rounded-xl border border-slate-200 p-4">
-          <div class="text-xs text-slate-500 uppercase mb-1">Drafts Updated</div>
-          <div class="text-2xl font-bold text-amber-600" id="statDraftsUpdated">-</div>
+        <div class="bg-white rounded-xl border border-me-border p-4">
+          <div class="text-xs text-me-text-muted uppercase mb-1">Drafts Updated</div>
+          <div class="text-2xl font-bold text-me-warning" id="statDraftsUpdated">-</div>
         </div>
       </div>
 
       <!-- Filters -->
       <div class="flex items-center gap-4 mb-4">
-        <select id="activityTypeFilter" onchange="filterActivityLog()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <select id="activityTypeFilter" onchange="filterActivityLog()" class="px-4 py-2 border border-me-border rounded-lg focus:outline-none focus:ring-2 focus:ring-me-dark">
           <option value="">All Types</option>
           <option value="new">New Orders Created</option>
           <option value="updated">Drafts Updated</option>
         </select>
-        <input type="text" id="activitySearchFilter" placeholder="Search PO# or Customer..." onkeyup="filterActivityLog()" class="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-64">
-        <span id="activityLogCount" class="text-sm text-slate-500 ml-auto"></span>
+        <input type="text" id="activitySearchFilter" placeholder="Search PO# or Customer..." onkeyup="filterActivityLog()" class="px-4 py-2 border border-me-border rounded-lg focus:outline-none focus:ring-2 focus:ring-me-dark w-64">
+        <span id="activityLogCount" class="text-sm text-me-text-muted ml-auto"></span>
       </div>
 
-      <div class="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div class="bg-white rounded-xl border border-me-border overflow-hidden">
         <table class="w-full">
-          <thead class="bg-slate-50 border-b border-slate-200">
+          <thead class="bg-me-bg border-b border-me-border">
             <tr>
-              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Date/Time</th>
-              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Type</th>
-              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">PO #</th>
-              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Customer</th>
-              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Zoho SO#</th>
-              <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Changes</th>
-              <th class="text-right px-4 py-3 text-xs font-semibold text-slate-500 uppercase">Amount</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-me-text-muted uppercase">Date/Time</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-me-text-muted uppercase">Type</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-me-text-muted uppercase">PO #</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-me-text-muted uppercase">Customer</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-me-text-muted uppercase">Zoho SO#</th>
+              <th class="text-left px-4 py-3 text-xs font-semibold text-me-text-muted uppercase">Changes</th>
+              <th class="text-right px-4 py-3 text-xs font-semibold text-me-text-muted uppercase">Amount</th>
             </tr>
           </thead>
           <tbody id="activityLogBody">
-            <tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">Loading...</td></tr>
+            <tr><td colspan="7" class="px-4 py-8 text-center text-me-text-muted">Loading...</td></tr>
           </tbody>
         </table>
       </div>
@@ -343,16 +387,16 @@ const dashboardHTML = `
     <!-- ==================== SETTINGS STAGE ==================== -->
     <div id="content-settings" class="stage-content hidden">
       <div class="max-w-3xl">
-        <h2 class="text-xl font-semibold text-slate-800 mb-6">Settings</h2>
+        <h2 class="text-xl font-semibold text-me-text-primary mb-6">Settings</h2>
 
         <!-- Customer Mappings -->
-        <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+        <div class="bg-white rounded-xl border border-me-border p-6 mb-6">
           <div class="flex items-center justify-between mb-4">
             <div>
-              <h3 class="text-lg font-semibold text-slate-800">Customer Mappings</h3>
-              <p class="text-slate-500 text-sm">Map EDI customer names to Zoho customers</p>
+              <h3 class="text-lg font-semibold text-me-text-primary">Customer Mappings</h3>
+              <p class="text-me-text-muted text-sm">Map EDI customer names to Zoho customers</p>
             </div>
-            <button onclick="showAddMappingModal()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm font-medium">
+            <button onclick="showAddMappingModal()" class="px-4 py-2 bg-me-dark text-white rounded-lg hover:bg-me-hover transition text-sm font-medium">
               + Add Mapping
             </button>
           </div>
@@ -360,13 +404,13 @@ const dashboardHTML = `
         </div>
 
         <!-- Customer Matching Rules -->
-        <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
+        <div class="bg-white rounded-xl border border-me-border p-6 mb-6">
           <div class="flex items-center justify-between mb-4">
             <div>
-              <h3 class="text-lg font-semibold text-slate-800">🔧 Customer Matching Rules</h3>
-              <p class="text-slate-500 text-sm">Configure how EDI orders are matched to Zoho bulk/contract orders per customer</p>
+              <h3 class="text-lg font-semibold text-me-text-primary">🔧 Customer Matching Rules</h3>
+              <p class="text-me-text-muted text-sm">Configure how EDI orders are matched to Zoho bulk/contract orders per customer</p>
             </div>
-            <button onclick="showAddRuleModal()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm font-medium">
+            <button onclick="showAddRuleModal()" class="px-4 py-2 bg-me-dark text-white rounded-lg hover:bg-me-hover transition text-sm font-medium">
               + Add Customer Rule
             </button>
           </div>
@@ -374,84 +418,84 @@ const dashboardHTML = `
         </div>
 
         <!-- SFTP Browser -->
-        <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
-          <h3 class="text-lg font-semibold text-slate-800 mb-4">SFTP Browser</h3>
-          <p class="text-slate-500 mb-4">Browse and manage files on the SFTP server</p>
-          <button onclick="refreshSftpStatus()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
+        <div class="bg-white rounded-xl border border-me-border p-6 mb-6">
+          <h3 class="text-lg font-semibold text-me-text-primary mb-4">SFTP Browser</h3>
+          <p class="text-me-text-muted mb-4">Browse and manage files on the SFTP server</p>
+          <button onclick="refreshSftpStatus()" class="px-4 py-2 bg-me-dark text-white rounded-lg hover:bg-me-hover transition">
             🔄 Refresh SFTP
           </button>
           <div id="sftpContent" class="mt-4"></div>
         </div>
 
         <!-- Re-parse Orders -->
-        <div class="bg-white rounded-xl border border-slate-200 p-6 mb-6">
-          <h3 class="text-lg font-semibold text-slate-800 mb-2">Re-parse Orders</h3>
-          <p class="text-slate-500 mb-4">Re-process existing orders with updated CSV parsing logic (e.g., pack qty calculation from prices)</p>
+        <div class="bg-white rounded-xl border border-me-border p-6 mb-6">
+          <h3 class="text-lg font-semibold text-me-text-primary mb-2">Re-parse Orders</h3>
+          <p class="text-me-text-muted mb-4">Re-process existing orders with updated CSV parsing logic (e.g., pack qty calculation from prices)</p>
           <div class="flex items-center gap-3">
-            <button onclick="reparseAllOrders()" id="reparseBtn" class="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition flex items-center gap-2">
+            <button onclick="reparseAllOrders()" id="reparseBtn" class="px-4 py-2 bg-me-warning text-white rounded-lg hover:bg-me-warning transition flex items-center gap-2">
               🔄 Re-parse All Orders
             </button>
-            <span id="reparseStatus" class="text-sm text-slate-500"></span>
+            <span id="reparseStatus" class="text-sm text-me-text-muted"></span>
           </div>
           <div id="reparseResults" class="mt-4 hidden">
-            <div class="bg-slate-50 rounded-lg p-4 max-h-64 overflow-y-auto">
-              <pre id="reparseResultsContent" class="text-sm text-slate-600 whitespace-pre-wrap"></pre>
+            <div class="bg-me-bg rounded-lg p-4 max-h-64 overflow-y-auto">
+              <pre id="reparseResultsContent" class="text-sm text-me-text-secondary whitespace-pre-wrap"></pre>
             </div>
           </div>
         </div>
 
         <!-- Discrepancy Reports -->
-        <div class="bg-white rounded-xl border border-slate-200 p-6">
+        <div class="bg-white rounded-xl border border-me-border p-6">
           <div class="flex items-center justify-between mb-4">
             <div>
-              <h3 class="text-lg font-semibold text-slate-800">📊 Discrepancy Reports</h3>
-              <p class="text-slate-500 text-sm">Track and export EDI vs Zoho mismatches for sales team review</p>
+              <h3 class="text-lg font-semibold text-me-text-primary">📊 Discrepancy Reports</h3>
+              <p class="text-me-text-muted text-sm">Track and export EDI vs Zoho mismatches for sales team review</p>
             </div>
           </div>
 
           <!-- Date Range Filter -->
-          <div class="flex items-center gap-4 mb-4 p-3 bg-slate-50 rounded-lg">
+          <div class="flex items-center gap-4 mb-4 p-3 bg-me-bg rounded-lg">
             <div class="flex items-center gap-2">
-              <label class="text-sm text-slate-600">From:</label>
-              <input type="date" id="discrepancyStartDate" class="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              <label class="text-sm text-me-text-secondary">From:</label>
+              <input type="date" id="discrepancyStartDate" class="px-3 py-1.5 border border-me-border rounded-lg text-sm focus:ring-2 focus:ring-me-dark focus:border-me-dark">
             </div>
             <div class="flex items-center gap-2">
-              <label class="text-sm text-slate-600">To:</label>
-              <input type="date" id="discrepancyEndDate" class="px-3 py-1.5 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              <label class="text-sm text-me-text-secondary">To:</label>
+              <input type="date" id="discrepancyEndDate" class="px-3 py-1.5 border border-me-border rounded-lg text-sm focus:ring-2 focus:ring-me-dark focus:border-me-dark">
             </div>
-            <button onclick="loadDiscrepancies()" class="px-4 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition text-sm font-medium">
+            <button onclick="loadDiscrepancies()" class="px-4 py-1.5 bg-me-dark text-white rounded-lg hover:bg-me-hover transition text-sm font-medium">
               🔍 Load
             </button>
-            <button onclick="exportDiscrepanciesToExcel()" id="exportDiscrepanciesBtn" class="px-4 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition text-sm font-medium flex items-center gap-1">
+            <button onclick="exportDiscrepanciesToExcel()" id="exportDiscrepanciesBtn" class="px-4 py-1.5 bg-me-success text-white rounded-lg hover:bg-me-success transition text-sm font-medium flex items-center gap-1">
               📥 Export Excel
             </button>
           </div>
 
           <!-- Summary Stats -->
           <div id="discrepancySummary" class="grid grid-cols-4 gap-4 mb-4">
-            <div class="bg-slate-50 rounded-lg p-3 text-center">
-              <div class="text-2xl font-bold text-slate-800" id="discrepancyTotalCount">-</div>
-              <div class="text-xs text-slate-500">Total Discrepancies</div>
+            <div class="bg-me-bg rounded-lg p-3 text-center">
+              <div class="text-2xl font-bold text-me-text-primary" id="discrepancyTotalCount">-</div>
+              <div class="text-xs text-me-text-muted">Total Discrepancies</div>
             </div>
             <div class="bg-amber-50 rounded-lg p-3 text-center">
-              <div class="text-2xl font-bold text-amber-600" id="discrepancyOpenCount">-</div>
-              <div class="text-xs text-slate-500">Unresolved</div>
+              <div class="text-2xl font-bold text-me-warning" id="discrepancyOpenCount">-</div>
+              <div class="text-xs text-me-text-muted">Unresolved</div>
             </div>
             <div class="bg-green-50 rounded-lg p-3 text-center">
-              <div class="text-2xl font-bold text-green-600" id="discrepancyResolvedCount">-</div>
-              <div class="text-xs text-slate-500">Resolved</div>
+              <div class="text-2xl font-bold text-me-success" id="discrepancyResolvedCount">-</div>
+              <div class="text-xs text-me-text-muted">Resolved</div>
             </div>
             <div class="bg-blue-50 rounded-lg p-3 text-center">
-              <div class="text-2xl font-bold text-blue-600" id="discrepancyOrdersCount">-</div>
-              <div class="text-xs text-slate-500">Orders Affected</div>
+              <div class="text-2xl font-bold text-me-accent" id="discrepancyOrdersCount">-</div>
+              <div class="text-xs text-me-text-muted">Orders Affected</div>
             </div>
           </div>
 
           <!-- Discrepancy List -->
-          <div id="discrepancyListContainer" class="border border-slate-200 rounded-lg overflow-hidden">
-            <div class="bg-slate-50 px-4 py-2 border-b border-slate-200 flex items-center justify-between">
-              <span class="text-sm font-medium text-slate-600">Recent Discrepancies</span>
-              <select id="discrepancyTypeFilter" onchange="loadDiscrepancies()" class="text-sm border border-slate-300 rounded px-2 py-1">
+          <div id="discrepancyListContainer" class="border border-me-border rounded-lg overflow-hidden">
+            <div class="bg-me-bg px-4 py-2 border-b border-me-border flex items-center justify-between">
+              <span class="text-sm font-medium text-me-text-secondary">Recent Discrepancies</span>
+              <select id="discrepancyTypeFilter" onchange="loadDiscrepancies()" class="text-sm border border-me-border rounded px-2 py-1">
                 <option value="">All Types</option>
                 <option value="date_mismatch">Date Mismatch</option>
                 <option value="amount_mismatch">Amount Mismatch</option>
@@ -462,7 +506,7 @@ const dashboardHTML = `
               </select>
             </div>
             <div id="discrepancyList" class="max-h-96 overflow-y-auto">
-              <div class="p-4 text-center text-slate-500 text-sm">Select a date range and click Load to view discrepancies</div>
+              <div class="p-4 text-center text-me-text-muted text-sm">Select a date range and click Load to view discrepancies</div>
             </div>
           </div>
         </div>
@@ -521,8 +565,11 @@ const dashboardHTML = `
 
     // Remove active from all stage buttons
     document.querySelectorAll('.stage-btn').forEach(btn => {
-      btn.classList.remove('active', 'bg-amber-500', 'bg-blue-500', 'bg-green-500', 'text-white', 'shadow-lg', 'shadow-amber-200', 'shadow-blue-200', 'shadow-green-200');
-      btn.classList.add('border');
+      btn.classList.remove('active', 'text-white', 'shadow-lg');
+      btn.style.background = '';
+      btn.style.boxShadow = '';
+      btn.style.color = '';
+      btn.style.border = '1px solid #d2d2d7';
     });
 
     // Show selected content
@@ -534,14 +581,20 @@ const dashboardHTML = `
     if (stageBtn) {
       stageBtn.classList.add('active');
       if (stage === 'inbox') {
-        stageBtn.classList.add('bg-amber-500', 'text-white', 'shadow-lg', 'shadow-amber-200');
-        stageBtn.classList.remove('bg-amber-100', 'text-amber-700', 'border', 'border-amber-300');
+        stageBtn.style.background = '#ff9500';
+        stageBtn.style.color = 'white';
+        stageBtn.style.boxShadow = '0 4px 12px rgba(255,149,0,0.3)';
+        stageBtn.style.border = 'none';
       } else if (stage === 'review') {
-        stageBtn.classList.add('bg-blue-500', 'text-white', 'shadow-lg', 'shadow-blue-200');
-        stageBtn.classList.remove('bg-blue-100', 'text-blue-700', 'border', 'border-blue-300');
+        stageBtn.style.background = '#0088c2';
+        stageBtn.style.color = 'white';
+        stageBtn.style.boxShadow = '0 4px 12px rgba(0,136,194,0.3)';
+        stageBtn.style.border = 'none';
       } else if (stage === 'done') {
-        stageBtn.classList.add('bg-green-500', 'text-white', 'shadow-lg', 'shadow-green-200');
-        stageBtn.classList.remove('bg-green-100', 'text-green-700', 'border', 'border-green-300');
+        stageBtn.style.background = '#34c759';
+        stageBtn.style.color = 'white';
+        stageBtn.style.boxShadow = '0 4px 12px rgba(52,199,89,0.3)';
+        stageBtn.style.border = 'none';
       }
     }
 
@@ -607,23 +660,23 @@ const dashboardHTML = `
 
   // Format raw data for clean grid display
   function formatRawDataDisplay(data) {
-    if (!data || typeof data !== 'object') return '<div class="text-slate-400">No data</div>';
+    if (!data || typeof data !== 'object') return '<div class="text-me-text-muted">No data</div>';
 
     let html = '';
 
     // Helper to format a value for display
     const formatValue = (val) => {
-      if (val === null || val === undefined || val === '') return '<span class="text-slate-400 italic">—</span>';
-      if (typeof val === 'boolean') return val ? '<span class="text-green-600">Yes</span>' : '<span class="text-red-600">No</span>';
-      if (typeof val === 'number') return '<span class="text-blue-600 font-medium">' + val.toLocaleString() + '</span>';
+      if (val === null || val === undefined || val === '') return '<span class="text-me-text-muted italic">—</span>';
+      if (typeof val === 'boolean') return val ? '<span class="text-me-success">Yes</span>' : '<span class="text-me-error">No</span>';
+      if (typeof val === 'number') return '<span class="text-me-accent font-medium">' + val.toLocaleString() + '</span>';
       if (typeof val === 'string') {
         // Format dates
         if (/^\\d{4}-\\d{2}-\\d{2}/.test(val)) {
           return '<span class="text-purple-600">' + escapeHtml(val) + '</span>';
         }
-        return '<span class="text-slate-700">' + escapeHtml(val) + '</span>';
+        return '<span class="text-me-text-primary">' + escapeHtml(val) + '</span>';
       }
-      return '<span class="text-slate-500">' + escapeHtml(String(val)) + '</span>';
+      return '<span class="text-me-text-muted">' + escapeHtml(String(val)) + '</span>';
     };
 
     // Recursive function to render any object/array structure
@@ -631,14 +684,14 @@ const dashboardHTML = `
       if (!obj || typeof obj !== 'object') return formatValue(obj);
 
       if (Array.isArray(obj)) {
-        if (obj.length === 0) return '<span class="text-slate-400 italic">empty array</span>';
+        if (obj.length === 0) return '<span class="text-me-text-muted italic">empty array</span>';
 
         // For arrays of objects (like items), render as expandable sections
         let arrayHtml = '';
         obj.forEach((item, idx) => {
           if (typeof item === 'object' && item !== null) {
-            arrayHtml += '<div class="border border-slate-200 rounded mb-2 overflow-hidden">';
-            arrayHtml += '<div class="bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-600">Item ' + (idx + 1) + '</div>';
+            arrayHtml += '<div class="border border-me-border rounded mb-2 overflow-hidden">';
+            arrayHtml += '<div class="bg-me-bg px-3 py-1.5 text-sm font-medium text-me-text-secondary">Item ' + (idx + 1) + '</div>';
             arrayHtml += '<div class="p-2">' + renderObject(item, depth + 1) + '</div>';
             arrayHtml += '</div>';
           } else {
@@ -650,25 +703,25 @@ const dashboardHTML = `
 
       // Regular object - render as table
       const entries = Object.entries(obj);
-      if (entries.length === 0) return '<span class="text-slate-400 italic">empty</span>';
+      if (entries.length === 0) return '<span class="text-me-text-muted italic">empty</span>';
 
       let tableHtml = '<table class="w-full text-sm">';
       entries.forEach(([key, value], idx) => {
-        const bgClass = idx % 2 === 0 ? 'bg-slate-50' : 'bg-white';
+        const bgClass = idx % 2 === 0 ? 'bg-me-bg' : 'bg-white';
         // Format the key name nicely
         const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).replace(/_/g, ' ');
 
-        tableHtml += '<tr class="' + bgClass + ' border-b border-slate-100">';
-        tableHtml += '<td class="px-3 py-2 text-slate-500 font-medium align-top" style="width: 200px;">' + escapeHtml(formattedKey) + '</td>';
+        tableHtml += '<tr class="' + bgClass + ' border-b border-gray-100">';
+        tableHtml += '<td class="px-3 py-2 text-me-text-muted font-medium align-top" style="width: 200px;">' + escapeHtml(formattedKey) + '</td>';
 
         if (typeof value === 'object' && value !== null) {
           if (Array.isArray(value)) {
             tableHtml += '<td class="px-3 py-2">';
             if (value.length === 0) {
-              tableHtml += '<span class="text-slate-400 italic">empty array</span>';
+              tableHtml += '<span class="text-me-text-muted italic">empty array</span>';
             } else if (typeof value[0] === 'object') {
               // Array of objects - show count and expandable
-              tableHtml += '<details class="cursor-pointer"><summary class="text-blue-600 hover:text-blue-800">' + value.length + ' items (click to expand)</summary>';
+              tableHtml += '<details class="cursor-pointer"><summary class="text-me-accent hover:text-me-dark">' + value.length + ' items (click to expand)</summary>';
               tableHtml += '<div class="mt-2">' + renderObject(value, depth + 1) + '</div></details>';
             } else {
               // Array of primitives - show inline
@@ -683,14 +736,14 @@ const dashboardHTML = `
               tableHtml += '<td class="px-3 py-2">';
               nestedEntries.forEach(([subKey, subVal]) => {
                 const subKeyFormatted = subKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).replace(/_/g, ' ');
-                tableHtml += '<div class="flex gap-2"><span class="text-slate-400">' + subKeyFormatted + ':</span> ' + formatValue(subVal) + '</div>';
+                tableHtml += '<div class="flex gap-2"><span class="text-me-text-muted">' + subKeyFormatted + ':</span> ' + formatValue(subVal) + '</div>';
               });
               tableHtml += '</td>';
             } else {
               // Large object - make expandable
               tableHtml += '<td class="px-3 py-2">';
-              tableHtml += '<details class="cursor-pointer"><summary class="text-blue-600 hover:text-blue-800">' + nestedEntries.length + ' fields (click to expand)</summary>';
-              tableHtml += '<div class="mt-2 pl-2 border-l-2 border-slate-200">' + renderObject(value, depth + 1) + '</div></details>';
+              tableHtml += '<details class="cursor-pointer"><summary class="text-me-accent hover:text-me-dark">' + nestedEntries.length + ' fields (click to expand)</summary>';
+              tableHtml += '<div class="mt-2 pl-2 border-l-2 border-me-border">' + renderObject(value, depth + 1) + '</div></details>';
               tableHtml += '</td>';
             }
           }
@@ -704,11 +757,11 @@ const dashboardHTML = `
     };
 
     // Render all the data
-    html += '<div class="bg-white border border-slate-200 rounded-lg overflow-hidden">';
+    html += '<div class="bg-white border border-me-border rounded-lg overflow-hidden">';
     html += renderObject(data);
     html += '</div>';
 
-    return html || '<div class="text-slate-400">No data available</div>';
+    return html || '<div class="text-me-text-muted">No data available</div>';
   }
 
   function escapeHtml(str) {
@@ -846,7 +899,7 @@ const dashboardHTML = `
     const container = document.getElementById('ordersContainer');
 
     if (!filtered.length) {
-      container.innerHTML = '<div class="text-center py-12 text-slate-500">No pending orders found.</div>';
+      container.innerHTML = '<div class="text-center py-12 text-me-text-muted">No pending orders found.</div>';
       return;
     }
 
@@ -860,12 +913,12 @@ const dashboardHTML = `
 
       // Age badge based on days since import - always show
       const ageBadge = daysSinceImport === 0
-        ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">📅 Today</span>'
+        ? '<span class="text-xs bg-green-100 text-me-success px-2 py-0.5 rounded-full">📅 Today</span>'
         : daysSinceImport === 1
         ? '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">📅 1 day</span>'
         : daysSinceImport < 3
-        ? '<span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">📅 ' + daysSinceImport + ' days</span>'
-        : '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">⚠️ ' + (daysSinceImport || 0) + ' days</span>';
+        ? '<span class="text-xs bg-me-bg text-me-text-secondary px-2 py-0.5 rounded-full">📅 ' + daysSinceImport + ' days</span>'
+        : '<span class="text-xs bg-amber-100 text-me-warning px-2 py-0.5 rounded-full">⚠️ ' + (daysSinceImport || 0) + ' days</span>';
       const ediDate = o.parsed_data?.dates?.orderDate || o.parsed_data?.dates?.poDate || '';
       const ediDateStr = ediDate ? new Date(ediDate).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: 'numeric' }) : 'N/A';
 
@@ -896,7 +949,7 @@ const dashboardHTML = `
       const isNoMatch = !!noMatchResult;
 
       // Determine border color priority: partial > amended > old > default
-      let borderClass = 'border-slate-200';
+      let borderClass = 'border-me-border';
       if (isPartial) borderClass = 'border-yellow-400 bg-yellow-50/30';
       else if (isAmended) borderClass = 'border-orange-300 bg-orange-50/30';
       else if (isOld) borderClass = 'border-amber-200 bg-amber-50/30';
@@ -904,23 +957,23 @@ const dashboardHTML = `
       // Match indicator badge
       let matchBadge = '';
       if (hasMatch) {
-        if (matchConf >= 100) matchBadge = '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">✓ 100% match</span>';
+        if (matchConf >= 100) matchBadge = '<span class="text-xs bg-green-100 text-me-success px-2 py-0.5 rounded-full font-medium">✓ 100% match</span>';
         else if (matchConf >= 80) matchBadge = '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">✓ ' + matchConf + '% match</span>';
-        else if (matchConf >= 60) matchBadge = '<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">⚠️ ' + matchConf + '% match</span>';
+        else if (matchConf >= 60) matchBadge = '<span class="text-xs bg-amber-100 text-me-warning px-2 py-0.5 rounded-full font-medium">⚠️ ' + matchConf + '% match</span>';
         else matchBadge = '<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">⚠️ ' + matchConf + '% match</span>';
       } else if (isNoMatch) {
-        matchBadge = '<span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">❌ No match</span>';
+        matchBadge = '<span class="text-xs bg-red-100 text-me-error px-2 py-0.5 rounded-full">❌ No match</span>';
       }
 
       return \`
-        <div class="bg-white rounded-xl border \${borderClass} p-4 hover:border-slate-300 transition">
+        <div class="bg-white rounded-xl border \${borderClass} p-4 hover:border-me-border transition">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-4">
               <input type="checkbox" \${selectedIds.has(o.id) ? 'checked' : ''} onchange="toggleSelect(\${o.id})"
-                class="w-5 h-5 rounded border-slate-300 text-blue-500 cursor-pointer">
+                class="w-5 h-5 rounded border-me-border text-me-accent cursor-pointer">
               <div>
-                <div class="font-semibold text-slate-800">\${o.edi_order_number || 'N/A'}</div>
-                <div class="text-sm text-slate-500">\${o.edi_customer_name || 'Unknown'}</div>
+                <div class="font-semibold text-me-text-primary">\${o.edi_order_number || 'N/A'}</div>
+                <div class="text-sm text-me-text-muted">\${o.edi_customer_name || 'Unknown'}</div>
               </div>
               \${ageBadge}
               \${matchBadge}
@@ -931,18 +984,18 @@ const dashboardHTML = `
             </div>
             <div class="flex items-center gap-8">
               <div class="text-right">
-                <div class="text-sm text-slate-500">\${items.length} items\${hasPrepack ? ' <span class="text-purple-500">(' + totalUnits + ' units)</span>' : ''}</div>
-                <div class="font-semibold text-slate-800">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+                <div class="text-sm text-me-text-muted">\${items.length} items\${hasPrepack ? ' <span class="text-purple-500">(' + totalUnits + ' units)</span>' : ''}</div>
+                <div class="font-semibold text-me-text-primary">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
               </div>
               <div class="text-right">
-                <div class="text-xs text-slate-400 uppercase">Imported</div>
-                <div class="text-sm \${isOld ? 'text-amber-600 font-medium' : 'text-slate-600'}">\${importedStr}</div>
+                <div class="text-xs text-me-text-muted uppercase">Imported</div>
+                <div class="text-sm \${isOld ? 'text-me-warning font-medium' : 'text-me-text-secondary'}">\${importedStr}</div>
               </div>
               <div class="text-right">
-                <div class="text-xs text-slate-400 uppercase">EDI Date</div>
-                <div class="text-sm text-slate-600">\${ediDateStr}</div>
+                <div class="text-xs text-me-text-muted uppercase">EDI Date</div>
+                <div class="text-sm text-me-text-secondary">\${ediDateStr}</div>
               </div>
-              <button onclick="viewEdiDetails(\${o.id})" class="p-2 hover:bg-slate-100 rounded-lg transition" title="View Details">
+              <button onclick="viewEdiDetails(\${o.id})" class="p-2 hover:bg-me-bg rounded-lg transition" title="View Details">
                 👁️
               </button>
             </div>
@@ -989,7 +1042,7 @@ const dashboardHTML = `
 
     const sorted = Object.entries(customerData).sort((a, b) => b[1].amount - a[1].amount);
     const totalAmount = sorted.reduce((s, [_, d]) => s + d.amount, 0);
-    const colors = ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#ef4444', '#6366f1', '#14b8a6', '#ec4899'];
+    const colors = ['#1e3a5f', '#0088c2', '#2d5a7f', '#34c759', '#ff9500', '#5a6b7f', '#3a7ca5', '#ff3b30'];
 
     let html = '';
     sorted.forEach(([customer, data], idx) => {
@@ -1274,11 +1327,11 @@ const dashboardHTML = `
     document.querySelectorAll('.conf-filter').forEach(btn => {
       const btnFilter = btn.dataset.filter;
       if (btnFilter === level) {
-        btn.classList.add('bg-white', 'shadow-sm', 'text-slate-700');
-        btn.classList.remove('text-slate-500');
+        btn.classList.add('bg-white', 'shadow-sm', 'text-me-text-primary');
+        btn.classList.remove('text-me-text-muted');
       } else {
-        btn.classList.remove('bg-white', 'shadow-sm', 'text-slate-700');
-        btn.classList.add('text-slate-500');
+        btn.classList.remove('bg-white', 'shadow-sm', 'text-me-text-primary');
+        btn.classList.add('text-me-text-muted');
       }
     });
 
@@ -1360,7 +1413,7 @@ const dashboardHTML = `
     const container = document.getElementById('matchCardsContainer');
 
     if (!matches.length) {
-      container.innerHTML = '<div class="text-center py-12 text-slate-500">No matches in this category.</div>';
+      container.innerHTML = '<div class="text-center py-12 text-me-text-muted">No matches in this category.</div>';
       return;
     }
 
@@ -1375,17 +1428,17 @@ const dashboardHTML = `
       // Confidence badge styling
       let confBg, confBorder;
       if (conf >= 100) {
-        confBg = 'bg-green-100 text-green-700'; confBorder = 'border-green-500';
+        confBg = 'bg-green-100 text-me-success'; confBorder = 'border-green-500';
       } else if (conf >= 80) {
         confBg = 'bg-blue-100 text-blue-700'; confBorder = 'border-blue-500';
       } else if (conf >= 60) {
-        confBg = 'bg-amber-100 text-amber-700'; confBorder = 'border-amber-500';
+        confBg = 'bg-amber-100 text-me-warning'; confBorder = 'border-amber-500';
       } else {
         confBg = 'bg-red-100 text-red-700'; confBorder = 'border-red-500';
       }
 
       // Card border based on selection state
-      let cardBorder = 'border-slate-200';
+      let cardBorder = 'border-me-border';
       if (isSelected) cardBorder = 'border-green-500 bg-green-50/30';
       if (isFlagged) cardBorder = 'border-red-500 bg-red-50/30';
 
@@ -1403,31 +1456,31 @@ const dashboardHTML = `
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-4">
               <input type="checkbox" \${isSelected ? 'checked' : ''} onclick="event.stopPropagation(); toggleMatchSelect(\${edi.id}, '\${zoho?.id || ''}')"
-                class="w-5 h-5 rounded border-slate-300 text-green-500 cursor-pointer">
+                class="w-5 h-5 rounded border-me-border text-green-500 cursor-pointer">
               <div>
-                <div class="font-semibold text-slate-800">\${edi.customer}</div>
-                <div class="text-sm text-slate-500">PO# \${edi.poNumber}\${zoho ? ' → Zoho Ref# ' + (zoho.reference || zoho.number) : ''}</div>
+                <div class="font-semibold text-me-text-primary">\${edi.customer}</div>
+                <div class="text-sm text-me-text-muted">PO# \${edi.poNumber}\${zoho ? ' → Zoho Ref# ' + (zoho.reference || zoho.number) : ''}</div>
               </div>
               \${isFlagged ? '<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">🚩 Flagged</span>' : ''}
-              \${isSelected ? '<span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">✓ Selected</span>' : ''}
+              \${isSelected ? '<span class="text-xs bg-green-100 text-me-success px-2 py-0.5 rounded-full">✓ Selected</span>' : ''}
             </div>
             <div class="flex items-center gap-6">
               <div class="text-right">
-                <div class="text-xs text-slate-400 uppercase">Units</div>
+                <div class="text-xs text-me-text-muted uppercase">Units</div>
                 <div class="text-sm font-medium">\${(edi.totalUnits || 0).toLocaleString()}</div>
               </div>
               <div class="text-right">
-                <div class="text-xs text-slate-400 uppercase">Amount</div>
+                <div class="text-xs text-me-text-muted uppercase">Amount</div>
                 <div class="text-sm font-medium">$\${(edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
               </div>
               <div class="text-right">
-                <div class="text-xs text-slate-400 uppercase">Styles</div>
+                <div class="text-xs text-me-text-muted uppercase">Styles</div>
                 <div class="text-sm">\${styles.length > 0 ? styles.slice(0, 2).join(', ') + (styles.length > 2 ? '...' : '') : '-'}</div>
               </div>
               <div class="px-3 py-1.5 rounded-lg \${confBg} font-bold text-lg border \${confBorder}">
                 \${isNoMatch ? 'No Match' : conf + '%'}
               </div>
-              <button onclick="event.stopPropagation(); openFocusMode(\${index})" class="ml-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-sm font-medium transition">
+              <button onclick="event.stopPropagation(); openFocusMode(\${index})" class="ml-2 px-3 py-1.5 bg-me-bg hover:bg-gray-200 text-me-text-secondary rounded-lg text-sm font-medium transition">
                 Review →
               </button>
             </div>
@@ -1571,7 +1624,7 @@ const dashboardHTML = `
       container.innerHTML = \`
         <input type="\${isDate ? 'date' : 'text'}" id="\${inputId}"
           value="\${currentValue || ''}"
-          class="w-full px-2 py-1 border border-blue-400 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          class="w-full px-2 py-1 border border-blue-400 rounded text-sm focus:outline-none focus:ring-2 focus:ring-me-dark"
           onblur="saveFieldEdit(\${orderId}, '\${fieldName}')"
           onkeydown="if(event.key==='Enter'){saveFieldEdit(\${orderId}, '\${fieldName}')}"
         >
@@ -1677,9 +1730,9 @@ const dashboardHTML = `
     }
 
     // Confidence badge color
-    let confBg = conf >= 100 ? 'bg-green-100 text-green-700 border-green-200' :
+    let confBg = conf >= 100 ? 'bg-green-100 text-me-success border-green-200' :
                  conf >= 80 ? 'bg-blue-100 text-blue-700 border-blue-200' :
-                 conf >= 60 ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                 conf >= 60 ? 'bg-amber-100 text-me-warning border-amber-200' :
                  'bg-red-100 text-red-700 border-red-200';
 
     const selectedCount = selectedMatchIds.size;
@@ -1716,18 +1769,18 @@ const dashboardHTML = `
     const html = \`
       <!-- Progress Bar -->
       <div class="flex items-center justify-between mb-2">
-        <span class="text-sm text-slate-500">Match <strong class="text-slate-700">\${focusModeIndex + 1}</strong> of <strong class="text-slate-700">\${allMatches.length}</strong></span>
+        <span class="text-sm text-me-text-muted">Match <strong class="text-me-text-primary">\${focusModeIndex + 1}</strong> of <strong class="text-me-text-primary">\${allMatches.length}</strong></span>
         <div class="flex items-center gap-4 text-sm">
-          <span class="text-green-600"><strong>\${selectedCount}</strong> selected</span>
-          \${flaggedCount > 0 ? '<span class="text-red-600"><strong>' + flaggedCount + '</strong> flagged</span>' : ''}
+          <span class="text-me-success"><strong>\${selectedCount}</strong> selected</span>
+          \${flaggedCount > 0 ? '<span class="text-me-error"><strong>' + flaggedCount + '</strong> flagged</span>' : ''}
         </div>
       </div>
-      <div class="h-1.5 bg-slate-200 rounded-full mb-6">
-        <div class="h-full bg-blue-500 rounded-full transition-all" style="width: \${progressPercent}%"></div>
+      <div class="h-1.5 bg-gray-200 rounded-full mb-6">
+        <div class="h-full bg-me-dark rounded-full transition-all" style="width: \${progressPercent}%"></div>
       </div>
 
       <!-- Focus Card -->
-      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="bg-white rounded-xl border border-me-border shadow-sm overflow-hidden">
 
         <!-- Status Banner -->
         <div class="px-5 py-3 flex items-center gap-3 \${statusBg} border-b-2">
@@ -1739,12 +1792,12 @@ const dashboardHTML = `
         </div>
 
         <!-- Header -->
-        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <div>
-            <div class="text-lg font-semibold text-slate-800">\${edi.customer}</div>
-            <div class="text-sm text-slate-500 flex items-center gap-3">
+            <div class="text-lg font-semibold text-me-text-primary">\${edi.customer}</div>
+            <div class="text-sm text-me-text-muted flex items-center gap-3">
               <span>PO# \${edi.poNumber}\${zoho ? ' → Zoho Ref# ' + (zoho.reference || zoho.number) : ''}</span>
-              <button onclick="viewEdiDetails(\${edi.id})" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded transition">
+              <button onclick="viewEdiDetails(\${edi.id})" class="text-xs bg-me-bg hover:bg-gray-200 text-me-text-secondary px-2 py-1 rounded transition">
                 📄 View EDI Details
               </button>
             </div>
@@ -1762,30 +1815,30 @@ const dashboardHTML = `
           const isFull = isFullSelection(edi.id, ediItems.length);
           return !isFull ? \`
           <div class="mx-5 mt-4 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
-            <div class="flex items-center gap-2 text-sm text-amber-700">
+            <div class="flex items-center gap-2 text-sm text-me-warning">
               <span>⚡</span>
               <span><strong>Selective Processing:</strong> \${counts.fields}/4 fields, \${counts.lines}/\${ediItems.length} line items\${counts.hasOverrides ? ', with overrides' : ''}</span>
             </div>
-            <button onclick="resetFieldSelection(\${edi.id}, \${ediItems.length})" class="text-xs text-amber-600 hover:text-amber-800 underline">Reset to All</button>
+            <button onclick="resetFieldSelection(\${edi.id}, \${ediItems.length})" class="text-xs text-me-warning hover:text-amber-800 underline">Reset to All</button>
           </div>
           \` : '';
         })()}
 
         <!-- Comparison Table with Checkboxes -->
         <div class="px-5 py-4">
-          <div class="text-xs text-slate-500 mb-2 flex items-center gap-2">
+          <div class="text-xs text-me-text-muted mb-2 flex items-center gap-2">
             <span>💡</span>
             <span>EDI stays unchanged. Click ✏️ to customize what gets sent to Zoho.</span>
           </div>
           <table class="w-full text-sm">
             <thead>
-              <tr class="border-b border-slate-200">
-                <th class="text-center py-2 font-medium text-slate-500 w-10">✓</th>
-                <th class="text-left py-2 font-medium text-slate-500 w-24">Field</th>
-                <th class="text-left py-2 font-medium text-blue-600 bg-blue-50/50 px-2">EDI (source)</th>
-                <th class="text-left py-2 font-medium text-green-600 bg-green-50/50 px-2">Zoho Now</th>
+              <tr class="border-b border-me-border">
+                <th class="text-center py-2 font-medium text-me-text-muted w-10">✓</th>
+                <th class="text-left py-2 font-medium text-me-text-muted w-24">Field</th>
+                <th class="text-left py-2 font-medium text-me-accent bg-blue-50/50 px-2">EDI (source)</th>
+                <th class="text-left py-2 font-medium text-me-success bg-green-50/50 px-2">Zoho Now</th>
                 <th class="text-left py-2 font-medium text-purple-600 bg-purple-50/50 px-2">→ Send to Zoho</th>
-                <th class="text-center py-2 font-medium text-slate-500 w-12">✏️</th>
+                <th class="text-center py-2 font-medium text-me-text-muted w-12">✏️</th>
               </tr>
             </thead>
             <tbody>
@@ -1802,68 +1855,68 @@ const dashboardHTML = `
                   const hasOverride = sel.overrides[r.key] !== undefined;
                   const sendVal = hasOverride ? sel.overrides[r.key] : r.ediVal;
                   return \`
-                  <tr class="border-b border-slate-100 \${!isChecked ? 'opacity-40 bg-slate-50' : ''}">
+                  <tr class="border-b border-gray-100 \${!isChecked ? 'opacity-40 bg-me-bg' : ''}">
                     <td class="py-2 text-center">
                       <input type="checkbox" \${isChecked ? 'checked' : ''} onchange="toggleFieldSelection(\${edi.id}, '\${r.key}')"
-                        class="w-4 h-4 rounded border-slate-300 text-blue-500 cursor-pointer">
+                        class="w-4 h-4 rounded border-me-border text-me-accent cursor-pointer">
                     </td>
-                                                <td class="py-2 text-slate-500 text-xs">\${r.match ? '<span class="text-green-600 mr-1">✓</span>' : '<span class="text-red-500 mr-1">✗</span>'}\${r.label}</td>
-                    <td class="py-2 bg-blue-50/30 px-2 text-slate-600 text-xs">\${r.ediVal}</td>
+                                                <td class="py-2 text-me-text-muted text-xs">\${r.match ? '<span class="text-me-success mr-1">✓</span>' : '<span class="text-me-error mr-1">✗</span>'}\${r.label}</td>
+                    <td class="py-2 bg-blue-50/30 px-2 text-me-text-secondary text-xs">\${r.ediVal}</td>
                     <td class="py-2 bg-green-50/30 px-2 text-xs">\${r.zohoVal}</td>
                     <td class="py-2 bg-purple-50/30 px-2" id="field-cell-\${edi.id}-\${r.key}">
                       \${isChecked ?
                         (hasOverride ?
                           '<span class="text-purple-700 font-semibold">' + sendVal + '</span> <span class="text-xs text-purple-400">(custom)</span>' :
                           '<span class="text-purple-600">' + sendVal + '</span>') :
-                        '<span class="text-slate-400 italic text-xs">skip</span>'}
+                        '<span class="text-me-text-muted italic text-xs">skip</span>'}
                     </td>
                     <td class="py-2 text-center">
-                      \${r.editable && isChecked ? '<button onclick="showFieldEdit(' + edi.id + ', \\'' + r.key + '\\', \\'' + (sendVal || '').replace(/'/g, "\\\\'") + '\\')" class="text-slate-400 hover:text-purple-600 text-xs">✏️</button>' : ''}
+                      \${r.editable && isChecked ? '<button onclick="showFieldEdit(' + edi.id + ', \\'' + r.key + '\\', \\'' + (sendVal || '').replace(/'/g, "\\\\'") + '\\')" class="text-me-text-muted hover:text-purple-600 text-xs">✏️</button>' : ''}
                     </td>
                   </tr>
                   \`;
                 }).join('');
               })()}
-              <tr class="border-b border-slate-100 bg-slate-50/50">
-                <td class="py-2 text-center text-slate-300">—</td>
-                <td class="py-2 text-slate-500 text-xs">Units</td>
+              <tr class="border-b border-gray-100 bg-me-bg/50">
+                <td class="py-2 text-center text-gray-300">—</td>
+                <td class="py-2 text-me-text-muted text-xs">Units</td>
                 <td class="py-2 bg-blue-50/30 px-2 font-semibold text-xs">\${(edi.totalUnits || 0).toLocaleString()}</td>
                 <td class="py-2 bg-green-50/30 px-2 font-semibold text-xs">\${(zoho?.totalUnits || 0).toLocaleString()}</td>
                 <td class="py-2 bg-purple-50/30 px-2 text-purple-600 text-xs">\${(edi.totalUnits || 0).toLocaleString()}</td>
                 <td class="py-2"></td>
               </tr>
-              <tr class="border-b border-slate-100 bg-slate-50">
-                <td class="py-2 text-center text-slate-300">—</td>
-                <td class="py-2 text-slate-500 text-xs">Amount</td>
+              <tr class="border-b border-gray-100 bg-me-bg">
+                <td class="py-2 text-center text-gray-300">—</td>
+                <td class="py-2 text-me-text-muted text-xs">Amount</td>
                 <td class="py-2 bg-blue-50/30 px-2 font-semibold text-xs">$\${(edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-                <td class="py-2 bg-green-50/30 px-2 font-semibold text-xs">$\${(zoho?.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})} \${details.totalAmount ? '<span class="text-green-600">✓</span>' : '<span class="text-amber-500">⚠️</span>'}</td>
+                <td class="py-2 bg-green-50/30 px-2 font-semibold text-xs">$\${(zoho?.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})} \${details.totalAmount ? '<span class="text-me-success">✓</span>' : '<span class="text-amber-500">⚠️</span>'}</td>
                 <td class="py-2 bg-purple-50/30 px-2 text-purple-600 text-xs">$\${(edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
                 <td class="py-2"></td>
               </tr>
-              <tr class="border-b border-slate-100">
-                <td class="py-2 text-center text-slate-300">—</td>
-                <td class="py-2 text-slate-500 text-xs">Base Style</td>
+              <tr class="border-b border-gray-100">
+                <td class="py-2 text-center text-gray-300">—</td>
+                <td class="py-2 text-me-text-muted text-xs">Base Style</td>
                 <td class="py-2 bg-blue-50/30 px-2">
                   \${ediStyles.length > 0 ? ediStyles.map(s => '<span class="inline-block bg-blue-100 px-1.5 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-'}
                 </td>
                 <td class="py-2 bg-green-50/30 px-2">
                   \${zohoStyles.length > 0 ? zohoStyles.map(s => '<span class="inline-block bg-green-100 px-1.5 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-'}
-                  \${details.baseStyle ? '<span class="text-green-600 ml-1">✓</span>' : '<span class="text-amber-500 ml-1">⚠️</span>'}
+                  \${details.baseStyle ? '<span class="text-me-success ml-1">✓</span>' : '<span class="text-amber-500 ml-1">⚠️</span>'}
                 </td>
                 <td class="py-2 bg-purple-50/30 px-2">
                   \${ediStyles.length > 0 ? ediStyles.map(s => '<span class="inline-block bg-purple-100 px-1.5 py-0.5 rounded text-xs mr-1">' + s + '</span>').join('') : '-'}
                 </td>
                 <td class="py-2"></td>
               </tr>
-              <tr class="border-b border-slate-100">
-                <td class="py-2 text-center text-slate-300">—</td>
-                <td class="py-2 text-slate-500 text-xs">Suffix</td>
+              <tr class="border-b border-gray-100">
+                <td class="py-2 text-center text-gray-300">—</td>
+                <td class="py-2 text-me-text-muted text-xs">Suffix</td>
                 <td class="py-2 bg-blue-50/30 px-2">
                   \${details.ediSuffixes ? '<span class="inline-block bg-blue-100 px-1.5 py-0.5 rounded text-xs">' + details.ediSuffixes + '</span>' : '-'}
                 </td>
                 <td class="py-2 bg-green-50/30 px-2">
                   \${details.zohoSuffixes ? '<span class="inline-block bg-green-100 px-1.5 py-0.5 rounded text-xs">' + details.zohoSuffixes + '</span>' : '-'}
-                  \${details.styleSuffix ? '<span class="text-green-600 ml-1">✓</span>' : (details.suffixWarning ? '<span class="text-amber-500 ml-1">⚠️</span>' : '')}
+                  \${details.styleSuffix ? '<span class="text-me-success ml-1">✓</span>' : (details.suffixWarning ? '<span class="text-amber-500 ml-1">⚠️</span>' : '')}
                 </td>
                 <td class="py-2 bg-purple-50/30 px-2">
                   \${details.ediSuffixes ? '<span class="inline-block bg-purple-100 px-1.5 py-0.5 rounded text-xs">' + details.ediSuffixes + '</span>' : '-'}
@@ -1871,11 +1924,11 @@ const dashboardHTML = `
                 <td class="py-2"></td>
               </tr>
               \${details.upcMatch ? \`
-              <tr class="border-b border-slate-100 bg-green-50/50">
-                <td class="py-2 text-center text-slate-300">—</td>
-                <td class="py-2 text-slate-500 text-xs">UPC</td>
+              <tr class="border-b border-gray-100 bg-green-50/50">
+                <td class="py-2 text-center text-gray-300">—</td>
+                <td class="py-2 text-me-text-muted text-xs">UPC</td>
                 <td class="py-2 bg-blue-50/30 px-2 text-xs font-mono">\${details.ediUpcCount || 0} UPCs</td>
-                <td class="py-2 bg-green-50/30 px-2 text-xs font-mono">\${details.zohoUpcCount || 0} UPCs <span class="text-green-600 font-medium">✓ \${details.upcMatchCount || 0}</span></td>
+                <td class="py-2 bg-green-50/30 px-2 text-xs font-mono">\${details.zohoUpcCount || 0} UPCs <span class="text-me-success font-medium">✓ \${details.upcMatchCount || 0}</span></td>
                 <td class="py-2 bg-purple-50/30 px-2 text-xs font-mono">\${details.ediUpcCount || 0} UPCs</td>
                 <td class="py-2"></td>
               </tr>
@@ -1886,7 +1939,7 @@ const dashboardHTML = `
 
         <!-- Line Items Comparison (expanded by default) -->
         <div class="px-5 pb-4">
-          <button onclick="toggleLineItems()" class="text-sm text-slate-600 hover:text-slate-800 flex items-center gap-2">
+          <button onclick="toggleLineItems()" class="text-sm text-me-text-secondary hover:text-me-text-primary flex items-center gap-2">
             <span id="lineItemsToggle">▼</span> View line items (\${ediItems.length} EDI → \${zohoItems.length} Zoho)
           </button>
           <div id="lineItemsContainer" class="mt-4">
@@ -1919,8 +1972,8 @@ const dashboardHTML = `
 
             <!-- Sync behavior note -->
             <div class="bg-green-50 border border-green-200 rounded-lg p-2 mb-3 flex items-start gap-2">
-              <span class="text-green-600">🔒</span>
-              <div class="text-xs text-green-700">
+              <span class="text-me-success">🔒</span>
+              <div class="text-xs text-me-success">
                 <strong>Zoho items preserved:</strong> Item names, SKUs, and descriptions stay unchanged.
                 Only <span class="font-semibold">Qty</span> and <span class="font-semibold">Price</span> can be synced from EDI.
               </div>
@@ -1929,9 +1982,9 @@ const dashboardHTML = `
             <div class="grid grid-cols-2 gap-4">
               <!-- EDI Items -->
               <div>
-                <div class="text-sm font-semibold text-blue-600 mb-2 flex items-center justify-between">
+                <div class="text-sm font-semibold text-me-accent mb-2 flex items-center justify-between">
                   <span>EDI Order Line Items</span>
-                  <label class="flex items-center gap-1 text-xs font-normal text-slate-500 cursor-pointer">
+                  <label class="flex items-center gap-1 text-xs font-normal text-me-text-muted cursor-pointer">
                     <input type="checkbox" \${(() => { const sel = fieldSelections.get(edi.id); return sel && sel.lineItems.length === ediItems.length ? 'checked' : ''; })()}
                       onchange="toggleAllLineItems(\${edi.id}, \${ediItems.length})" class="w-3 h-3 rounded">
                     All
@@ -1959,34 +2012,34 @@ const dashboardHTML = `
                       const sel = fieldSelections.get(edi.id);
                       const isSelected = sel ? sel.lineItems.includes(idx) : true;
                       return \`
-                      <tr class="border-t border-slate-100 \${isPrepack ? 'bg-purple-50/30' : ''} \${!isSelected ? 'opacity-40 bg-slate-50' : ''}">
+                      <tr class="border-t border-gray-100 \${isPrepack ? 'bg-purple-50/30' : ''} \${!isSelected ? 'opacity-40 bg-me-bg' : ''}">
                         <td class="px-1 py-1 text-center">
                           <input type="checkbox" \${isSelected ? 'checked' : ''} onchange="toggleLineItemSelection(\${edi.id}, \${idx})"
-                            class="w-3 h-3 rounded border-slate-300 text-blue-500 cursor-pointer">
+                            class="w-3 h-3 rounded border-me-border text-me-accent cursor-pointer">
                         </td>
                         <td class="px-2 py-1">\${sku || '-'}</td>
                         <td class="px-2 py-1">\${item.color || '-'}</td>
                         <td class="px-2 py-1 text-center">
-                          <span class="\${isPrepack ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'} px-1.5 py-0.5 rounded text-xs">\${uom}</span>
+                          <span class="\${isPrepack ? 'bg-purple-100 text-purple-700' : 'bg-me-bg text-me-text-secondary'} px-1.5 py-0.5 rounded text-xs">\${uom}</span>
                           \${isPrepack && packQty > 1 ? '<div class="text-xs text-purple-500">' + packQty + '/pk</div>' : ''}
                         </td>
                         <td class="px-2 py-1 text-right">
                           \${item.quantityOrdered || 0}
-                          \${isPrepack && packQty > 1 ? '<div class="text-xs text-slate-400">=' + (item.totalUnits || item.quantityOrdered * packQty) + ' ea</div>' : ''}
+                          \${isPrepack && packQty > 1 ? '<div class="text-xs text-me-text-muted">=' + (item.totalUnits || item.quantityOrdered * packQty) + ' ea</div>' : ''}
                         </td>
-                        <td class="px-2 py-1 text-right font-medium \${item.unitPriceCalculated ? 'text-blue-600' : ''}">
+                        <td class="px-2 py-1 text-right font-medium \${item.unitPriceCalculated ? 'text-me-accent' : ''}">
                           $\${unitPrice.toFixed(2)}
                         </td>
                       </tr>
                     \`}).join('')}
-                    \${ediItems.length > 10 ? '<tr><td colspan="7" class="px-2 py-1 text-center text-slate-400">... and ' + (ediItems.length - 10) + ' more</td></tr>' : ''}
+                    \${ediItems.length > 10 ? '<tr><td colspan="7" class="px-2 py-1 text-center text-me-text-muted">... and ' + (ediItems.length - 10) + ' more</td></tr>' : ''}
                   </tbody>
                 </table>
-                <div class="text-xs text-slate-400 mt-1">* Unit price calculated from pack price ÷ pack qty</div>
+                <div class="text-xs text-me-text-muted mt-1">* Unit price calculated from pack price ÷ pack qty</div>
               </div>
               <!-- Zoho Items -->
               <div>
-                <div class="text-sm font-semibold text-green-600 mb-2 flex items-center gap-2">
+                <div class="text-sm font-semibold text-me-success mb-2 flex items-center gap-2">
                   <span>Zoho Draft</span>
                   <span class="text-xs font-normal text-green-500 bg-green-100 px-1.5 py-0.5 rounded">🔒 Items preserved</span>
                 </div>
@@ -1995,22 +2048,22 @@ const dashboardHTML = `
                     <tr>
                       <th class="text-left px-2 py-1">Item <span class="text-green-500">🔒</span></th>
                       <th class="text-left px-2 py-1">UPC</th>
-                      <th class="text-right px-2 py-1 text-blue-600">Qty ✎</th>
-                      <th class="text-right px-2 py-1 text-blue-600">Rate ✎</th>
+                      <th class="text-right px-2 py-1 text-me-accent">Qty ✎</th>
+                      <th class="text-right px-2 py-1 text-me-accent">Rate ✎</th>
                     </tr>
                   </thead>
                   <tbody>
                     \${zohoItems.slice(0, 10).map(item => {
                       const zohoUpc = item.cf_upc || item.upc || item.item?.upc || '';
                       return \`
-                      <tr class="border-t border-slate-100">
+                      <tr class="border-t border-gray-100">
                         <td class="px-2 py-1">\${item.name || item.sku || '-'}</td>
                         <td class="px-2 py-1 font-mono text-xs">\${zohoUpc || '-'}</td>
                         <td class="px-2 py-1 text-right">\${item.quantity || 0}</td>
                         <td class="px-2 py-1 text-right">$\${(item.rate || 0).toFixed(2)}</td>
                       </tr>
                     \`}).join('')}
-                    \${zohoItems.length > 10 ? '<tr><td colspan="4" class="px-2 py-1 text-center text-slate-400">... and ' + (zohoItems.length - 10) + ' more</td></tr>' : ''}
+                    \${zohoItems.length > 10 ? '<tr><td colspan="4" class="px-2 py-1 text-center text-me-text-muted">... and ' + (zohoItems.length - 10) + ' more</td></tr>' : ''}
                   </tbody>
                 </table>
               </div>
@@ -2020,8 +2073,8 @@ const dashboardHTML = `
         \` : \`
         <!-- No Match Info -->
         <div class="px-5 py-8 text-center">
-          <p class="text-slate-500 mb-4">No matching Zoho draft was found for this EDI order.</p>
-          <button onclick="viewEdiDetails(\${edi.id})" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition">
+          <p class="text-me-text-muted mb-4">No matching Zoho draft was found for this EDI order.</p>
+          <button onclick="viewEdiDetails(\${edi.id})" class="px-4 py-2 bg-me-dark text-white rounded-lg hover:bg-me-hover transition">
             View Full EDI Details
           </button>
         </div>
@@ -2030,17 +2083,17 @@ const dashboardHTML = `
         \${!isNoMatch && match.alternativeMatches && match.alternativeMatches.length > 0 ? \`
         <!-- Alternative Matches -->
         <div class="px-5 py-3 bg-amber-50 border-t border-amber-200">
-          <div class="text-sm font-medium text-amber-700 mb-2">
+          <div class="text-sm font-medium text-me-warning mb-2">
             🔄 Alternative Matches (\${match.alternativeMatches.length} other potential matches)
           </div>
           <div class="space-y-2">
             \${match.alternativeMatches.map((alt, idx) => \`
               <div class="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-amber-200">
                 <div class="flex items-center gap-3">
-                  <span class="text-xs text-slate-400">#\${idx + 2}</span>
+                  <span class="text-xs text-me-text-muted">#\${idx + 2}</span>
                   <div>
-                    <div class="font-medium text-sm text-slate-700">\${alt.zohoDraft.customer}</div>
-                    <div class="text-xs text-slate-500">
+                    <div class="font-medium text-sm text-me-text-primary">\${alt.zohoDraft.customer}</div>
+                    <div class="text-xs text-me-text-muted">
                       Ref# \${alt.zohoDraft.reference || alt.zohoDraft.number}
                       • \${alt.zohoDraft.itemCount} items
                       • $\${alt.zohoDraft.totalAmount.toLocaleString()}
@@ -2049,10 +2102,10 @@ const dashboardHTML = `
                   </div>
                 </div>
                 <div class="flex items-center gap-2">
-                  <span class="px-2 py-1 rounded text-xs font-medium \${alt.confidence >= 60 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}">
+                  <span class="px-2 py-1 rounded text-xs font-medium \${alt.confidence >= 60 ? 'bg-amber-100 text-me-warning' : 'bg-me-bg text-me-text-secondary'}">
                     \${alt.confidence}%
                   </span>
-                  <button onclick="switchToAlternativeMatch(\${focusModeIndex}, \${idx})" class="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition">
+                  <button onclick="switchToAlternativeMatch(\${focusModeIndex}, \${idx})" class="px-2 py-1 bg-me-dark text-white text-xs rounded hover:bg-me-hover transition">
                     Use This
                   </button>
                 </div>
@@ -2063,15 +2116,15 @@ const dashboardHTML = `
         \` : ''}
 
         <!-- Actions -->
-        <div class="px-5 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+        <div class="px-5 py-4 bg-me-bg border-t border-me-border flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <button onclick="focusModeSkip()" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition text-slate-600 font-medium">
+            <button onclick="focusModeSkip()" class="px-4 py-2 bg-white border border-me-border rounded-lg hover:bg-me-bg transition text-me-text-secondary font-medium">
               Skip
             </button>
-            <button onclick="focusModeFlag()" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-red-50 hover:border-red-200 transition text-slate-600 font-medium \${flaggedMatchIds.has(edi.id) ? 'bg-red-100 border-red-300 text-red-700' : ''}">
+            <button onclick="focusModeFlag()" class="px-4 py-2 bg-white border border-me-border rounded-lg hover:bg-red-50 hover:border-red-200 transition text-me-text-secondary font-medium \${flaggedMatchIds.has(edi.id) ? 'bg-red-100 border-red-300 text-red-700' : ''}">
               \${flaggedMatchIds.has(edi.id) ? '🚩 Flagged' : '🚩 Flag'}
             </button>
-            \${zoho ? \`<button onclick="window.open('https://books.zoho.com/app/677681121#/salesorders/\${zoho.id}','_blank')" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-100 transition text-slate-600 font-medium">
+            \${zoho ? \`<button onclick="window.open('https://books.zoho.com/app/677681121#/salesorders/\${zoho.id}','_blank')" class="px-4 py-2 bg-white border border-me-border rounded-lg hover:bg-me-bg transition text-me-text-secondary font-medium">
               🔗 Zoho
             </button>\` : ''}
           </div>
@@ -2081,15 +2134,15 @@ const dashboardHTML = `
             const counts = getSelectionCounts(edi.id, ediItems.length);
             const isSelected = selectedMatchIds.has(edi.id);
             if (isSelected) {
-              return '<button onclick="focusModeApprove()" class="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium flex items-center gap-2">✓ Selected' + (!isFull ? ' (Partial)' : '') + '</button>';
+              return '<button onclick="focusModeApprove()" class="px-6 py-2.5 bg-me-success text-white rounded-lg hover:bg-green-700 transition font-medium flex items-center gap-2">✓ Selected' + (!isFull ? ' (Partial)' : '') + '</button>';
             } else if (isFull) {
-              return '<button onclick="focusModeApprove()" class="px-6 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-medium flex items-center gap-2">✓ Select All & Next →</button>';
+              return '<button onclick="focusModeApprove()" class="px-6 py-2.5 bg-me-success text-white rounded-lg hover:bg-me-success transition font-medium flex items-center gap-2">✓ Select All & Next →</button>';
             } else {
-              return '<button onclick="focusModeApprove()" class="px-6 py-2.5 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition font-medium flex items-center gap-2">⚡ Select Partial (' + counts.fields + '/4 fields, ' + counts.lines + '/' + ediItems.length + ' items) →</button>';
+              return '<button onclick="focusModeApprove()" class="px-6 py-2.5 bg-me-warning text-white rounded-lg hover:bg-me-warning transition font-medium flex items-center gap-2">⚡ Select Partial (' + counts.fields + '/4 fields, ' + counts.lines + '/' + ediItems.length + ' items) →</button>';
             }
           })()}
           \` : \`
-          <button onclick="createZohoOrder(\${edi.id})" class="px-6 py-2.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-medium flex items-center gap-2">
+          <button onclick="createZohoOrder(\${edi.id})" class="px-6 py-2.5 bg-me-dark text-white rounded-lg hover:bg-me-hover transition font-medium flex items-center gap-2">
             ➕ Create in Zoho
           </button>
           \`}
@@ -2098,13 +2151,13 @@ const dashboardHTML = `
 
       <!-- Navigation Footer -->
       <div class="flex items-center justify-between mt-4 text-sm">
-        <button onclick="focusModePrev()" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition text-slate-600 \${focusModeIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''}" \${focusModeIndex === 0 ? 'disabled' : ''}>
+        <button onclick="focusModePrev()" class="px-4 py-2 bg-white border border-me-border rounded-lg hover:bg-me-bg transition text-me-text-secondary \${focusModeIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''}" \${focusModeIndex === 0 ? 'disabled' : ''}>
           ← Previous
         </button>
-        <div class="text-slate-400">
+        <div class="text-me-text-muted">
           <kbd>A</kbd> select <kbd>S</kbd> skip <kbd>F</kbd> flag <kbd>←</kbd><kbd>→</kbd> navigate <kbd>Esc</kbd> exit
         </div>
-        <button onclick="focusModeNext()" class="px-4 py-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition text-slate-600 \${focusModeIndex >= allMatches.length - 1 ? 'opacity-50 cursor-not-allowed' : ''}" \${focusModeIndex >= allMatches.length - 1 ? 'disabled' : ''}>
+        <button onclick="focusModeNext()" class="px-4 py-2 bg-white border border-me-border rounded-lg hover:bg-me-bg transition text-me-text-secondary \${focusModeIndex >= allMatches.length - 1 ? 'opacity-50 cursor-not-allowed' : ''}" \${focusModeIndex >= allMatches.length - 1 ? 'disabled' : ''}>
           Next →
         </button>
       </div>
@@ -2327,36 +2380,36 @@ const dashboardHTML = `
       }
 
       ordersHtml += \`
-        <div class="bg-white border border-slate-200 rounded-lg p-4 mb-3 relative" id="send-order-\${index}">
-          <button onclick="removeFromSendList(\${index})" class="absolute top-2 right-2 w-6 h-6 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition" title="Remove from list">
+        <div class="bg-white border border-me-border rounded-lg p-4 mb-3 relative" id="send-order-\${index}">
+          <button onclick="removeFromSendList(\${index})" class="absolute top-2 right-2 w-6 h-6 flex items-center justify-center text-me-text-muted hover:text-me-error hover:bg-red-50 rounded transition" title="Remove from list">
             ✕
           </button>
           <div class="flex items-start gap-3 mb-3 pr-6">
             <div class="flex-1">
-              <div class="font-semibold text-slate-800">\${edi.customer}</div>
-              <div class="text-sm text-slate-500">PO# \${edi.poNumber} → Zoho Ref# \${zoho?.reference || zoho?.number || 'N/A'}</div>
+              <div class="font-semibold text-me-text-primary">\${edi.customer}</div>
+              <div class="text-sm text-me-text-muted">PO# \${edi.poNumber} → Zoho Ref# \${zoho?.reference || zoho?.number || 'N/A'}</div>
             </div>
             <div class="text-right">
-              <div class="font-semibold text-green-600">$\${(edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
-              <div class="text-xs text-slate-400">\${edi.totalUnits?.toLocaleString() || 0} units</div>
+              <div class="font-semibold text-me-success">$\${(edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+              <div class="text-xs text-me-text-muted">\${edi.totalUnits?.toLocaleString() || 0} units</div>
             </div>
           </div>
           \${changes.length > 0 ? \`
             <div class="bg-amber-50 border border-amber-200 rounded p-2">
-              <div class="text-xs font-semibold text-amber-700 mb-1">Changes to apply:</div>
+              <div class="text-xs font-semibold text-me-warning mb-1">Changes to apply:</div>
               <table class="w-full text-sm">
                 <tbody>
                   \${changes.map(c => \`
                     <tr>
-                      <td class="py-1 text-slate-600 w-24">\${c.field}</td>
+                      <td class="py-1 text-me-text-secondary w-24">\${c.field}</td>
                       <td class="py-1 text-red-400 line-through text-sm">\${c.from}</td>
-                      <td class="py-1 text-green-600 font-medium">→ \${c.to}</td>
+                      <td class="py-1 text-me-success font-medium">→ \${c.to}</td>
                     </tr>
                   \`).join('')}
                 </tbody>
               </table>
             </div>
-          \` : '<div class="text-sm text-green-600 bg-green-50 border border-green-200 rounded p-2">✓ No field changes - will sync order</div>'}
+          \` : '<div class="text-sm text-me-success bg-green-50 border border-green-200 rounded p-2">✓ No field changes - will sync order</div>'}
         </div>
       \`;
     });
@@ -2364,29 +2417,29 @@ const dashboardHTML = `
     const modalHtml = \`
       <div class="modal-overlay" onclick="closeModal()">
         <div class="bg-white rounded-xl max-w-3xl w-full mx-4 overflow-hidden" onclick="event.stopPropagation()">
-          <div class="bg-slate-800 text-white px-6 py-4 flex justify-between items-center">
+          <div class="bg-me-dark text-white px-6 py-4 flex justify-between items-center">
             <h3 class="text-lg font-semibold">📋 Review & Confirm — \${selectedMatches.length} Order\${selectedMatches.length !== 1 ? 's' : ''}</h3>
-            <button onclick="closeModal()" class="text-white hover:text-slate-300 text-xl">✕</button>
+            <button onclick="closeModal()" class="text-white hover:text-gray-300 text-xl">✕</button>
           </div>
 
           <!-- Summary Stats -->
-          <div class="bg-slate-50 px-6 py-4 border-b border-slate-200">
+          <div class="bg-me-bg px-6 py-4 border-b border-me-border">
             <div class="grid grid-cols-4 gap-4 text-center">
               <div>
-                <div class="text-2xl font-bold text-slate-800">\${selectedMatches.length}</div>
-                <div class="text-xs text-slate-500 uppercase">Orders</div>
+                <div class="text-2xl font-bold text-me-text-primary">\${selectedMatches.length}</div>
+                <div class="text-xs text-me-text-muted uppercase">Orders</div>
               </div>
               <div>
-                <div class="text-2xl font-bold text-green-600">$\${totalEdiAmount.toLocaleString('en-US', {minimumFractionDigits: 0})}</div>
-                <div class="text-xs text-slate-500 uppercase">Total Value</div>
+                <div class="text-2xl font-bold text-me-success">$\${totalEdiAmount.toLocaleString('en-US', {minimumFractionDigits: 0})}</div>
+                <div class="text-xs text-me-text-muted uppercase">Total Value</div>
               </div>
               <div>
-                <div class="text-2xl font-bold text-blue-600">\${totalEdiUnits.toLocaleString()}</div>
-                <div class="text-xs text-slate-500 uppercase">Total Units</div>
+                <div class="text-2xl font-bold text-me-accent">\${totalEdiUnits.toLocaleString()}</div>
+                <div class="text-xs text-me-text-muted uppercase">Total Units</div>
               </div>
               <div>
-                <div class="text-2xl font-bold text-amber-600">\${ordersWithChanges}</div>
-                <div class="text-xs text-slate-500 uppercase">With Changes</div>
+                <div class="text-2xl font-bold text-me-warning">\${ordersWithChanges}</div>
+                <div class="text-xs text-me-text-muted uppercase">With Changes</div>
               </div>
             </div>
           </div>
@@ -2398,7 +2451,7 @@ const dashboardHTML = `
               <span id="sendProgressText" class="text-blue-700 font-medium">Preparing...</span>
             </div>
             <div class="mt-2 h-2 bg-blue-200 rounded-full overflow-hidden">
-              <div id="sendProgressFill" class="h-full bg-blue-500 transition-all duration-300" style="width: 0%"></div>
+              <div id="sendProgressFill" class="h-full bg-me-dark transition-all duration-300" style="width: 0%"></div>
             </div>
           </div>
 
@@ -2408,15 +2461,15 @@ const dashboardHTML = `
           </div>
 
           <!-- Footer -->
-          <div class="px-6 py-4 bg-slate-50 border-t flex justify-between items-center">
-            <div class="text-sm text-slate-500">
+          <div class="px-6 py-4 bg-me-bg border-t flex justify-between items-center">
+            <div class="text-sm text-me-text-muted">
               Click ✕ on any order to remove it from this batch
             </div>
             <div class="flex gap-3">
-              <button onclick="closeModal()" class="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100 font-medium">
+              <button onclick="closeModal()" class="px-4 py-2 border border-me-border rounded-lg hover:bg-me-bg font-medium">
                 Cancel
               </button>
-              <button onclick="executeBulkUpdate()" id="confirmBulkBtn" class="px-6 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 font-semibold flex items-center gap-2">
+              <button onclick="executeBulkUpdate()" id="confirmBulkBtn" class="px-6 py-2.5 bg-me-success text-white rounded-lg hover:bg-me-success font-semibold flex items-center gap-2">
                 ✓ Send \${selectedMatches.length} to Zoho
               </button>
             </div>
@@ -2523,7 +2576,7 @@ const dashboardHTML = `
           if (orderEl) {
             orderEl.classList.remove('opacity-50');
             orderEl.classList.add('border-green-300', 'bg-green-50');
-            orderEl.innerHTML = '<div class="flex items-center gap-2 text-green-600 font-medium"><span class="text-xl">✓</span> PO# ' + match.ediOrder.poNumber + ' — Sent successfully</div>';
+            orderEl.innerHTML = '<div class="flex items-center gap-2 text-me-success font-medium"><span class="text-xl">✓</span> PO# ' + match.ediOrder.poNumber + ' — Sent successfully</div>';
           }
         } else {
           failed++;
@@ -2534,7 +2587,7 @@ const dashboardHTML = `
           if (orderEl) {
             orderEl.classList.remove('opacity-50');
             orderEl.classList.add('border-red-300', 'bg-red-50');
-            orderEl.innerHTML = '<div class="flex items-center gap-2 text-red-600 font-medium"><span class="text-xl">✕</span> PO# ' + match.ediOrder.poNumber + ' — Failed: ' + (data.error || 'Unknown error') + '</div>';
+            orderEl.innerHTML = '<div class="flex items-center gap-2 text-me-error font-medium"><span class="text-xl">✕</span> PO# ' + match.ediOrder.poNumber + ' — Failed: ' + (data.error || 'Unknown error') + '</div>';
           }
         }
       } catch (e) {
@@ -2545,7 +2598,7 @@ const dashboardHTML = `
         if (orderEl) {
           orderEl.classList.remove('opacity-50');
           orderEl.classList.add('border-red-300', 'bg-red-50');
-          orderEl.innerHTML = '<div class="flex items-center gap-2 text-red-600 font-medium"><span class="text-xl">✕</span> PO# ' + match.ediOrder.poNumber + ' — Error: ' + e.message + '</div>';
+          orderEl.innerHTML = '<div class="flex items-center gap-2 text-me-error font-medium"><span class="text-xl">✕</span> PO# ' + match.ediOrder.poNumber + ' — Error: ' + e.message + '</div>';
         }
       }
     }
@@ -2556,12 +2609,12 @@ const dashboardHTML = `
     progressBar.classList.remove('bg-blue-50', 'border-blue-200');
     progressBar.classList.add(failed > 0 ? 'bg-amber-50' : 'bg-green-50', failed > 0 ? 'border-amber-200' : 'border-green-200');
     progressText.classList.remove('text-blue-700');
-    progressText.classList.add(failed > 0 ? 'text-amber-700' : 'text-green-700');
+    progressText.classList.add(failed > 0 ? 'text-me-warning' : 'text-me-success');
 
     // Update button to close
     btn.disabled = false;
-    btn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-green-500', 'hover:bg-green-600');
-    btn.classList.add('bg-slate-700', 'hover:bg-slate-800');
+    btn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-me-success', 'hover:bg-me-success');
+    btn.classList.add('bg-me-hover', 'hover:bg-me-dark');
     btn.innerHTML = '✓ Done — Close';
     btn.onclick = () => {
       closeModal();
@@ -2607,22 +2660,22 @@ const dashboardHTML = `
       const modalHtml = \`
         <div class="modal-overlay" onclick="closeModal()">
           <div class="bg-white rounded-xl max-w-4xl w-full mx-4 overflow-hidden max-h-[90vh] flex flex-col" onclick="event.stopPropagation()">
-            <div class="bg-slate-800 text-white px-6 py-4 flex justify-between items-center">
+            <div class="bg-me-dark text-white px-6 py-4 flex justify-between items-center">
               <div>
                 <h3 class="text-lg font-semibold">EDI Order Details</h3>
-                <div class="text-sm text-slate-300">PO# \${order.edi_order_number} • \${order.edi_customer_name}</div>
+                <div class="text-sm text-gray-300">PO# \${order.edi_order_number} • \${order.edi_customer_name}</div>
               </div>
-              <button onclick="closeModal()" class="text-white hover:text-slate-300 text-xl">✕</button>
+              <button onclick="closeModal()" class="text-white hover:text-gray-300 text-xl">✕</button>
             </div>
 
             <!-- Tabs -->
-            <div class="border-b border-slate-200 px-6">
+            <div class="border-b border-me-border px-6">
               <div class="flex gap-6">
                 <button onclick="showEdiTab('summary')" class="tab-btn active py-3 text-sm font-medium" data-tab="summary">Summary</button>
-                <button onclick="showEdiTab('lineitems')" class="tab-btn py-3 text-sm font-medium text-slate-500" data-tab="lineitems">📦 Line Items</button>
-                <button onclick="showEdiTab('matches'); loadOrderMatch(\${order.id})" class="tab-btn py-3 text-sm font-medium text-slate-500" data-tab="matches" id="matchesTab-\${order.id}">🔍 Matches</button>
+                <button onclick="showEdiTab('lineitems')" class="tab-btn py-3 text-sm font-medium text-me-text-muted" data-tab="lineitems">📦 Line Items</button>
+                <button onclick="showEdiTab('matches'); loadOrderMatch(\${order.id})" class="tab-btn py-3 text-sm font-medium text-me-text-muted" data-tab="matches" id="matchesTab-\${order.id}">🔍 Matches</button>
                 \${order.is_amended ? '<button onclick="showEdiTab(\\'changes\\')" class="tab-btn py-3 text-sm font-medium text-orange-500" data-tab="changes">🔄 Changes (' + (order.amendment_count || 1) + ')</button>' : ''}
-                <button onclick="showEdiTab('raw')" class="tab-btn py-3 text-sm font-medium text-slate-500" data-tab="raw">All Raw Data</button>
+                <button onclick="showEdiTab('raw')" class="tab-btn py-3 text-sm font-medium text-me-text-muted" data-tab="raw">All Raw Data</button>
               </div>
             </div>
 
@@ -2630,20 +2683,20 @@ const dashboardHTML = `
               <!-- Summary Tab -->
               <div id="edi-tab-summary" class="edi-tab-content">
                 <div class="grid grid-cols-4 gap-4 mb-6">
-                  <div class="bg-slate-50 rounded-lg p-4 text-center">
-                    <div class="text-xs text-slate-500 uppercase mb-1">PO Number</div>
+                  <div class="bg-me-bg rounded-lg p-4 text-center">
+                    <div class="text-xs text-me-text-muted uppercase mb-1">PO Number</div>
                     <div class="text-lg font-semibold">\${order.edi_order_number || 'N/A'}</div>
                   </div>
-                  <div class="bg-slate-50 rounded-lg p-4 text-center">
-                    <div class="text-xs text-slate-500 uppercase mb-1">Customer</div>
+                  <div class="bg-me-bg rounded-lg p-4 text-center">
+                    <div class="text-xs text-me-text-muted uppercase mb-1">Customer</div>
                     <div class="text-lg font-semibold">\${order.edi_customer_name || 'Unknown'}</div>
                   </div>
-                  <div class="bg-slate-50 rounded-lg p-4 text-center">
-                    <div class="text-xs text-slate-500 uppercase mb-1">Order Date</div>
+                  <div class="bg-me-bg rounded-lg p-4 text-center">
+                    <div class="text-xs text-me-text-muted uppercase mb-1">Order Date</div>
                     <div class="text-lg font-semibold">\${formatDate(dates.orderDate || dates.poDate)}</div>
                   </div>
-                  <div class="bg-slate-50 rounded-lg p-4 text-center">
-                    <div class="text-xs text-slate-500 uppercase mb-1">Unit of Measure</div>
+                  <div class="bg-me-bg rounded-lg p-4 text-center">
+                    <div class="text-xs text-me-text-muted uppercase mb-1">Unit of Measure</div>
                     <div class="text-lg font-semibold"><span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-sm">EA</span> Each</div>
                   </div>
                 </div>
@@ -2651,15 +2704,15 @@ const dashboardHTML = `
                 <div class="grid grid-cols-3 gap-4 mb-6">
                   <div class="bg-blue-50 rounded-lg p-4 text-center border border-blue-100">
                     <div class="text-3xl font-bold text-blue-700">\${items.length}</div>
-                    <div class="text-sm text-blue-600">Line Items</div>
+                    <div class="text-sm text-me-accent">Line Items</div>
                   </div>
                   <div class="bg-blue-50 rounded-lg p-4 text-center border border-blue-100">
                     <div class="text-3xl font-bold text-blue-700">\${totalUnits.toLocaleString()}</div>
-                    <div class="text-sm text-blue-600">Units Ordered</div>
+                    <div class="text-sm text-me-accent">Units Ordered</div>
                   </div>
                   <div class="bg-green-50 rounded-lg p-4 text-center border border-green-100">
-                    <div class="text-3xl font-bold text-green-700">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
-                    <div class="text-sm text-green-600">Total Value</div>
+                    <div class="text-3xl font-bold text-me-success">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+                    <div class="text-sm text-me-success">Total Value</div>
                   </div>
                 </div>
 
@@ -2677,19 +2730,19 @@ const dashboardHTML = `
                         <div class="font-semibold text-purple-800 mb-3">📦 Pre-Pack Order</div>
                         <div class="grid grid-cols-4 gap-4 text-sm">
                           <div>
-                            <div class="text-xs text-slate-500 uppercase">Pack Price</div>
+                            <div class="text-xs text-me-text-muted uppercase">Pack Price</div>
                             <div class="font-bold text-purple-700 text-lg">$\${packPrice.toFixed(2)}</div>
                           </div>
                           <div class="flex items-center justify-center">
-                            <div class="text-slate-400 text-lg">÷</div>
+                            <div class="text-me-text-muted text-lg">÷</div>
                           </div>
                           <div>
-                            <div class="text-xs text-slate-500 uppercase">Pack Qty</div>
+                            <div class="text-xs text-me-text-muted uppercase">Pack Qty</div>
                             <div class="font-bold text-purple-700 text-lg">\${packQty}</div>
                           </div>
                           <div>
-                            <div class="text-xs text-slate-500 uppercase">= Each Price</div>
-                            <div class="font-bold text-green-600 text-lg">$\${eachPrice.toFixed(2)}</div>
+                            <div class="text-xs text-me-text-muted uppercase">= Each Price</div>
+                            <div class="font-bold text-me-success text-lg">$\${eachPrice.toFixed(2)}</div>
                           </div>
                         </div>
                         <div class="mt-3 pt-3 border-t border-purple-200 text-xs text-purple-600">
@@ -2699,16 +2752,16 @@ const dashboardHTML = `
                     \`;
                   } else {
                     return \`
-                      <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                        <div class="font-semibold text-slate-700 mb-2">💰 Pricing Details</div>
+                      <div class="bg-me-bg rounded-lg p-4 border border-me-border">
+                        <div class="font-semibold text-me-text-primary mb-2">💰 Pricing Details</div>
                         <div class="grid grid-cols-2 gap-4 text-sm">
                           <div>
-                            <div class="text-xs text-slate-500 uppercase">Unit Price</div>
-                            <div class="font-bold text-green-600 text-lg">$\${eachPrice.toFixed(2)}</div>
+                            <div class="text-xs text-me-text-muted uppercase">Unit Price</div>
+                            <div class="font-bold text-me-success text-lg">$\${eachPrice.toFixed(2)}</div>
                           </div>
                           <div>
-                            <div class="text-xs text-slate-500 uppercase">Total Amount</div>
-                            <div class="font-bold text-slate-700 text-lg">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
+                            <div class="text-xs text-me-text-muted uppercase">Total Amount</div>
+                            <div class="font-bold text-me-text-primary text-lg">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</div>
                           </div>
                         </div>
                       </div>
@@ -2719,20 +2772,20 @@ const dashboardHTML = `
 
               <!-- Line Items Tab -->
               <div id="edi-tab-lineitems" class="edi-tab-content hidden">
-                <div class="border border-slate-200 rounded-lg overflow-hidden overflow-x-auto">
+                <div class="border border-me-border rounded-lg overflow-hidden overflow-x-auto">
                   <table class="w-full text-sm">
-                    <thead class="bg-slate-50">
+                    <thead class="bg-me-bg">
                       <tr>
-                        <th class="text-left px-3 py-2 text-slate-500">Style/SKU</th>
-                        <th class="text-left px-3 py-2 text-slate-500">UPC</th>
-                        <th class="text-left px-3 py-2 text-slate-500">Color</th>
-                        <th class="text-left px-3 py-2 text-slate-500">Size</th>
-                        <th class="text-center px-3 py-2 text-slate-500">UOM</th>
-                        <th class="text-right px-3 py-2 text-slate-500">Qty</th>
-                        <th class="text-right px-3 py-2 text-slate-500">Pack Price</th>
-                        <th class="text-right px-3 py-2 text-slate-500">Each Price</th>
-                        <th class="text-right px-3 py-2 text-slate-500">Retail</th>
-                        <th class="text-right px-3 py-2 text-slate-500">Line Total</th>
+                        <th class="text-left px-3 py-2 text-me-text-muted">Style/SKU</th>
+                        <th class="text-left px-3 py-2 text-me-text-muted">UPC</th>
+                        <th class="text-left px-3 py-2 text-me-text-muted">Color</th>
+                        <th class="text-left px-3 py-2 text-me-text-muted">Size</th>
+                        <th class="text-center px-3 py-2 text-me-text-muted">UOM</th>
+                        <th class="text-right px-3 py-2 text-me-text-muted">Qty</th>
+                        <th class="text-right px-3 py-2 text-me-text-muted">Pack Price</th>
+                        <th class="text-right px-3 py-2 text-me-text-muted">Each Price</th>
+                        <th class="text-right px-3 py-2 text-me-text-muted">Retail</th>
+                        <th class="text-right px-3 py-2 text-me-text-muted">Line Total</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2749,35 +2802,35 @@ const dashboardHTML = `
                         const skuIsUpc = sku && /^\\d{10,14}$/.test(sku);
                         const retailPrice = item.retailPrice || 0;
                         return \`
-                        <tr class="border-t border-slate-100 hover:bg-slate-50">
-                          <td class="px-3 py-2 font-medium">\${skuIsUpc ? '<span class="text-slate-400 text-xs">see UPC</span>' : sku || '-'}</td>
-                          <td class="px-3 py-2 font-mono text-xs text-slate-600">\${skuIsUpc ? sku : (upc || '-')}</td>
+                        <tr class="border-t border-gray-100 hover:bg-me-bg">
+                          <td class="px-3 py-2 font-medium">\${skuIsUpc ? '<span class="text-me-text-muted text-xs">see UPC</span>' : sku || '-'}</td>
+                          <td class="px-3 py-2 font-mono text-xs text-me-text-secondary">\${skuIsUpc ? sku : (upc || '-')}</td>
                           <td class="px-3 py-2">\${item.color || '-'}</td>
                           <td class="px-3 py-2">\${item.size || '-'}</td>
                           <td class="px-3 py-2 text-center">
-                            <span class="\${isPrepack ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'} px-2 py-0.5 rounded text-xs font-medium">\${uom}</span>
-                            \${isPrepack && packQty > 1 ? '<div class="text-xs text-slate-400 mt-0.5">' + packQty + '/pk</div>' : ''}
+                            <span class="\${isPrepack ? 'bg-purple-100 text-purple-700' : 'bg-me-bg text-me-text-secondary'} px-2 py-0.5 rounded text-xs font-medium">\${uom}</span>
+                            \${isPrepack && packQty > 1 ? '<div class="text-xs text-me-text-muted mt-0.5">' + packQty + '/pk</div>' : ''}
                           </td>
                           <td class="px-3 py-2 text-right">
                             \${item.quantityOrdered || 0}
-                            \${isPrepack && packQty > 1 ? '<div class="text-xs text-slate-400">(' + totalUnitsLine + ' ea)</div>' : ''}
+                            \${isPrepack && packQty > 1 ? '<div class="text-xs text-me-text-muted">(' + totalUnitsLine + ' ea)</div>' : ''}
                           </td>
-                          <td class="px-3 py-2 text-right \${isPrepack ? 'font-medium' : 'text-slate-400'}">$\${packPrice.toFixed(2)}</td>
-                          <td class="px-3 py-2 text-right \${!isPrepack ? 'font-medium' : ''}\${item.unitPriceCalculated ? ' text-blue-600' : ''}">
+                          <td class="px-3 py-2 text-right \${isPrepack ? 'font-medium' : 'text-me-text-muted'}">$\${packPrice.toFixed(2)}</td>
+                          <td class="px-3 py-2 text-right \${!isPrepack ? 'font-medium' : ''}\${item.unitPriceCalculated ? ' text-me-accent' : ''}">
                             $\${eachPrice.toFixed(2)}
-                            \${item.unitPriceCalculated ? '<span class="text-xs text-blue-500 ml-1">*</span>' : ''}
+                            \${item.unitPriceCalculated ? '<span class="text-xs text-me-accent ml-1">*</span>' : ''}
                           </td>
-                          <td class="px-3 py-2 text-right text-slate-500">\${retailPrice > 0 ? '$' + retailPrice.toFixed(2) : '-'}</td>
-                          <td class="px-3 py-2 text-right font-medium text-green-700">$\${lineTotal.toFixed(2)}</td>
+                          <td class="px-3 py-2 text-right text-me-text-muted">\${retailPrice > 0 ? '$' + retailPrice.toFixed(2) : '-'}</td>
+                          <td class="px-3 py-2 text-right font-medium text-me-success">$\${lineTotal.toFixed(2)}</td>
                         </tr>
                       \`}).join('')}
                     </tbody>
-                    <tfoot class="bg-slate-50 font-semibold">
-                      <tr class="border-t border-slate-200">
+                    <tfoot class="bg-me-bg font-semibold">
+                      <tr class="border-t border-me-border">
                         <td colspan="5" class="px-3 py-2 text-right">Totals:</td>
                         <td class="px-3 py-2 text-right">\${totalUnits.toLocaleString()} units</td>
                         <td colspan="3" class="px-3 py-2"></td>
-                        <td class="px-3 py-2 text-right text-green-700">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+                        <td class="px-3 py-2 text-right text-me-success">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -2808,15 +2861,15 @@ const dashboardHTML = `
                   return changes;
                 })().length > 0 ? \`
                 <div class="mb-4">
-                  <h4 class="font-semibold text-slate-700 mb-2">📋 What Changed</h4>
+                  <h4 class="font-semibold text-me-text-primary mb-2">📋 What Changed</h4>
                   <div class="bg-white rounded-lg border overflow-hidden">
                     <table class="w-full text-sm">
-                      <thead class="bg-slate-100">
+                      <thead class="bg-me-bg">
                         <tr>
-                          <th class="text-left px-4 py-2 text-slate-600 font-medium">Field</th>
-                          <th class="text-left px-4 py-2 text-slate-600 font-medium">Previous Value</th>
-                          <th class="text-center px-2 py-2 text-slate-400">→</th>
-                          <th class="text-left px-4 py-2 text-slate-600 font-medium">New Value</th>
+                          <th class="text-left px-4 py-2 text-me-text-secondary font-medium">Field</th>
+                          <th class="text-left px-4 py-2 text-me-text-secondary font-medium">Previous Value</th>
+                          <th class="text-center px-2 py-2 text-me-text-muted">→</th>
+                          <th class="text-left px-4 py-2 text-me-text-secondary font-medium">New Value</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2826,11 +2879,11 @@ const dashboardHTML = `
                             try { changes = JSON.parse(changes); } catch { changes = []; }
                           }
                           return changes.map((c, idx) => \`
-                            <tr class="\${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'} border-t border-slate-100">
-                              <td class="px-4 py-2 font-medium text-slate-700">\${c.field}</td>
-                              <td class="px-4 py-2 text-red-600">\${c.from !== null && c.from !== undefined ? c.from : '<span class="text-slate-400 italic">none</span>'}</td>
-                              <td class="px-2 py-2 text-center text-slate-400">→</td>
-                              <td class="px-4 py-2 text-green-600 font-medium">\${c.to !== null && c.to !== undefined ? c.to : '<span class="text-slate-400 italic">removed</span>'}</td>
+                            <tr class="\${idx % 2 === 0 ? 'bg-white' : 'bg-me-bg'} border-t border-gray-100">
+                              <td class="px-4 py-2 font-medium text-me-text-primary">\${c.field}</td>
+                              <td class="px-4 py-2 text-me-error">\${c.from !== null && c.from !== undefined ? c.from : '<span class="text-me-text-muted italic">none</span>'}</td>
+                              <td class="px-2 py-2 text-center text-me-text-muted">→</td>
+                              <td class="px-4 py-2 text-me-success font-medium">\${c.to !== null && c.to !== undefined ? c.to : '<span class="text-me-text-muted italic">removed</span>'}</td>
                             </tr>
                           \`).join('');
                         })()}
@@ -2838,17 +2891,17 @@ const dashboardHTML = `
                     </table>
                   </div>
                 </div>
-                \` : '<p class="text-slate-500">No detailed changes recorded.</p>'}
+                \` : '<p class="text-me-text-muted">No detailed changes recorded.</p>'}
 
                 \${order.previous_data ? \`
                 <div>
-                  <h4 class="font-semibold text-slate-700 mb-2">📜 Previous Order Data</h4>
-                  <details class="bg-slate-50 rounded-lg border">
-                    <summary class="px-4 py-2 cursor-pointer text-sm text-slate-600 hover:text-slate-800">
+                  <h4 class="font-semibold text-me-text-primary mb-2">📜 Previous Order Data</h4>
+                  <details class="bg-me-bg rounded-lg border">
+                    <summary class="px-4 py-2 cursor-pointer text-sm text-me-text-secondary hover:text-me-text-primary">
                       Click to expand previous version
                     </summary>
                     <div class="p-4 border-t max-h-60 overflow-auto">
-                      <pre class="text-xs text-slate-600 whitespace-pre-wrap">\${JSON.stringify(order.previous_data, null, 2)}</pre>
+                      <pre class="text-xs text-me-text-secondary whitespace-pre-wrap">\${JSON.stringify(order.previous_data, null, 2)}</pre>
                     </div>
                   </details>
                 </div>
@@ -2862,20 +2915,20 @@ const dashboardHTML = `
                 \${order.parsed_data?.rawCsvData ? \`
                 <div class="mb-4">
                   <div class="flex items-center justify-between mb-2">
-                    <h4 class="font-semibold text-slate-700">📄 Raw CSV Fields (Spring System)</h4>
+                    <h4 class="font-semibold text-me-text-primary">📄 Raw CSV Fields (Spring System)</h4>
                     <div class="relative">
                       <input type="text" id="rawDataSearch" placeholder="Search fields..."
                         oninput="filterRawDataTable(this.value)"
-                        class="pl-8 pr-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-48">
-                      <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+                        class="pl-8 pr-3 py-1.5 text-sm border border-me-border rounded-lg focus:ring-2 focus:ring-me-dark focus:border-me-dark w-48">
+                      <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-me-text-muted">🔍</span>
                     </div>
                   </div>
                   <div class="bg-white rounded-lg border max-h-80 overflow-auto">
                     <table class="w-full text-sm" id="rawDataTable">
-                      <thead class="bg-slate-100 sticky top-0">
+                      <thead class="bg-me-bg sticky top-0">
                         <tr>
-                          <th class="text-left px-3 py-2 text-slate-600 font-medium w-1/3">Field Name</th>
-                          <th class="text-left px-3 py-2 text-slate-600 font-medium">Value</th>
+                          <th class="text-left px-3 py-2 text-me-text-secondary font-medium w-1/3">Field Name</th>
+                          <th class="text-left px-3 py-2 text-me-text-secondary font-medium">Value</th>
                         </tr>
                       </thead>
                       <tbody id="rawDataTableBody">
@@ -2883,22 +2936,22 @@ const dashboardHTML = `
                           .filter(([k, v]) => v !== null && v !== undefined && v !== '')
                           .sort((a, b) => a[0].localeCompare(b[0]))
                           .map(([key, value], idx) => \`
-                          <tr class="raw-data-row \${idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'} border-b border-slate-100" data-field="\${key.toLowerCase()}" data-value="\${String(value).toLowerCase()}">
+                          <tr class="raw-data-row \${idx % 2 === 0 ? 'bg-white' : 'bg-me-bg'} border-b border-gray-100" data-field="\${key.toLowerCase()}" data-value="\${String(value).toLowerCase()}">
                             <td class="px-3 py-1.5 font-mono text-xs text-blue-700">\${key}</td>
-                            <td class="px-3 py-1.5 text-slate-700">\${typeof value === 'string' && value.length > 100 ? value.substring(0, 100) + '...' : value}</td>
+                            <td class="px-3 py-1.5 text-me-text-primary">\${typeof value === 'string' && value.length > 100 ? value.substring(0, 100) + '...' : value}</td>
                           </tr>
                         \`).join('')}
                       </tbody>
                     </table>
                   </div>
-                  <div id="rawDataSearchCount" class="text-xs text-slate-500 mt-1"></div>
+                  <div id="rawDataSearchCount" class="text-xs text-me-text-muted mt-1"></div>
                 </div>
                 \` : ''}
 
                 <!-- Parsed/Structured Data -->
                 <div>
-                  <h4 class="font-semibold text-slate-700 mb-2">🔧 Parsed Data (Structured)</h4>
-                  <div class="bg-slate-50 rounded-lg border max-h-80 overflow-auto">
+                  <h4 class="font-semibold text-me-text-primary mb-2">🔧 Parsed Data (Structured)</h4>
+                  <div class="bg-me-bg rounded-lg border max-h-80 overflow-auto">
                     \${formatRawDataDisplay(order.parsed_data)}
                   </div>
                 </div>
@@ -2907,10 +2960,10 @@ const dashboardHTML = `
               <!-- Matches Tab -->
               <div id="edi-tab-matches" class="edi-tab-content hidden">
                 <div id="matchesContent-\${order.id}" class="matches-content">
-                  <div class="text-center py-8 text-slate-500">
+                  <div class="text-center py-8 text-me-text-muted">
                     <div class="text-4xl mb-3">🔍</div>
                     <div class="font-medium">Click to Find Zoho Match</div>
-                    <button onclick="loadOrderMatch(\${order.id})" class="mt-4 px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-medium">
+                    <button onclick="loadOrderMatch(\${order.id})" class="mt-4 px-6 py-2 bg-me-dark text-white rounded-lg hover:bg-me-hover transition font-medium">
                       Find Match
                     </button>
                   </div>
@@ -2918,10 +2971,10 @@ const dashboardHTML = `
               </div>
             </div>
 
-            <div class="px-6 py-4 bg-slate-50 border-t flex justify-between items-center">
-              <button onclick="closeModal()" class="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700">Close</button>
+            <div class="px-6 py-4 bg-me-bg border-t flex justify-between items-center">
+              <button onclick="closeModal()" class="px-4 py-2 bg-me-dark text-white rounded-lg hover:bg-me-hover">Close</button>
               <div id="matchActions-\${order.id}" class="hidden">
-                <button onclick="processMatchFromModal(\${order.id})" class="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-medium flex items-center gap-2">
+                <button onclick="processMatchFromModal(\${order.id})" class="px-6 py-2 bg-me-success text-white rounded-lg hover:bg-me-success transition font-medium flex items-center gap-2">
                   ✓ Process Match
                 </button>
               </div>
@@ -2942,13 +2995,13 @@ const dashboardHTML = `
     // Remove active from all buttons
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.classList.remove('active');
-      btn.classList.add('text-slate-500');
+      btn.classList.add('text-me-text-muted');
     });
     // Show selected tab
     document.getElementById('edi-tab-' + tabName)?.classList.remove('hidden');
     // Activate button
     document.querySelector('.tab-btn[data-tab="' + tabName + '"]')?.classList.add('active');
-    document.querySelector('.tab-btn[data-tab="' + tabName + '"]')?.classList.remove('text-slate-500');
+    document.querySelector('.tab-btn[data-tab="' + tabName + '"]')?.classList.remove('text-me-text-muted');
 
     // Clear search when switching to raw tab
     if (tabName === 'raw') {
@@ -2988,7 +3041,7 @@ const dashboardHTML = `
     }
 
     // Show loading state
-    contentEl.innerHTML = '<div class="text-center py-8"><div class="spinner border-blue-500 border-t-transparent w-8 h-8 mx-auto mb-3"></div><div class="text-slate-500">Finding Zoho match...</div></div>';
+    contentEl.innerHTML = '<div class="text-center py-8"><div class="spinner border-blue-500 border-t-transparent w-8 h-8 mx-auto mb-3"></div><div class="text-me-text-muted">Finding Zoho match...</div></div>';
 
     try {
       // Add timeout to prevent infinite waiting
@@ -3013,13 +3066,13 @@ const dashboardHTML = `
         modalMatchCache.set(orderId, result);
         renderModalMatch(orderId, result);
       } else {
-        contentEl.innerHTML = '<div class="text-center py-8 text-red-500"><div class="text-4xl mb-3">⚠️</div><div>Error: ' + (data.error || 'Unknown error') + '</div></div>';
+        contentEl.innerHTML = '<div class="text-center py-8 text-me-error"><div class="text-4xl mb-3">⚠️</div><div>Error: ' + (data.error || 'Unknown error') + '</div></div>';
       }
     } catch (e) {
       if (e.name === 'AbortError') {
-        contentEl.innerHTML = '<div class="text-center py-8 text-red-500"><div class="text-4xl mb-3">⏱️</div><div>Request timed out. Try clicking "Find Matches" on the main screen first.</div></div>';
+        contentEl.innerHTML = '<div class="text-center py-8 text-me-error"><div class="text-4xl mb-3">⏱️</div><div>Request timed out. Try clicking "Find Matches" on the main screen first.</div></div>';
       } else {
-        contentEl.innerHTML = '<div class="text-center py-8 text-red-500"><div class="text-4xl mb-3">⚠️</div><div>Error: ' + e.message + '</div></div>';
+        contentEl.innerHTML = '<div class="text-center py-8 text-me-error"><div class="text-4xl mb-3">⚠️</div><div>Error: ' + e.message + '</div></div>';
       }
     }
   }
@@ -3033,7 +3086,7 @@ const dashboardHTML = `
     if (!contentEl) return;
 
     if (!result) {
-      contentEl.innerHTML = '<div class="text-center py-8 text-slate-500"><div class="text-4xl mb-3">🤷</div><div class="font-medium">No match data available</div></div>';
+      contentEl.innerHTML = '<div class="text-center py-8 text-me-text-muted"><div class="text-4xl mb-3">🤷</div><div class="font-medium">No match data available</div></div>';
       if (actionsEl) actionsEl.classList.add('hidden');
       return;
     }
@@ -3047,7 +3100,7 @@ const dashboardHTML = `
 
     // Update tab with confidence badge
     if (tabEl) {
-      let confColor = conf >= 100 ? 'text-green-600' : conf >= 80 ? 'text-blue-600' : conf >= 60 ? 'text-amber-600' : 'text-red-600';
+      let confColor = conf >= 100 ? 'text-me-success' : conf >= 80 ? 'text-me-accent' : conf >= 60 ? 'text-me-warning' : 'text-me-error';
       tabEl.innerHTML = '🔍 Matches <span class="ml-1 ' + confColor + ' font-bold">' + (isNoMatch ? '⚠️' : conf + '%') + '</span>';
     }
 
@@ -3068,11 +3121,11 @@ const dashboardHTML = `
         const ruleMethodLabel = noMatchRuleInfo.matchMethod === 'customer_po' ? 'Customer PO' :
                                 noMatchRuleInfo.matchMethod === 'contract_ref' ? 'Contract Ref (' + (noMatchRuleInfo.contractRefField || 'po_rel_num') + ')' :
                                 'Style + Customer';
-        noMatchRuleHTML = '<div class="bg-slate-100 border border-slate-200 rounded-lg p-3 mb-4">' +
-          '<div class="flex items-center gap-3 text-sm text-slate-600">' +
+        noMatchRuleHTML = '<div class="bg-me-bg border border-me-border rounded-lg p-3 mb-4">' +
+          '<div class="flex items-center gap-3 text-sm text-me-text-secondary">' +
             '<span class="font-medium">🔧 Matching Rule:</span>' +
             '<span>' + (noMatchRuleInfo.isDefault ? 'Default (all customers)' : noMatchRuleInfo.customerName) + '</span>' +
-            '<span class="text-slate-400">|</span>' +
+            '<span class="text-me-text-muted">|</span>' +
             '<span>Searched by: <strong>' + ruleMethodLabel + '</strong></span>' +
           '</div>' +
         '</div>';
@@ -3081,8 +3134,8 @@ const dashboardHTML = `
       contentEl.innerHTML =
         '<div class="text-center py-4">' +
           '<div class="text-5xl mb-4">🔴</div>' +
-          '<div class="text-xl font-semibold text-red-600 mb-2">No Zoho Match Found</div>' +
-          '<div class="text-slate-500 mb-4">This EDI order does not have a matching draft in Zoho.</div>' +
+          '<div class="text-xl font-semibold text-me-error mb-2">No Zoho Match Found</div>' +
+          '<div class="text-me-text-muted mb-4">This EDI order does not have a matching draft in Zoho.</div>' +
         '</div>' +
 
         // Rule info (if available)
@@ -3102,22 +3155,22 @@ const dashboardHTML = `
         // Why no match
         '<div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">' +
           '<div class="font-medium text-amber-800 mb-2">❌ Why no match was found:</div>' +
-          '<div class="text-sm text-amber-700 space-y-2">' +
+          '<div class="text-sm text-me-warning space-y-2">' +
             '<div class="flex items-start gap-2">' +
-              '<span class="text-red-500">✗</span>' +
+              '<span class="text-me-error">✗</span>' +
               '<span>No Zoho draft has PO/Reference = <strong>"' + (edi?.poNumber || '') + '"</strong></span>' +
             '</div>' +
             '<div class="flex items-start gap-2">' +
-              '<span class="text-red-500">✗</span>' +
+              '<span class="text-me-error">✗</span>' +
               '<span>No Zoho draft for <strong>' + (edi?.customer || 'this customer') + '</strong> with base style <strong>' + (ediStyles[0] || 'N/A') + '</strong></span>' +
             '</div>' +
           '</div>' +
         '</div>' +
 
         // What to do
-        '<div class="bg-slate-50 border border-slate-200 rounded-lg p-4">' +
-          '<div class="font-medium text-slate-700 mb-2">💡 What to do:</div>' +
-          '<ul class="text-sm text-slate-600 space-y-1 list-disc list-inside">' +
+        '<div class="bg-me-bg border border-me-border rounded-lg p-4">' +
+          '<div class="font-medium text-me-text-primary mb-2">💡 What to do:</div>' +
+          '<ul class="text-sm text-me-text-secondary space-y-1 list-disc list-inside">' +
             '<li>Check if a draft exists in Zoho for this order</li>' +
             '<li>Verify the PO number matches the Zoho reference field</li>' +
             '<li>Ensure customer name and style match between systems</li>' +
@@ -3136,13 +3189,13 @@ const dashboardHTML = `
     // Confidence styling
     let confBg, confIcon, statusBg, statusTitle, statusDesc;
     if (conf >= 100) {
-      confBg = 'bg-green-100 text-green-700 border-green-300'; confIcon = '🟢';
+      confBg = 'bg-green-100 text-me-success border-green-300'; confIcon = '🟢';
       statusBg = 'bg-green-50 border-green-500'; statusTitle = 'Perfect Match'; statusDesc = 'All fields match - safe to approve';
     } else if (conf >= 80) {
       confBg = 'bg-blue-100 text-blue-700 border-blue-300'; confIcon = '🔵';
       statusBg = 'bg-blue-50 border-blue-500'; statusTitle = 'High Confidence'; statusDesc = 'Most fields match';
     } else if (conf >= 60) {
-      confBg = 'bg-amber-100 text-amber-700 border-amber-300'; confIcon = '🟡';
+      confBg = 'bg-amber-100 text-me-warning border-amber-300'; confIcon = '🟡';
       statusBg = 'bg-amber-50 border-amber-500'; statusTitle = 'Review Recommended'; statusDesc = 'Some differences found';
     } else {
       confBg = 'bg-red-100 text-red-700 border-red-300'; confIcon = '🔴';
@@ -3178,40 +3231,40 @@ const dashboardHTML = `
       const isChecked = sel.fields[r.key] !== false;
       const hasOverride = sel.overrides[r.key] !== undefined;
       const sendVal = hasOverride ? sel.overrides[r.key] : r.ediVal;
-      return '<tr class="border-b border-slate-100 ' + (!isChecked ? 'opacity-40 bg-slate-50' : '') + '">' +
+      return '<tr class="border-b border-gray-100 ' + (!isChecked ? 'opacity-40 bg-me-bg' : '') + '">' +
         '<td class="py-2 text-center">' +
-          '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onchange="toggleModalFieldSelection(' + orderId + ', \\'' + r.key + '\\')" class="w-4 h-4 rounded border-slate-300 text-blue-500 cursor-pointer">' +
+          '<input type="checkbox" ' + (isChecked ? 'checked' : '') + ' onchange="toggleModalFieldSelection(' + orderId + ', \\'' + r.key + '\\')" class="w-4 h-4 rounded border-me-border text-me-accent cursor-pointer">' +
         '</td>' +
-        '<td class="py-2 text-slate-500 text-xs">' + (r.match ? '<span class="text-green-600 mr-1">✓</span>' : '<span class="text-red-500 mr-1">✗</span>') + r.label + '</td>' +
-        '<td class="py-2 bg-blue-50/30 px-2 text-slate-700 text-xs">' + r.ediVal + '</td>' +
+        '<td class="py-2 text-me-text-muted text-xs">' + (r.match ? '<span class="text-me-success mr-1">✓</span>' : '<span class="text-me-error mr-1">✗</span>') + r.label + '</td>' +
+        '<td class="py-2 bg-blue-50/30 px-2 text-me-text-primary text-xs">' + r.ediVal + '</td>' +
         '<td class="py-2 bg-green-50/30 px-2 text-xs">' + r.zohoVal + '</td>' +
         '<td class="py-2 bg-purple-50/30 px-2" id="modal-field-cell-' + orderId + '-' + r.key + '">' +
           (isChecked ?
             (hasOverride ?
               '<span class="text-purple-700 font-semibold text-xs">' + sendVal + '</span> <span class="text-xs text-purple-400">(custom)</span>' :
               '<span class="text-purple-600 text-xs">' + sendVal + '</span>') :
-            '<span class="text-slate-400 italic text-xs">skip</span>') +
+            '<span class="text-me-text-muted italic text-xs">skip</span>') +
         '</td>' +
         '<td class="py-2 text-center">' +
-          (r.editable && isChecked ? '<button onclick="showModalFieldEdit(' + orderId + ', \\'' + r.key + '\\', \\'' + (sendVal || '').replace(/'/g, "\\\\'") + '\\')" class="text-slate-400 hover:text-purple-600 text-xs">✏️</button>' : '') +
+          (r.editable && isChecked ? '<button onclick="showModalFieldEdit(' + orderId + ', \\'' + r.key + '\\', \\'' + (sendVal || '').replace(/'/g, "\\\\'") + '\\')" class="text-me-text-muted hover:text-purple-600 text-xs">✏️</button>' : '') +
         '</td>' +
       '</tr>';
     }).join('');
 
     // Add units and amount rows (read-only)
-    fieldTableHTML += '<tr class="border-b border-slate-100 bg-slate-50/50">' +
-      '<td class="py-2 text-center text-slate-300">—</td>' +
-      '<td class="py-2 text-slate-500 text-xs">Units</td>' +
+    fieldTableHTML += '<tr class="border-b border-gray-100 bg-me-bg/50">' +
+      '<td class="py-2 text-center text-gray-300">—</td>' +
+      '<td class="py-2 text-me-text-muted text-xs">Units</td>' +
       '<td class="py-2 bg-blue-50/30 px-2 font-semibold text-xs">' + (edi.totalUnits || 0).toLocaleString() + '</td>' +
       '<td class="py-2 bg-green-50/30 px-2 font-semibold text-xs">' + (zoho?.totalUnits || 0).toLocaleString() + '</td>' +
       '<td class="py-2 bg-purple-50/30 px-2 text-purple-600 text-xs">' + (edi.totalUnits || 0).toLocaleString() + '</td>' +
       '<td class="py-2"></td>' +
     '</tr>';
-    fieldTableHTML += '<tr class="border-b border-slate-100 bg-slate-50">' +
-      '<td class="py-2 text-center text-slate-300">—</td>' +
-      '<td class="py-2 text-slate-500 text-xs">Amount</td>' +
+    fieldTableHTML += '<tr class="border-b border-gray-100 bg-me-bg">' +
+      '<td class="py-2 text-center text-gray-300">—</td>' +
+      '<td class="py-2 text-me-text-muted text-xs">Amount</td>' +
       '<td class="py-2 bg-blue-50/30 px-2 font-semibold text-xs">$' + (edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2}) + '</td>' +
-      '<td class="py-2 bg-green-50/30 px-2 font-semibold text-xs">$' + (zoho?.total || zoho?.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2}) + ' ' + (details.totalAmount ? '<span class="text-green-600">✓</span>' : '<span class="text-amber-500">⚠️</span>') + '</td>' +
+      '<td class="py-2 bg-green-50/30 px-2 font-semibold text-xs">$' + (zoho?.total || zoho?.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2}) + ' ' + (details.totalAmount ? '<span class="text-me-success">✓</span>' : '<span class="text-amber-500">⚠️</span>') + '</td>' +
       '<td class="py-2 bg-purple-50/30 px-2 text-purple-600 text-xs">$' + (edi.totalAmount || 0).toLocaleString('en-US', {minimumFractionDigits: 2}) + '</td>' +
       '<td class="py-2"></td>' +
     '</tr>';
@@ -3224,30 +3277,30 @@ const dashboardHTML = `
       const packQty = item.packQty || 1;
       const unitPrice = item.unitPrice || 0;
       const isSelected = sel.lineItems ? sel.lineItems.includes(idx) : true;
-      return '<tr class="border-t border-slate-100 ' + (isPrepack ? 'bg-purple-50/30' : '') + ' ' + (!isSelected ? 'opacity-40 bg-slate-50' : '') + '">' +
+      return '<tr class="border-t border-gray-100 ' + (isPrepack ? 'bg-purple-50/30' : '') + ' ' + (!isSelected ? 'opacity-40 bg-me-bg' : '') + '">' +
         '<td class="px-1 py-1 text-center">' +
-          '<input type="checkbox" ' + (isSelected ? 'checked' : '') + ' onchange="toggleModalLineItem(' + orderId + ', ' + idx + ')" class="w-3 h-3 rounded border-slate-300 text-blue-500 cursor-pointer">' +
+          '<input type="checkbox" ' + (isSelected ? 'checked' : '') + ' onchange="toggleModalLineItem(' + orderId + ', ' + idx + ')" class="w-3 h-3 rounded border-me-border text-me-accent cursor-pointer">' +
         '</td>' +
         '<td class="px-2 py-1 text-xs">' + (sku || '-') + '</td>' +
         '<td class="px-2 py-1 text-xs">' + (item.color || '-') + '</td>' +
         '<td class="px-2 py-1 text-center">' +
-          '<span class="' + (isPrepack ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600') + ' px-1.5 py-0.5 rounded text-xs">' + uom + '</span>' +
+          '<span class="' + (isPrepack ? 'bg-purple-100 text-purple-700' : 'bg-me-bg text-me-text-secondary') + ' px-1.5 py-0.5 rounded text-xs">' + uom + '</span>' +
           (isPrepack && packQty > 1 ? '<div class="text-xs text-purple-500">' + packQty + '/pk</div>' : '') +
         '</td>' +
         '<td class="px-2 py-1 text-right text-xs">' + (item.quantityOrdered || 0) +
-          (isPrepack && packQty > 1 ? '<div class="text-xs text-slate-400">=' + (item.totalUnits || item.quantityOrdered * packQty) + ' ea</div>' : '') +
+          (isPrepack && packQty > 1 ? '<div class="text-xs text-me-text-muted">=' + (item.totalUnits || item.quantityOrdered * packQty) + ' ea</div>' : '') +
         '</td>' +
-        '<td class="px-2 py-1 text-right font-medium text-xs ' + (item.unitPriceCalculated ? 'text-blue-600' : '') + '">$' + unitPrice.toFixed(2) + '</td>' +
+        '<td class="px-2 py-1 text-right font-medium text-xs ' + (item.unitPriceCalculated ? 'text-me-accent' : '') + '">$' + unitPrice.toFixed(2) + '</td>' +
       '</tr>';
     }).join('');
     if (ediItems.length > 15) {
-      ediItemsHTML += '<tr><td colspan="6" class="px-2 py-1 text-center text-slate-400 text-xs">... and ' + (ediItems.length - 15) + ' more</td></tr>';
+      ediItemsHTML += '<tr><td colspan="6" class="px-2 py-1 text-center text-me-text-muted text-xs">... and ' + (ediItems.length - 15) + ' more</td></tr>';
     }
 
     // Build Zoho items table
     let zohoItemsHTML = zohoItems.slice(0, 10).map(item => {
       const zohoUpc = item.cf_upc || item.upc || item.item?.upc || '';
-      return '<tr class="border-t border-slate-100">' +
+      return '<tr class="border-t border-gray-100">' +
         '<td class="px-2 py-1 text-xs">' + (item.name || item.sku || '-') + '</td>' +
         '<td class="px-2 py-1 font-mono text-xs">' + (zohoUpc || '-') + '</td>' +
         '<td class="px-2 py-1 text-right text-xs">' + (item.quantity || 0) + '</td>' +
@@ -3255,22 +3308,22 @@ const dashboardHTML = `
       '</tr>';
     }).join('');
     if (zohoItems.length > 10) {
-      zohoItemsHTML += '<tr><td colspan="4" class="px-2 py-1 text-center text-slate-400 text-xs">... and ' + (zohoItems.length - 10) + ' more</td></tr>';
+      zohoItemsHTML += '<tr><td colspan="4" class="px-2 py-1 text-center text-me-text-muted text-xs">... and ' + (zohoItems.length - 10) + ' more</td></tr>';
     }
 
     // Build alternative matches section
     let altMatchesHTML = '';
     if (result.alternativeMatches && result.alternativeMatches.length > 0) {
       altMatchesHTML = '<div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">' +
-        '<div class="text-sm font-medium text-amber-700 mb-2">🔄 Alternative Matches (' + result.alternativeMatches.length + ' other potential matches)</div>' +
+        '<div class="text-sm font-medium text-me-warning mb-2">🔄 Alternative Matches (' + result.alternativeMatches.length + ' other potential matches)</div>' +
         '<div class="space-y-2">' +
         result.alternativeMatches.map((alt, idx) =>
           '<div class="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-amber-200">' +
             '<div class="flex items-center gap-3">' +
-              '<span class="text-xs text-slate-400">#' + (idx + 2) + '</span>' +
+              '<span class="text-xs text-me-text-muted">#' + (idx + 2) + '</span>' +
               '<div>' +
-                '<div class="font-medium text-sm text-slate-700">' + alt.zohoDraft.customer + '</div>' +
-                '<div class="text-xs text-slate-500">' +
+                '<div class="font-medium text-sm text-me-text-primary">' + alt.zohoDraft.customer + '</div>' +
+                '<div class="text-xs text-me-text-muted">' +
                   'Ref# ' + (alt.zohoDraft.reference || alt.zohoDraft.number) +
                   ' • ' + (alt.zohoDraft.itemCount || 0) + ' items' +
                   ' • $' + (alt.zohoDraft.totalAmount || 0).toLocaleString() +
@@ -3278,8 +3331,8 @@ const dashboardHTML = `
               '</div>' +
             '</div>' +
             '<div class="flex items-center gap-2">' +
-              '<span class="px-2 py-1 rounded text-xs font-medium ' + (alt.confidence >= 60 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600') + '">' + alt.confidence + '%</span>' +
-              '<button onclick="switchModalMatch(' + orderId + ', ' + idx + ')" class="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600 transition">Use This</button>' +
+              '<span class="px-2 py-1 rounded text-xs font-medium ' + (alt.confidence >= 60 ? 'bg-amber-100 text-me-warning' : 'bg-me-bg text-me-text-secondary') + '">' + alt.confidence + '%</span>' +
+              '<button onclick="switchModalMatch(' + orderId + ', ' + idx + ')" class="px-2 py-1 bg-me-dark text-white text-xs rounded hover:bg-me-hover transition">Use This</button>' +
             '</div>' +
           '</div>'
         ).join('') +
@@ -3316,12 +3369,12 @@ const dashboardHTML = `
       const actionLabel = ruleInfo.actionOnMatch === 'create_new_drawdown' ?
         '<span class="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs">Create New + Drawdown</span>' :
         '<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs">Update Bulk</span>';
-      ruleInfoHTML = '<div class="mb-3 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg">' +
+      ruleInfoHTML = '<div class="mb-3 px-3 py-2 bg-me-bg border border-me-border rounded-lg">' +
         '<div class="flex items-center justify-between">' +
-          '<div class="flex items-center gap-3 text-sm text-slate-600">' +
+          '<div class="flex items-center gap-3 text-sm text-me-text-secondary">' +
             '<span class="font-medium">🔧 Rule:</span>' +
             '<span>' + (ruleInfo.isDefault ? 'Default (all customers)' : ruleInfo.customerName) + '</span>' +
-            '<span class="text-slate-400">|</span>' +
+            '<span class="text-me-text-muted">|</span>' +
             '<span>Match by: <strong>' + ruleMethodLabel + '</strong></span>' +
           '</div>' +
           '<div>' + actionLabel + '</div>' +
@@ -3335,11 +3388,11 @@ const dashboardHTML = `
     let selectionInfoHTML = '';
     if (!isFull) {
       selectionInfoHTML = '<div class="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">' +
-        '<div class="flex items-center gap-2 text-sm text-amber-700">' +
+        '<div class="flex items-center gap-2 text-sm text-me-warning">' +
           '<span>⚡</span>' +
           '<span><strong>Selective Processing:</strong> ' + counts.fields + '/4 fields, ' + counts.lines + '/' + ediItems.length + ' line items' + (counts.hasOverrides ? ', with overrides' : '') + '</span>' +
         '</div>' +
-        '<button onclick="resetModalFieldSelection(' + orderId + ', ' + ediItems.length + ')" class="text-xs text-amber-600 hover:text-amber-800 underline">Reset to All</button>' +
+        '<button onclick="resetModalFieldSelection(' + orderId + ', ' + ediItems.length + ')" class="text-xs text-me-warning hover:text-amber-800 underline">Reset to All</button>' +
       '</div>';
     }
 
@@ -3362,7 +3415,7 @@ const dashboardHTML = `
       selectionInfoHTML +
 
       // Instruction note
-      '<div class="text-xs text-slate-500 mb-2 flex items-center gap-2">' +
+      '<div class="text-xs text-me-text-muted mb-2 flex items-center gap-2">' +
         '<span>💡</span>' +
         '<span>EDI stays unchanged. Click ✏️ to customize what gets sent to Zoho.</span>' +
       '</div>' +
@@ -3371,13 +3424,13 @@ const dashboardHTML = `
       '<div class="mb-4">' +
         '<table class="w-full text-sm">' +
           '<thead>' +
-            '<tr class="border-b border-slate-200">' +
-              '<th class="text-center py-2 font-medium text-slate-500 w-10">✓</th>' +
-              '<th class="text-left py-2 font-medium text-slate-500 w-24">Field</th>' +
-              '<th class="text-left py-2 font-medium text-blue-600 bg-blue-50/50 px-2">EDI (source)</th>' +
-              '<th class="text-left py-2 font-medium text-green-600 bg-green-50/50 px-2">Zoho Now</th>' +
+            '<tr class="border-b border-me-border">' +
+              '<th class="text-center py-2 font-medium text-me-text-muted w-10">✓</th>' +
+              '<th class="text-left py-2 font-medium text-me-text-muted w-24">Field</th>' +
+              '<th class="text-left py-2 font-medium text-me-accent bg-blue-50/50 px-2">EDI (source)</th>' +
+              '<th class="text-left py-2 font-medium text-me-success bg-green-50/50 px-2">Zoho Now</th>' +
               '<th class="text-left py-2 font-medium text-purple-600 bg-purple-50/50 px-2">→ Send to Zoho</th>' +
-              '<th class="text-center py-2 font-medium text-slate-500 w-10">✏️</th>' +
+              '<th class="text-center py-2 font-medium text-me-text-muted w-10">✏️</th>' +
             '</tr>' +
           '</thead>' +
           '<tbody>' + fieldTableHTML + '</tbody>' +
@@ -3390,17 +3443,17 @@ const dashboardHTML = `
       // Line Items Comparison
       '<div class="mb-4">' +
         '<div class="flex items-center justify-between mb-2">' +
-          '<h5 class="text-sm font-semibold text-slate-600 cursor-pointer" onclick="toggleModalLineItems(' + orderId + ')">' +
+          '<h5 class="text-sm font-semibold text-me-text-secondary cursor-pointer" onclick="toggleModalLineItems(' + orderId + ')">' +
             '<span id="lineItemsToggle-' + orderId + '">▼</span> Line Items (' + ediItems.length + ' EDI → ' + zohoItems.length + ' Zoho)' +
           '</h5>' +
-          '<label class="flex items-center gap-1 text-xs font-normal text-slate-500 cursor-pointer">' +
+          '<label class="flex items-center gap-1 text-xs font-normal text-me-text-muted cursor-pointer">' +
             '<input type="checkbox" ' + (sel.lineItems && sel.lineItems.length === ediItems.length ? 'checked' : '') + ' onchange="toggleAllModalLineItems(' + orderId + ', ' + ediItems.length + ')" class="w-3 h-3 rounded"> All' +
           '</label>' +
         '</div>' +
         '<div id="lineItemsContainer-' + orderId + '" class="grid grid-cols-2 gap-3">' +
           // EDI Items
           '<div>' +
-            '<div class="text-xs font-semibold text-blue-600 mb-1">EDI Order Line Items</div>' +
+            '<div class="text-xs font-semibold text-me-accent mb-1">EDI Order Line Items</div>' +
             '<table class="w-full text-xs">' +
               '<thead class="bg-blue-50">' +
                 '<tr>' +
@@ -3417,7 +3470,7 @@ const dashboardHTML = `
           '</div>' +
           // Zoho Items
           '<div>' +
-            '<div class="text-xs font-semibold text-green-600 mb-1 flex items-center gap-2">' +
+            '<div class="text-xs font-semibold text-me-success mb-1 flex items-center gap-2">' +
               '<span>Zoho Draft Items</span>' +
               '<span class="text-xs font-normal text-green-500 bg-green-100 px-1.5 py-0.5 rounded">🔒 Items preserved</span>' +
             '</div>' +
@@ -3642,12 +3695,12 @@ const dashboardHTML = `
     if (countEl) {
       if (term) {
         if (visibleCount > 0) {
-          countEl.innerHTML = '<span class="text-green-600">✓ ' + visibleCount + ' of ' + totalCount + ' fields match "' + searchTerm + '"</span>';
+          countEl.innerHTML = '<span class="text-me-success">✓ ' + visibleCount + ' of ' + totalCount + ' fields match "' + searchTerm + '"</span>';
         } else {
-          countEl.innerHTML = '<span class="text-amber-600">✗ No fields match "' + searchTerm + '"</span>';
+          countEl.innerHTML = '<span class="text-me-warning">✗ No fields match "' + searchTerm + '"</span>';
         }
       } else {
-        countEl.innerHTML = '<span class="text-slate-500">' + totalCount + ' fields total</span>';
+        countEl.innerHTML = '<span class="text-me-text-muted">' + totalCount + ' fields total</span>';
       }
     }
   }
@@ -3686,7 +3739,7 @@ const dashboardHTML = `
     const tbody = document.getElementById('sentOrdersTable');
 
     if (!filtered.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">No orders found</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-me-text-muted">No orders found</td></tr>';
       document.getElementById('sentOrderCount').textContent = '';
       return;
     }
@@ -3697,19 +3750,19 @@ const dashboardHTML = `
       const zohoId = o.zoho_so_id || o.matched_draft_id || '';
       const zohoNum = o.zoho_so_number || zohoId || 'N/A';
       const zohoLink = zohoId ?
-        '<a href="https://books.zoho.com/app/677681121#/salesorders/' + zohoId + '" target="_blank" class="text-green-600 font-medium hover:underline">' + zohoNum + ' ↗</a>' :
+        '<a href="https://books.zoho.com/app/677681121#/salesorders/' + zohoId + '" target="_blank" class="text-me-success font-medium hover:underline">' + zohoNum + ' ↗</a>' :
         zohoNum;
       const sentAtHtml = o.processed_at ? formatDateWithTime(new Date(o.processed_at)) : '-';
 
       return \`
-        <tr class="border-b border-slate-100 hover:bg-slate-50">
-          <td class="px-4 py-3 font-medium text-slate-800">\${o.edi_order_number || 'N/A'}</td>
-          <td class="px-4 py-3 text-slate-600">\${o.edi_customer_name || 'Unknown'}</td>
+        <tr class="border-b border-gray-100 hover:bg-me-bg">
+          <td class="px-4 py-3 font-medium text-me-text-primary">\${o.edi_order_number || 'N/A'}</td>
+          <td class="px-4 py-3 text-me-text-secondary">\${o.edi_customer_name || 'Unknown'}</td>
           <td class="px-4 py-3">\${zohoLink}</td>
-          <td class="px-4 py-3 text-right text-slate-800">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-          <td class="px-4 py-3 text-right text-slate-500">\${sentAtHtml}</td>
+          <td class="px-4 py-3 text-right text-me-text-primary">$\${amt.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
+          <td class="px-4 py-3 text-right text-me-text-muted">\${sentAtHtml}</td>
           <td class="px-4 py-3 text-center">
-            <button onclick="viewEdiDetails(\${o.id})" class="px-3 py-1 text-sm bg-slate-100 hover:bg-slate-200 rounded transition">View</button>
+            <button onclick="viewEdiDetails(\${o.id})" class="px-3 py-1 text-sm bg-me-bg hover:bg-gray-200 rounded transition">View</button>
           </td>
         </tr>
       \`;
@@ -3775,7 +3828,7 @@ const dashboardHTML = `
     orders = orders || activityLogData;
 
     if (!orders.length) {
-      tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-slate-500">No orders found</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="px-4 py-8 text-center text-me-text-muted">No orders found</td></tr>';
       return;
     }
 
@@ -3783,7 +3836,7 @@ const dashboardHTML = `
       const time = order.sent_at ? formatDateWithTime(new Date(order.sent_at)) : '-';
       const typeLabel = order.was_new_order ?
         '<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-medium">➕ New</span>' :
-        '<span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-xs font-medium">✏️ Updated</span>';
+        '<span class="bg-amber-100 text-me-warning px-2 py-0.5 rounded text-xs font-medium">✏️ Updated</span>';
 
       // Format changes
       let changesHtml = '-';
@@ -3791,26 +3844,26 @@ const dashboardHTML = `
         const changes = typeof order.changes_applied === 'string' ? JSON.parse(order.changes_applied) : order.changes_applied;
         if (changes && changes.length > 0) {
           changesHtml = changes.map(c =>
-            '<span class="inline-block bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-xs mr-1">' + c.field + '</span>'
+            '<span class="inline-block bg-me-bg text-me-text-secondary px-1.5 py-0.5 rounded text-xs mr-1">' + c.field + '</span>'
           ).join('');
         } else {
-          changesHtml = '<span class="text-slate-400 text-xs">No changes</span>';
+          changesHtml = '<span class="text-me-text-muted text-xs">No changes</span>';
         }
       } else if (order.was_new_order) {
-        changesHtml = '<span class="text-blue-500 text-xs">Created new</span>';
+        changesHtml = '<span class="text-me-accent text-xs">Created new</span>';
       }
 
       const amount = order.order_amount ? '$' + parseFloat(order.order_amount).toLocaleString('en-US', {minimumFractionDigits: 2}) : '-';
 
       return \`
-        <tr class="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onclick="showOrderDetail(\${order.id})">
-          <td class="px-4 py-3 text-slate-500 text-sm">\${time}</td>
+        <tr class="border-b border-gray-100 hover:bg-me-bg cursor-pointer" onclick="showOrderDetail(\${order.id})">
+          <td class="px-4 py-3 text-me-text-muted text-sm">\${time}</td>
           <td class="px-4 py-3">\${typeLabel}</td>
-          <td class="px-4 py-3 font-medium text-slate-800">\${order.edi_po_number || order.edi_order_number || '-'}</td>
-          <td class="px-4 py-3 text-slate-600">\${order.customer_name || '-'}</td>
-          <td class="px-4 py-3 text-slate-600">\${order.zoho_so_number || '-'}</td>
+          <td class="px-4 py-3 font-medium text-me-text-primary">\${order.edi_po_number || order.edi_order_number || '-'}</td>
+          <td class="px-4 py-3 text-me-text-secondary">\${order.customer_name || '-'}</td>
+          <td class="px-4 py-3 text-me-text-secondary">\${order.zoho_so_number || '-'}</td>
           <td class="px-4 py-3 text-sm">\${changesHtml}</td>
-          <td class="px-4 py-3 text-right font-medium text-green-600">\${amount}</td>
+          <td class="px-4 py-3 text-right font-medium text-me-success">\${amount}</td>
         </tr>
       \`;
     }).join('');
@@ -3827,21 +3880,21 @@ const dashboardHTML = `
     if (changes && changes.length > 0) {
       changesHtml = \`
         <div class="mt-4">
-          <div class="text-sm font-semibold text-slate-600 mb-2">Changes Made:</div>
-          <table class="w-full text-sm border border-slate-200 rounded">
-            <thead class="bg-slate-50">
+          <div class="text-sm font-semibold text-me-text-secondary mb-2">Changes Made:</div>
+          <table class="w-full text-sm border border-me-border rounded">
+            <thead class="bg-me-bg">
               <tr>
-                <th class="text-left px-3 py-2 text-slate-500">Field</th>
-                <th class="text-left px-3 py-2 text-slate-500">Before (Zoho)</th>
-                <th class="text-left px-3 py-2 text-slate-500">After (EDI)</th>
+                <th class="text-left px-3 py-2 text-me-text-muted">Field</th>
+                <th class="text-left px-3 py-2 text-me-text-muted">Before (Zoho)</th>
+                <th class="text-left px-3 py-2 text-me-text-muted">After (EDI)</th>
               </tr>
             </thead>
             <tbody>
               \${changes.map(c => \`
-                <tr class="border-t border-slate-100">
+                <tr class="border-t border-gray-100">
                   <td class="px-3 py-2 font-medium">\${c.field}</td>
                   <td class="px-3 py-2 text-red-400 line-through">\${c.from || '—'}</td>
-                  <td class="px-3 py-2 text-green-600 font-medium">\${c.to || '—'}</td>
+                  <td class="px-3 py-2 text-me-success font-medium">\${c.to || '—'}</td>
                 </tr>
               \`).join('')}
             </tbody>
@@ -3851,58 +3904,58 @@ const dashboardHTML = `
     } else if (order.was_new_order) {
       changesHtml = '<div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded text-blue-700 text-sm">This was a new order created in Zoho (no existing draft was updated).</div>';
     } else {
-      changesHtml = '<div class="mt-4 p-3 bg-slate-50 border border-slate-200 rounded text-slate-600 text-sm">No field changes were recorded for this update.</div>';
+      changesHtml = '<div class="mt-4 p-3 bg-me-bg border border-me-border rounded text-me-text-secondary text-sm">No field changes were recorded for this update.</div>';
     }
 
     const modalHtml = \`
       <div class="modal-overlay" onclick="closeModal()">
         <div class="bg-white rounded-xl max-w-2xl w-full mx-4 overflow-hidden max-h-[80vh] overflow-y-auto" onclick="event.stopPropagation()">
-          <div class="bg-slate-800 text-white px-6 py-4 flex justify-between items-center sticky top-0">
+          <div class="bg-me-dark text-white px-6 py-4 flex justify-between items-center sticky top-0">
             <h3 class="text-lg font-semibold">📋 Order Audit Detail</h3>
-            <button onclick="closeModal()" class="text-white hover:text-slate-300">✕</button>
+            <button onclick="closeModal()" class="text-white hover:text-gray-300">✕</button>
           </div>
           <div class="p-6">
             <div class="grid grid-cols-2 gap-4 text-sm mb-4">
-              <div class="bg-slate-50 rounded p-3">
-                <div class="text-xs text-slate-500 uppercase mb-1">Sent to Zoho</div>
+              <div class="bg-me-bg rounded p-3">
+                <div class="text-xs text-me-text-muted uppercase mb-1">Sent to Zoho</div>
                 <div class="font-medium">\${time}</div>
               </div>
-              <div class="bg-slate-50 rounded p-3">
-                <div class="text-xs text-slate-500 uppercase mb-1">Type</div>
+              <div class="bg-me-bg rounded p-3">
+                <div class="text-xs text-me-text-muted uppercase mb-1">Type</div>
                 <div class="font-medium">\${order.was_new_order ? '➕ New Order Created' : '✏️ Draft Updated'}</div>
               </div>
-              <div class="bg-slate-50 rounded p-3">
-                <div class="text-xs text-slate-500 uppercase mb-1">EDI PO #</div>
+              <div class="bg-me-bg rounded p-3">
+                <div class="text-xs text-me-text-muted uppercase mb-1">EDI PO #</div>
                 <div class="font-medium">\${order.edi_po_number || order.edi_order_number || '-'}</div>
               </div>
-              <div class="bg-slate-50 rounded p-3">
-                <div class="text-xs text-slate-500 uppercase mb-1">Zoho SO #</div>
+              <div class="bg-me-bg rounded p-3">
+                <div class="text-xs text-me-text-muted uppercase mb-1">Zoho SO #</div>
                 <div class="font-medium">\${order.zoho_so_number || '-'}</div>
               </div>
-              <div class="bg-slate-50 rounded p-3">
-                <div class="text-xs text-slate-500 uppercase mb-1">Customer</div>
+              <div class="bg-me-bg rounded p-3">
+                <div class="text-xs text-me-text-muted uppercase mb-1">Customer</div>
                 <div class="font-medium">\${order.customer_name || '-'}</div>
               </div>
               <div class="bg-green-50 rounded p-3 border border-green-100">
-                <div class="text-xs text-green-600 uppercase mb-1">Order Amount</div>
-                <div class="font-bold text-green-700">$\${order.order_amount ? parseFloat(order.order_amount).toLocaleString('en-US', {minimumFractionDigits: 2}) : '0.00'}</div>
+                <div class="text-xs text-me-success uppercase mb-1">Order Amount</div>
+                <div class="font-bold text-me-success">$\${order.order_amount ? parseFloat(order.order_amount).toLocaleString('en-US', {minimumFractionDigits: 2}) : '0.00'}</div>
               </div>
               \${order.match_confidence ? \`
-              <div class="bg-slate-50 rounded p-3">
-                <div class="text-xs text-slate-500 uppercase mb-1">Match Confidence</div>
+              <div class="bg-me-bg rounded p-3">
+                <div class="text-xs text-me-text-muted uppercase mb-1">Match Confidence</div>
                 <div class="font-medium">\${order.match_confidence}%</div>
               </div>\` : ''}
               \${order.matched_draft_number ? \`
-              <div class="bg-slate-50 rounded p-3">
-                <div class="text-xs text-slate-500 uppercase mb-1">Matched Draft</div>
+              <div class="bg-me-bg rounded p-3">
+                <div class="text-xs text-me-text-muted uppercase mb-1">Matched Draft</div>
                 <div class="font-medium">\${order.matched_draft_number}</div>
               </div>\` : ''}
             </div>
             \${changesHtml}
           </div>
-          <div class="px-6 py-4 bg-slate-50 border-t flex justify-between">
-            <button onclick="closeModal()" class="px-4 py-2 bg-slate-200 rounded-lg hover:bg-slate-300">Close</button>
-            \${order.zoho_so_id ? \`<a href="https://books.zoho.com/app/677681121#/salesorders/\${order.zoho_so_id}" target="_blank" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">View in Zoho →</a>\` : ''}
+          <div class="px-6 py-4 bg-me-bg border-t flex justify-between">
+            <button onclick="closeModal()" class="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-200">Close</button>
+            \${order.zoho_so_id ? \`<a href="https://books.zoho.com/app/677681121#/salesorders/\${order.zoho_so_id}" target="_blank" class="px-4 py-2 bg-me-dark text-white rounded-lg hover:bg-me-hover">View in Zoho →</a>\` : ''}
           </div>
         </div>
       </div>
@@ -3933,7 +3986,7 @@ const dashboardHTML = `
 
       if (!data.mappings || data.mappings.length === 0) {
         document.getElementById('mappingsContent').innerHTML = \`
-          <div class="text-center py-8 text-slate-500">
+          <div class="text-center py-8 text-me-text-muted">
             <p class="mb-2">No customer mappings configured yet.</p>
             <p class="text-sm">Click "Add Mapping" to map an EDI customer to a Zoho customer.</p>
           </div>
@@ -3942,28 +3995,28 @@ const dashboardHTML = `
       }
 
       document.getElementById('mappingsContent').innerHTML = \`
-        <div class="border border-slate-200 rounded-lg overflow-hidden">
+        <div class="border border-me-border rounded-lg overflow-hidden">
           <table class="w-full text-sm">
-            <thead class="bg-slate-50">
+            <thead class="bg-me-bg">
               <tr>
-                <th class="text-left px-4 py-3 text-slate-600 font-medium">EDI Customer Name</th>
-                <th class="text-left px-4 py-3 text-slate-600 font-medium">Zoho Customer</th>
-                <th class="text-right px-4 py-3 text-slate-600 font-medium w-24">Actions</th>
+                <th class="text-left px-4 py-3 text-me-text-secondary font-medium">EDI Customer Name</th>
+                <th class="text-left px-4 py-3 text-me-text-secondary font-medium">Zoho Customer</th>
+                <th class="text-right px-4 py-3 text-me-text-secondary font-medium w-24">Actions</th>
               </tr>
             </thead>
             <tbody>
               \${data.mappings.map(m => \`
-                <tr class="border-t border-slate-100 hover:bg-slate-50">
+                <tr class="border-t border-gray-100 hover:bg-me-bg">
                   <td class="px-4 py-3 font-medium">\${m.edi_customer_name}</td>
                   <td class="px-4 py-3">
-                    <span class="text-slate-700">\${m.zoho_customer_name || m.zoho_account_name || '-'}</span>
-                    \${m.zoho_customer_id ? '<span class="text-xs text-slate-400 ml-2">ID: ' + m.zoho_customer_id + '</span>' : ''}
+                    <span class="text-me-text-primary">\${m.zoho_customer_name || m.zoho_account_name || '-'}</span>
+                    \${m.zoho_customer_id ? '<span class="text-xs text-me-text-muted ml-2">ID: ' + m.zoho_customer_id + '</span>' : ''}
                   </td>
                   <td class="px-4 py-3 text-right">
                     <button onclick="editMapping(\${m.id}, '\${escapeQuotes(m.edi_customer_name)}', '\${m.zoho_customer_id || ''}')"
-                      class="text-blue-600 hover:text-blue-800 text-sm mr-3">Edit</button>
+                      class="text-me-accent hover:text-me-dark text-sm mr-3">Edit</button>
                     <button onclick="deleteMapping(\${m.id}, '\${escapeQuotes(m.edi_customer_name)}')"
-                      class="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                      class="text-me-error hover:text-red-800 text-sm">Delete</button>
                   </td>
                 </tr>
               \`).join('')}
@@ -3972,7 +4025,7 @@ const dashboardHTML = `
         </div>
       \`;
     } catch (e) {
-      document.getElementById('mappingsContent').innerHTML = '<p class="text-red-500">Failed to load mappings: ' + e.message + '</p>';
+      document.getElementById('mappingsContent').innerHTML = '<p class="text-me-error">Failed to load mappings: ' + e.message + '</p>';
     }
   }
 
@@ -4004,21 +4057,21 @@ const dashboardHTML = `
     const modalHtml = \`
       <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onclick="closeModal(event)">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4" onclick="event.stopPropagation()">
-          <div class="px-6 py-4 border-b border-slate-200">
-            <h3 class="text-lg font-semibold text-slate-800">\${isEdit ? 'Edit' : 'Add'} Customer Mapping</h3>
+          <div class="px-6 py-4 border-b border-me-border">
+            <h3 class="text-lg font-semibold text-me-text-primary">\${isEdit ? 'Edit' : 'Add'} Customer Mapping</h3>
           </div>
           <div class="p-6">
             <div class="mb-4">
-              <label class="block text-sm font-medium text-slate-700 mb-2">EDI Customer Name</label>
+              <label class="block text-sm font-medium text-me-text-primary mb-2">EDI Customer Name</label>
               <input type="text" id="mappingEdiName" value="\${editEdiName}"
                 placeholder="e.g., BURLINGTON COAT FACTORY"
-                class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 \${isEdit ? 'bg-slate-100' : ''}"
+                class="w-full px-4 py-2 border border-me-border rounded-lg focus:outline-none focus:ring-2 focus:ring-me-dark \${isEdit ? 'bg-me-bg' : ''}"
                 \${isEdit ? 'readonly' : ''}>
-              <p class="text-xs text-slate-500 mt-1">Enter the customer name exactly as it appears in EDI orders</p>
+              <p class="text-xs text-me-text-muted mt-1">Enter the customer name exactly as it appears in EDI orders</p>
             </div>
             <div class="mb-4">
-              <label class="block text-sm font-medium text-slate-700 mb-2">Zoho Customer</label>
-              <select id="mappingZohoCustomer" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <label class="block text-sm font-medium text-me-text-primary mb-2">Zoho Customer</label>
+              <select id="mappingZohoCustomer" class="w-full px-4 py-2 border border-me-border rounded-lg focus:outline-none focus:ring-2 focus:ring-me-dark">
                 <option value="">-- Select Zoho Customer --</option>
                 \${customers.map(c => \`
                   <option value="\${c.contact_id}" data-name="\${escapeQuotes(c.contact_name || '')}" \${c.contact_id === editZohoId ? 'selected' : ''}>
@@ -4026,12 +4079,12 @@ const dashboardHTML = `
                   </option>
                 \`).join('')}
               </select>
-              <p class="text-xs text-slate-500 mt-1">\${customers.length} customers loaded from Zoho</p>
+              <p class="text-xs text-me-text-muted mt-1">\${customers.length} customers loaded from Zoho</p>
             </div>
           </div>
-          <div class="px-6 py-4 bg-slate-50 rounded-b-xl flex justify-end gap-3">
-            <button onclick="closeModal()" class="px-4 py-2 text-slate-600 hover:text-slate-800 transition">Cancel</button>
-            <button onclick="saveMapping(\${editId})" class="px-5 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-medium">
+          <div class="px-6 py-4 bg-me-bg rounded-b-xl flex justify-end gap-3">
+            <button onclick="closeModal()" class="px-4 py-2 text-me-text-secondary hover:text-me-text-primary transition">Cancel</button>
+            <button onclick="saveMapping(\${editId})" class="px-5 py-2 bg-me-dark text-white rounded-lg hover:bg-me-hover transition font-medium">
               \${isEdit ? 'Update' : 'Save'} Mapping
             </button>
           </div>
@@ -4109,7 +4162,7 @@ const dashboardHTML = `
   }
 
   async function refreshSftpStatus() {
-    document.getElementById('sftpContent').innerHTML = '<p class="text-slate-500">Checking SFTP...</p>';
+    document.getElementById('sftpContent').innerHTML = '<p class="text-me-text-muted">Checking SFTP...</p>';
     try {
       const res = await fetch('/sftp/status');
       const data = await res.json();
@@ -4119,14 +4172,14 @@ const dashboardHTML = `
           <p><strong>Status:</strong> \${statusText}</p>
           <p><strong>Host:</strong> \${data.host || process.env.SFTP_HOST || 'Configured'}</p>
           <p><strong>Files in Inbox:</strong> \${data.inboxCount || 0}</p>
-          <p class="text-xs text-slate-400 mt-2">SFTP connects automatically when you click "Fetch from SFTP"</p>
+          <p class="text-xs text-me-text-muted mt-2">SFTP connects automatically when you click "Fetch from SFTP"</p>
         </div>
       \`;
     } catch (e) {
       document.getElementById('sftpContent').innerHTML = \`
         <div class="text-sm">
           <p><strong>Status:</strong> 🟡 Ready (connects on fetch)</p>
-          <p class="text-xs text-slate-400 mt-2">Click "Fetch from SFTP" on the New Orders page to connect and download orders.</p>
+          <p class="text-xs text-me-text-muted mt-2">Click "Fetch from SFTP" on the New Orders page to connect and download orders.</p>
         </div>
       \`;
     }
@@ -4153,7 +4206,7 @@ const dashboardHTML = `
       const data = await res.json();
 
       if (data.success) {
-        statusEl.innerHTML = '✅ <span class="text-green-600">' + data.message + '</span>';
+        statusEl.innerHTML = '✅ <span class="text-me-success">' + data.message + '</span>';
 
         // Show detailed results
         let detailText = 'Summary: ' + data.summary.success + ' successful, ' + data.summary.failed + ' failed\\n\\n';
@@ -4181,12 +4234,12 @@ const dashboardHTML = `
         toast('Re-parsed ' + data.summary.success + ' orders successfully');
 
       } else {
-        statusEl.innerHTML = '❌ <span class="text-red-600">Error: ' + (data.error || 'Unknown error') + '</span>';
+        statusEl.innerHTML = '❌ <span class="text-me-error">Error: ' + (data.error || 'Unknown error') + '</span>';
         toast('Re-parse failed: ' + (data.error || 'Unknown error'));
       }
 
     } catch (e) {
-      statusEl.innerHTML = '❌ <span class="text-red-600">Error: ' + e.message + '</span>';
+      statusEl.innerHTML = '❌ <span class="text-me-error">Error: ' + e.message + '</span>';
       toast('Error: ' + e.message);
     }
 
@@ -4206,7 +4259,7 @@ const dashboardHTML = `
 
       if (!data.rules || data.rules.length === 0) {
         document.getElementById('customerRulesContent').innerHTML = \`
-          <div class="text-center py-8 text-slate-500">
+          <div class="text-center py-8 text-me-text-muted">
             <p class="mb-2">No customer matching rules configured yet.</p>
             <p class="text-sm">Click "Add Customer Rule" to set up matching rules for specific customers.</p>
           </div>
@@ -4224,46 +4277,46 @@ const dashboardHTML = `
                                rule.match_by_contract_ref ? 'Contract Ref (' + rule.contract_ref_field + ')' :
                                'Style + Customer';
             const actionLabel = rule.action_on_match === 'create_new_drawdown' ? 'Create New + Drawdown' : 'Update Bulk';
-            const statusBadge = rule.bulk_order_status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
+            const statusBadge = rule.bulk_order_status === 'confirmed' ? 'bg-green-100 text-me-success' : 'bg-amber-100 text-me-warning';
 
             return \`
-              <div class="border border-slate-200 rounded-lg p-4 \${isDefault ? 'bg-blue-50/30 border-blue-200' : 'hover:bg-slate-50'}">
+              <div class="border border-me-border rounded-lg p-4 \${isDefault ? 'bg-blue-50/30 border-blue-200' : 'hover:bg-me-bg'}">
                 <div class="flex items-center justify-between mb-2">
                   <div class="flex items-center gap-2">
-                    <span class="font-semibold text-slate-800">\${isDefault ? '📋 Default Rule (All Customers)' : '🏪 ' + rule.customer_name}</span>
+                    <span class="font-semibold text-me-text-primary">\${isDefault ? '📋 Default Rule (All Customers)' : '🏪 ' + rule.customer_name}</span>
                     \${isDefault ? '<span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">Default</span>' : ''}
                   </div>
                   <div class="flex items-center gap-2">
-                    <button onclick="editCustomerRule(\${rule.id})" class="text-blue-600 hover:text-blue-800 text-sm">Edit</button>
-                    \${!isDefault ? '<button onclick="deleteCustomerRule(' + rule.id + ', \\'' + escapeQuotes(rule.customer_name) + '\\')" class="text-red-600 hover:text-red-800 text-sm">Delete</button>' : ''}
+                    <button onclick="editCustomerRule(\${rule.id})" class="text-me-accent hover:text-me-dark text-sm">Edit</button>
+                    \${!isDefault ? '<button onclick="deleteCustomerRule(' + rule.id + ', \\'' + escapeQuotes(rule.customer_name) + '\\')" class="text-me-error hover:text-red-800 text-sm">Delete</button>' : ''}
                   </div>
                 </div>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
                   <div>
-                    <span class="text-slate-500">Match By:</span>
-                    <span class="font-medium text-slate-700 ml-1">\${matchMethod}</span>
+                    <span class="text-me-text-muted">Match By:</span>
+                    <span class="font-medium text-me-text-primary ml-1">\${matchMethod}</span>
                   </div>
                   <div>
-                    <span class="text-slate-500">Bulk Status:</span>
+                    <span class="text-me-text-muted">Bulk Status:</span>
                     <span class="px-2 py-0.5 rounded text-xs \${statusBadge} ml-1">\${rule.bulk_order_status}</span>
                   </div>
                   <div>
-                    <span class="text-slate-500">On Match:</span>
-                    <span class="font-medium text-slate-700 ml-1">\${actionLabel}</span>
+                    <span class="text-me-text-muted">On Match:</span>
+                    <span class="font-medium text-me-text-primary ml-1">\${actionLabel}</span>
                   </div>
                   <div>
-                    <span class="text-slate-500">860 Action:</span>
-                    <span class="font-medium text-slate-700 ml-1">\${rule.edi_860_action === 'update_existing' ? 'Update Existing' : 'Create Amendment'}</span>
+                    <span class="text-me-text-muted">860 Action:</span>
+                    <span class="font-medium text-me-text-primary ml-1">\${rule.edi_860_action === 'update_existing' ? 'Update Existing' : 'Create Amendment'}</span>
                   </div>
                 </div>
-                \${rule.notes ? '<div class="mt-2 text-xs text-slate-500 italic">' + rule.notes + '</div>' : ''}
+                \${rule.notes ? '<div class="mt-2 text-xs text-me-text-muted italic">' + rule.notes + '</div>' : ''}
               </div>
             \`;
           }).join('')}
         </div>
       \`;
     } catch (e) {
-      document.getElementById('customerRulesContent').innerHTML = '<p class="text-red-500">Failed to load rules: ' + e.message + '</p>';
+      document.getElementById('customerRulesContent').innerHTML = '<p class="text-me-error">Failed to load rules: ' + e.message + '</p>';
     }
   }
 
@@ -4280,118 +4333,118 @@ const dashboardHTML = `
     const modalHtml = \`
       <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onclick="closeModal(event)">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
-          <div class="px-6 py-4 border-b border-slate-200 sticky top-0 bg-white">
-            <h3 class="text-lg font-semibold text-slate-800">\${isEdit ? 'Edit' : 'Add'} Customer Matching Rule</h3>
+          <div class="px-6 py-4 border-b border-me-border sticky top-0 bg-white">
+            <h3 class="text-lg font-semibold text-me-text-primary">\${isEdit ? 'Edit' : 'Add'} Customer Matching Rule</h3>
           </div>
           <div class="p-6 space-y-6">
 
             <!-- Customer Name -->
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-2">Customer Name</label>
+              <label class="block text-sm font-medium text-me-text-primary mb-2">Customer Name</label>
               \${isDefault ?
-                '<input type="text" value="Default Rule (All Customers)" disabled class="w-full px-4 py-2 border border-slate-300 rounded-lg bg-slate-100 text-slate-500">' :
-                '<input type="text" id="ruleCustomerName" value="' + (rule?.customer_name || '') + '" placeholder="e.g., Kohls, JC Penney, Burlington Coat Factory" class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">'
+                '<input type="text" value="Default Rule (All Customers)" disabled class="w-full px-4 py-2 border border-me-border rounded-lg bg-me-bg text-me-text-muted">' :
+                '<input type="text" id="ruleCustomerName" value="' + (rule?.customer_name || '') + '" placeholder="e.g., Kohls, JC Penney, Burlington Coat Factory" class="w-full px-4 py-2 border border-me-border rounded-lg focus:outline-none focus:ring-2 focus:ring-me-dark">'
               }
-              <p class="text-xs text-slate-500 mt-1">Enter customer name exactly as it appears in EDI orders, or leave blank for default rule</p>
+              <p class="text-xs text-me-text-muted mt-1">Enter customer name exactly as it appears in EDI orders, or leave blank for default rule</p>
             </div>
 
             <!-- Bulk Order Identification -->
-            <div class="p-4 bg-slate-50 rounded-lg">
-              <h4 class="font-medium text-slate-700 mb-3">📦 How to Identify Bulk/Contract Orders in Zoho</h4>
+            <div class="p-4 bg-me-bg rounded-lg">
+              <h4 class="font-medium text-me-text-primary mb-3">📦 How to Identify Bulk/Contract Orders in Zoho</h4>
               <div class="grid grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-sm text-slate-600 mb-1">Bulk Order Status</label>
-                  <select id="ruleBulkStatus" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <label class="block text-sm text-me-text-secondary mb-1">Bulk Order Status</label>
+                  <select id="ruleBulkStatus" class="w-full px-3 py-2 border border-me-border rounded-lg text-sm">
                     <option value="draft" \${rule?.bulk_order_status === 'draft' ? 'selected' : ''}>Draft</option>
                     <option value="confirmed" \${rule?.bulk_order_status === 'confirmed' ? 'selected' : ''}>Confirmed</option>
                   </select>
                 </div>
                 <div>
-                  <label class="block text-sm text-slate-600 mb-1">Bulk Order Category</label>
-                  <select id="ruleBulkCategory" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <label class="block text-sm text-me-text-secondary mb-1">Bulk Order Category</label>
+                  <select id="ruleBulkCategory" class="w-full px-3 py-2 border border-me-border rounded-lg text-sm">
                     <option value="unconfirmed" \${rule?.bulk_order_category === 'unconfirmed' ? 'selected' : ''}>Unconfirmed</option>
                     <option value="confirmed" \${rule?.bulk_order_category === 'confirmed' ? 'selected' : ''}>Confirmed</option>
                   </select>
                 </div>
               </div>
               <div class="mt-3">
-                <label class="block text-sm text-slate-600 mb-1">PO Field Pattern (optional)</label>
-                <input type="text" id="rulePOPattern" value="\${rule?.bulk_po_field_pattern || 'EDI'}" placeholder="e.g., EDI" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
-                <p class="text-xs text-slate-400 mt-1">Pattern to look for in the PO field to identify bulk orders</p>
+                <label class="block text-sm text-me-text-secondary mb-1">PO Field Pattern (optional)</label>
+                <input type="text" id="rulePOPattern" value="\${rule?.bulk_po_field_pattern || 'EDI'}" placeholder="e.g., EDI" class="w-full px-3 py-2 border border-me-border rounded-lg text-sm">
+                <p class="text-xs text-me-text-muted mt-1">Pattern to look for in the PO field to identify bulk orders</p>
               </div>
             </div>
 
             <!-- Matching Method -->
             <div class="p-4 bg-blue-50 rounded-lg">
-              <h4 class="font-medium text-slate-700 mb-3">🔗 How to Match EDI to Bulk Order</h4>
+              <h4 class="font-medium text-me-text-primary mb-3">🔗 How to Match EDI to Bulk Order</h4>
               <div class="space-y-3">
                 <label class="flex items-start gap-3 cursor-pointer">
                   <input type="radio" name="matchMethod" value="style_customer" \${!rule?.match_by_customer_po && !rule?.match_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
                   <div>
-                    <span class="font-medium text-slate-700">Match by Style + Customer</span>
-                    <p class="text-xs text-slate-500">Match using customer name, style, color, and delivery date</p>
+                    <span class="font-medium text-me-text-primary">Match by Style + Customer</span>
+                    <p class="text-xs text-me-text-muted">Match using customer name, style, color, and delivery date</p>
                   </div>
                 </label>
                 <label class="flex items-start gap-3 cursor-pointer">
                   <input type="radio" name="matchMethod" value="customer_po" \${rule?.match_by_customer_po ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
                   <div>
-                    <span class="font-medium text-slate-700">Match by Customer PO Number</span>
-                    <p class="text-xs text-slate-500">EDI and bulk order share the same Customer PO number (e.g., Kohls)</p>
+                    <span class="font-medium text-me-text-primary">Match by Customer PO Number</span>
+                    <p class="text-xs text-me-text-muted">EDI and bulk order share the same Customer PO number (e.g., Kohls)</p>
                   </div>
                 </label>
                 <label class="flex items-start gap-3 cursor-pointer">
                   <input type="radio" name="matchMethod" value="contract_ref" \${rule?.match_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
                   <div>
-                    <span class="font-medium text-slate-700">Match by Contract Reference Field</span>
-                    <p class="text-xs text-slate-500">EDI has a reference to the contract order number (e.g., JCP uses po_rel_num)</p>
+                    <span class="font-medium text-me-text-primary">Match by Contract Reference Field</span>
+                    <p class="text-xs text-me-text-muted">EDI has a reference to the contract order number (e.g., JCP uses po_rel_num)</p>
                   </div>
                 </label>
                 <div id="contractRefFieldContainer" class="ml-6 \${rule?.match_by_contract_ref ? '' : 'hidden'}">
-                  <label class="block text-sm text-slate-600 mb-1">Contract Reference Field Name</label>
-                  <input type="text" id="ruleContractRefField" value="\${rule?.contract_ref_field || 'po_rel_num'}" placeholder="e.g., po_rel_num" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                  <label class="block text-sm text-me-text-secondary mb-1">Contract Reference Field Name</label>
+                  <input type="text" id="ruleContractRefField" value="\${rule?.contract_ref_field || 'po_rel_num'}" placeholder="e.g., po_rel_num" class="w-full px-3 py-2 border border-me-border rounded-lg text-sm">
                 </div>
               </div>
             </div>
 
             <!-- Matching Criteria -->
             <div class="p-4 bg-green-50 rounded-lg">
-              <h4 class="font-medium text-slate-700 mb-3">✅ Matching Criteria</h4>
+              <h4 class="font-medium text-me-text-primary mb-3">✅ Matching Criteria</h4>
               <div class="grid grid-cols-2 gap-3">
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" id="ruleMatchStyle" \${rule?.match_style !== false ? 'checked' : ''} class="w-4 h-4 rounded">
-                  <span class="text-sm text-slate-700">Match Style</span>
+                  <span class="text-sm text-me-text-primary">Match Style</span>
                 </label>
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" id="ruleMatchColor" \${rule?.match_color !== false ? 'checked' : ''} class="w-4 h-4 rounded">
-                  <span class="text-sm text-slate-700">Match Color</span>
+                  <span class="text-sm text-me-text-primary">Match Color</span>
                 </label>
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" id="ruleMatchUnits" \${rule?.match_units ? 'checked' : ''} class="w-4 h-4 rounded">
-                  <span class="text-sm text-slate-700">Match Units</span>
+                  <span class="text-sm text-me-text-primary">Match Units</span>
                 </label>
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" id="ruleMatchDelivery" \${rule?.match_delivery_date !== false ? 'checked' : ''} class="w-4 h-4 rounded">
-                  <span class="text-sm text-slate-700">Match Delivery Date</span>
+                  <span class="text-sm text-me-text-primary">Match Delivery Date</span>
                 </label>
               </div>
             </div>
 
             <!-- Action on Match -->
             <div class="p-4 bg-amber-50 rounded-lg">
-              <h4 class="font-medium text-slate-700 mb-3">⚡ Action When Match Found</h4>
+              <h4 class="font-medium text-me-text-primary mb-3">⚡ Action When Match Found</h4>
               <div class="space-y-3">
                 <label class="flex items-start gap-3 cursor-pointer">
                   <input type="radio" name="actionOnMatch" value="update_bulk" \${rule?.action_on_match !== 'create_new_drawdown' ? 'checked' : ''} class="mt-1">
                   <div>
-                    <span class="font-medium text-slate-700">Update Bulk Order</span>
-                    <p class="text-xs text-slate-500">EDI data updates the bulk order directly (current behavior)</p>
+                    <span class="font-medium text-me-text-primary">Update Bulk Order</span>
+                    <p class="text-xs text-me-text-muted">EDI data updates the bulk order directly (current behavior)</p>
                   </div>
                 </label>
                 <label class="flex items-start gap-3 cursor-pointer">
                   <input type="radio" name="actionOnMatch" value="create_new_drawdown" \${rule?.action_on_match === 'create_new_drawdown' ? 'checked' : ''} class="mt-1">
                   <div>
-                    <span class="font-medium text-slate-700">Create New Order + Draw Down Bulk</span>
-                    <p class="text-xs text-slate-500">Create new Zoho order from EDI, reduce quantities from bulk order (contract matching)</p>
+                    <span class="font-medium text-me-text-primary">Create New Order + Draw Down Bulk</span>
+                    <p class="text-xs text-me-text-muted">Create new Zoho order from EDI, reduce quantities from bulk order (contract matching)</p>
                   </div>
                 </label>
               </div>
@@ -4399,20 +4452,20 @@ const dashboardHTML = `
 
             <!-- 860 Handling -->
             <div class="p-4 bg-purple-50 rounded-lg">
-              <h4 class="font-medium text-slate-700 mb-3">🔄 EDI 860 (Change Order) Handling</h4>
+              <h4 class="font-medium text-me-text-primary mb-3">🔄 EDI 860 (Change Order) Handling</h4>
               <div class="space-y-3">
                 <label class="flex items-start gap-3 cursor-pointer">
                   <input type="radio" name="edi860Action" value="update_existing" \${rule?.edi_860_action !== 'create_amendment' ? 'checked' : ''} class="mt-1">
                   <div>
-                    <span class="font-medium text-slate-700">Update Existing Order</span>
-                    <p class="text-xs text-slate-500">Find and update the Zoho order created from the original EDI</p>
+                    <span class="font-medium text-me-text-primary">Update Existing Order</span>
+                    <p class="text-xs text-me-text-muted">Find and update the Zoho order created from the original EDI</p>
                   </div>
                 </label>
                 <label class="flex items-start gap-3 cursor-pointer">
                   <input type="radio" name="edi860Action" value="create_amendment" \${rule?.edi_860_action === 'create_amendment' ? 'checked' : ''} class="mt-1">
                   <div>
-                    <span class="font-medium text-slate-700">Create Amendment Order</span>
-                    <p class="text-xs text-slate-500">Create a new amendment order linked to the original</p>
+                    <span class="font-medium text-me-text-primary">Create Amendment Order</span>
+                    <p class="text-xs text-me-text-muted">Create a new amendment order linked to the original</p>
                   </div>
                 </label>
               </div>
@@ -4420,14 +4473,14 @@ const dashboardHTML = `
 
             <!-- Notes -->
             <div>
-              <label class="block text-sm font-medium text-slate-700 mb-2">Notes (optional)</label>
-              <textarea id="ruleNotes" rows="2" placeholder="Add any notes about this customer's matching rules..." class="w-full px-4 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">\${rule?.notes || ''}</textarea>
+              <label class="block text-sm font-medium text-me-text-primary mb-2">Notes (optional)</label>
+              <textarea id="ruleNotes" rows="2" placeholder="Add any notes about this customer's matching rules..." class="w-full px-4 py-2 border border-me-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-me-dark">\${rule?.notes || ''}</textarea>
             </div>
           </div>
 
-          <div class="px-6 py-4 bg-slate-50 rounded-b-xl flex justify-end gap-3 sticky bottom-0">
-            <button onclick="closeModal()" class="px-4 py-2 text-slate-600 hover:text-slate-800 transition">Cancel</button>
-            <button onclick="saveCustomerRule(\${editId}, \${isDefault})" class="px-5 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition font-medium">
+          <div class="px-6 py-4 bg-me-bg rounded-b-xl flex justify-end gap-3 sticky bottom-0">
+            <button onclick="closeModal()" class="px-4 py-2 text-me-text-secondary hover:text-me-text-primary transition">Cancel</button>
+            <button onclick="saveCustomerRule(\${editId}, \${isDefault})" class="px-5 py-2 bg-me-dark text-white rounded-lg hover:bg-me-hover transition font-medium">
               \${isEdit ? 'Update' : 'Save'} Rule
             </button>
           </div>
@@ -4532,7 +4585,7 @@ const dashboardHTML = `
     const typeFilter = document.getElementById('discrepancyTypeFilter')?.value || '';
 
     const listEl = document.getElementById('discrepancyList');
-    listEl.innerHTML = '<div class="p-4 text-center text-slate-500 text-sm">Loading...</div>';
+    listEl.innerHTML = '<div class="p-4 text-center text-me-text-muted text-sm">Loading...</div>';
 
     try {
       // Build query params
@@ -4565,7 +4618,7 @@ const dashboardHTML = `
       renderDiscrepancyList(discrepanciesData);
 
     } catch (e) {
-      listEl.innerHTML = '<div class="p-4 text-center text-red-500 text-sm">Error: ' + e.message + '</div>';
+      listEl.innerHTML = '<div class="p-4 text-center text-me-error text-sm">Error: ' + e.message + '</div>';
     }
   }
 
@@ -4573,41 +4626,41 @@ const dashboardHTML = `
     const listEl = document.getElementById('discrepancyList');
 
     if (!discrepancies || discrepancies.length === 0) {
-      listEl.innerHTML = '<div class="p-4 text-center text-slate-500 text-sm">No discrepancies found for the selected filters</div>';
+      listEl.innerHTML = '<div class="p-4 text-center text-me-text-muted text-sm">No discrepancies found for the selected filters</div>';
       return;
     }
 
     const typeColors = {
-      date_mismatch: 'bg-amber-100 text-amber-700',
+      date_mismatch: 'bg-amber-100 text-me-warning',
       amount_mismatch: 'bg-red-100 text-red-700',
       quantity_mismatch: 'bg-orange-100 text-orange-700',
       reference_mismatch: 'bg-blue-100 text-blue-700',
       line_qty_mismatch: 'bg-purple-100 text-purple-700',
       line_price_mismatch: 'bg-pink-100 text-pink-700',
-      line_count_mismatch: 'bg-slate-100 text-slate-700'
+      line_count_mismatch: 'bg-me-bg text-me-text-primary'
     };
 
     listEl.innerHTML = '<table class="w-full text-sm">' +
-      '<thead class="bg-slate-50 sticky top-0">' +
+      '<thead class="bg-me-bg sticky top-0">' +
         '<tr>' +
-          '<th class="text-left px-3 py-2 font-medium text-slate-600">Date</th>' +
-          '<th class="text-left px-3 py-2 font-medium text-slate-600">Customer</th>' +
-          '<th class="text-left px-3 py-2 font-medium text-slate-600">PO#</th>' +
-          '<th class="text-left px-3 py-2 font-medium text-slate-600">Field</th>' +
-          '<th class="text-left px-3 py-2 font-medium text-slate-600">EDI Value</th>' +
-          '<th class="text-left px-3 py-2 font-medium text-slate-600">Zoho Value</th>' +
-          '<th class="text-center px-3 py-2 font-medium text-slate-600">Type</th>' +
-          '<th class="text-center px-3 py-2 font-medium text-slate-600">Status</th>' +
+          '<th class="text-left px-3 py-2 font-medium text-me-text-secondary">Date</th>' +
+          '<th class="text-left px-3 py-2 font-medium text-me-text-secondary">Customer</th>' +
+          '<th class="text-left px-3 py-2 font-medium text-me-text-secondary">PO#</th>' +
+          '<th class="text-left px-3 py-2 font-medium text-me-text-secondary">Field</th>' +
+          '<th class="text-left px-3 py-2 font-medium text-me-text-secondary">EDI Value</th>' +
+          '<th class="text-left px-3 py-2 font-medium text-me-text-secondary">Zoho Value</th>' +
+          '<th class="text-center px-3 py-2 font-medium text-me-text-secondary">Type</th>' +
+          '<th class="text-center px-3 py-2 font-medium text-me-text-secondary">Status</th>' +
         '</tr>' +
       '</thead>' +
       '<tbody>' +
         discrepancies.map(d => {
           const date = new Date(d.detected_at).toLocaleDateString();
-          const typeClass = typeColors[d.discrepancy_type] || 'bg-slate-100 text-slate-700';
-          const statusClass = d.resolved_at ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700';
+          const typeClass = typeColors[d.discrepancy_type] || 'bg-me-bg text-me-text-primary';
+          const statusClass = d.resolved_at ? 'bg-green-100 text-me-success' : 'bg-amber-100 text-me-warning';
           const status = d.resolved_at ? 'Resolved' : 'Open';
-          return '<tr class="border-t border-slate-100 hover:bg-slate-50">' +
-            '<td class="px-3 py-2 text-slate-500">' + date + '</td>' +
+          return '<tr class="border-t border-gray-100 hover:bg-me-bg">' +
+            '<td class="px-3 py-2 text-me-text-muted">' + date + '</td>' +
             '<td class="px-3 py-2 truncate max-w-[150px]" title="' + (d.customer_name || '') + '">' + (d.customer_name || '-').substring(0, 25) + '</td>' +
             '<td class="px-3 py-2 font-mono text-xs">' + (d.po_number || '-') + '</td>' +
             '<td class="px-3 py-2">' + (d.field_label || d.field_name || '-') + '</td>' +
