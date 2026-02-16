@@ -175,6 +175,17 @@ function detectDiscrepancies(ediOrder, zohoDraft) {
 }
 
 const app = express();
+
+// --- Origin Protection ---
+const ORIGIN_SECRET = process.env.ORIGIN_SECRET;
+if (ORIGIN_SECRET) {
+    app.use((req, res, next) => {
+          if (req.headers['x-origin-secret'] === ORIGIN_SECRET) {
+                  return next();
+          }
+          res.status(403).json({ error: 'Direct access not allowed' });
+    });
+}
 app.use(express.json({ limit: '50mb' }));  // Increased limit for large session/match data
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.text({ limit: '50mb' }));
