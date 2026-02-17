@@ -1,4 +1,4 @@
-// Dashboard with Matching System - Mark Edwards Apparel
+\// Dashboard with Matching System - Mark Edwards Apparel
 // Mark Edwards Design System
 
 const dashboardHTML = `
@@ -4407,10 +4407,10 @@ const dashboardHTML = `
               </div>
             </div>
 
-            <!-- Matching Method - 860 / 860R -->
+            <!-- Matching Method - 860 / 850R -->
             <div class="p-4 bg-indigo-50 rounded-lg">
-              <h4 class="font-medium text-me-text-primary mb-1">🔗 How to Match EDI 860 / 860R to Bulk Order</h4>
-              <p class="text-xs text-me-text-muted mb-3">Applies to Change Orders and Change Order Responses (EDI 860 / 860R)</p>
+              <h4 class="font-medium text-me-text-primary mb-1">🔗 How to Match EDI 860 / 850R to Bulk Order</h4>
+              <p class="text-xs text-me-text-muted mb-3">Applies to Change Orders and Revised 850s (EDI 860 / 850R)</p>
               <div class="space-y-3">
                 <label class="flex items-start gap-3 cursor-pointer">
                   <input type="radio" name="matchMethod860" value="style_customer" \${!rule?.match_860_by_customer_po && !rule?.match_860_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField860()" class="mt-1">
