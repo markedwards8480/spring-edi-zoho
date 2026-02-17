@@ -1,4 +1,4 @@
-\// Dashboard with Matching System - Mark Edwards Apparel
+// Dashboard with Matching System - Mark Edwards Apparel
 // Mark Edwards Design System
 
 const dashboardHTML = `
@@ -4305,7 +4305,7 @@ const dashboardHTML = `
                     <span class="font-medium text-me-text-primary ml-1">\${actionLabel}</span>
                   </div>
                   <div>
-                    <span class="text-me-text-muted">860 Action:</span>
+                    <span class="text-me-text-muted">860 & 850R Action:</span>
                     <span class="font-medium text-me-text-primary ml-1">\${rule.edi_860_action === 'update_existing' ? 'Update Existing' : 'Create New Order & Draw Down Bulk'}</span>
                   </div>
                 </div>
@@ -4410,7 +4410,7 @@ const dashboardHTML = `
             <!-- Matching Method - 860 / 850R -->
             <div class="p-4 bg-indigo-50 rounded-lg">
               <h4 class="font-medium text-me-text-primary mb-1">🔗 How to Match EDI 860 / 850R to Bulk Order</h4>
-              <p class="text-xs text-me-text-muted mb-3">Applies to Change Orders and Revised 850s (EDI 860 / 850R)</p>
+              <p class="text-xs text-me-text-muted mb-3">Applies to Change Orders and Revised Purchase Orders (EDI 860 / 850R)</p>
               <div class="space-y-3">
                 <label class="flex items-start gap-3 cursor-pointer">
                   <input type="radio" name="matchMethod860" value="style_customer" \${!rule?.match_860_by_customer_po && !rule?.match_860_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField860()" class="mt-1">
@@ -4486,7 +4486,7 @@ const dashboardHTML = `
 
             <!-- 860 Handling -->
             <div class="p-4 bg-purple-50 rounded-lg">
-              <h4 class="font-medium text-me-text-primary mb-3">🔄 EDI 860 (Change Order) Handling</h4>
+              <h4 class="font-medium text-me-text-primary mb-3">🔄 EDI 860 & 850R (Change Order) Handling</h4>
               <div class="space-y-3">
                 <label class="flex items-start gap-3 cursor-pointer">
                   <input type="radio" name="edi860Action" value="update_existing" \${rule?.edi_860_action !== 'create_amendment' ? 'checked' : ''} class="mt-1">
