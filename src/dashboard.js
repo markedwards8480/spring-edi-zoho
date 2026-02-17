@@ -4306,7 +4306,7 @@ const dashboardHTML = `
                   </div>
                   <div>
                     <span class="text-me-text-muted">860 Action:</span>
-                    <span class="font-medium text-me-text-primary ml-1">\${rule.edi_860_action === 'update_existing' ? 'Update Existing' : 'Create Amendment'}</span>
+                    <span class="font-medium text-me-text-primary ml-1">\${rule.edi_860_action === 'update_existing' ? 'Update Existing' : 'Create New Order & Draw Down Bulk'}</span>
                   </div>
                 </div>
                 \${rule.notes ? '<div class="mt-2 text-xs text-me-text-muted italic">' + rule.notes + '</div>' : ''}
@@ -4374,26 +4374,27 @@ const dashboardHTML = `
               </div>
             </div>
 
-            <!-- Matching Method -->
+            <!-- Matching Method - 850 -->
             <div class="p-4 bg-blue-50 rounded-lg">
-              <h4 class="font-medium text-me-text-primary mb-3">🔗 How to Match EDI to Bulk Order</h4>
+              <h4 class="font-medium text-me-text-primary mb-1">🔗 How to Match EDI 850 to Bulk Order</h4>
+              <p class="text-xs text-me-text-muted mb-3">Applies to new Purchase Orders (EDI 850)</p>
               <div class="space-y-3">
                 <label class="flex items-start gap-3 cursor-pointer">
-                  <input type="radio" name="matchMethod" value="style_customer" \${!rule?.match_by_customer_po && !rule?.match_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
+                  <input type="radio" name="matchMethod850" value="style_customer" \${!rule?.match_by_customer_po && !rule?.match_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
                   <div>
                     <span class="font-medium text-me-text-primary">Match by Style + Customer</span>
                     <p class="text-xs text-me-text-muted">Match using customer name, style, color, and delivery date</p>
                   </div>
                 </label>
                 <label class="flex items-start gap-3 cursor-pointer">
-                  <input type="radio" name="matchMethod" value="customer_po" \${rule?.match_by_customer_po ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
+                  <input type="radio" name="matchMethod850" value="customer_po" \${rule?.match_by_customer_po ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
                   <div>
                     <span class="font-medium text-me-text-primary">Match by Customer PO Number</span>
                     <p class="text-xs text-me-text-muted">EDI and bulk order share the same Customer PO number (e.g., Kohls)</p>
                   </div>
                 </label>
                 <label class="flex items-start gap-3 cursor-pointer">
-                  <input type="radio" name="matchMethod" value="contract_ref" \${rule?.match_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
+                  <input type="radio" name="matchMethod850" value="contract_ref" \${rule?.match_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
                   <div>
                     <span class="font-medium text-me-text-primary">Match by Contract Reference Field</span>
                     <p class="text-xs text-me-text-muted">EDI has a reference to the contract order number (e.g., JCP uses po_rel_num)</p>
@@ -4402,6 +4403,39 @@ const dashboardHTML = `
                 <div id="contractRefFieldContainer" class="ml-6 \${rule?.match_by_contract_ref ? '' : 'hidden'}">
                   <label class="block text-sm text-me-text-secondary mb-1">Contract Reference Field Name</label>
                   <input type="text" id="ruleContractRefField" value="\${rule?.contract_ref_field || 'po_rel_num'}" placeholder="e.g., po_rel_num" class="w-full px-3 py-2 border border-me-border rounded-lg text-sm">
+                </div>
+              </div>
+            </div>
+
+            <!-- Matching Method - 860 / 860R -->
+            <div class="p-4 bg-indigo-50 rounded-lg">
+              <h4 class="font-medium text-me-text-primary mb-1">🔗 How to Match EDI 860 / 860R to Bulk Order</h4>
+              <p class="text-xs text-me-text-muted mb-3">Applies to Change Orders and Change Order Responses (EDI 860 / 860R)</p>
+              <div class="space-y-3">
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="matchMethod860" value="style_customer" \${!rule?.match_860_by_customer_po && !rule?.match_860_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField860()" class="mt-1">
+                  <div>
+                    <span class="font-medium text-me-text-primary">Match by Style + Customer</span>
+                    <p class="text-xs text-me-text-muted">Match using customer name, style, color, and delivery date</p>
+                  </div>
+                </label>
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="matchMethod860" value="customer_po" \${rule?.match_860_by_customer_po ? 'checked' : ''} onchange="toggleContractRefField860()" class="mt-1">
+                  <div>
+                    <span class="font-medium text-me-text-primary">Match by Customer PO Number</span>
+                    <p class="text-xs text-me-text-muted">860 and bulk order share the same Customer PO number</p>
+                  </div>
+                </label>
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input type="radio" name="matchMethod860" value="contract_ref" \${rule?.match_860_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField860()" class="mt-1">
+                  <div>
+                    <span class="font-medium text-me-text-primary">Match by Contract Reference Field</span>
+                    <p class="text-xs text-me-text-muted">860 has a reference to the contract order number</p>
+                  </div>
+                </label>
+                <div id="contractRefFieldContainer860" class="ml-6 \${rule?.match_860_by_contract_ref ? '' : 'hidden'}">
+                  <label class="block text-sm text-me-text-secondary mb-1">Contract Reference Field Name</label>
+                  <input type="text" id="ruleContractRefField860" value="\${rule?.contract_ref_field_860 || 'po_rel_num'}" placeholder="e.g., po_rel_num" class="w-full px-3 py-2 border border-me-border rounded-lg text-sm">
                 </div>
               </div>
             </div>
@@ -4464,8 +4498,8 @@ const dashboardHTML = `
                 <label class="flex items-start gap-3 cursor-pointer">
                   <input type="radio" name="edi860Action" value="create_amendment" \${rule?.edi_860_action === 'create_amendment' ? 'checked' : ''} class="mt-1">
                   <div>
-                    <span class="font-medium text-me-text-primary">Create Amendment Order</span>
-                    <p class="text-xs text-me-text-muted">Create a new amendment order linked to the original</p>
+                    <span class="font-medium text-me-text-primary">Create New Order & Draw Down Bulk</span>
+                    <p class="text-xs text-me-text-muted">Create a new Zoho order from the 860 and reduce quantities from the bulk order</p>
                   </div>
                 </label>
               </div>
@@ -4492,8 +4526,16 @@ const dashboardHTML = `
   }
 
   function toggleContractRefField() {
-    const contractRefRadio = document.querySelector('input[name="matchMethod"][value="contract_ref"]');
+    const contractRefRadio = document.querySelector('input[name="matchMethod850"][value="contract_ref"]');
     const container = document.getElementById('contractRefFieldContainer');
+    if (contractRefRadio && container) {
+      container.classList.toggle('hidden', !contractRefRadio.checked);
+    }
+  }
+
+  function toggleContractRefField860() {
+    const contractRefRadio = document.querySelector('input[name="matchMethod860"][value="contract_ref"]');
+    const container = document.getElementById('contractRefFieldContainer860');
     if (contractRefRadio && container) {
       container.classList.toggle('hidden', !contractRefRadio.checked);
     }
@@ -4511,7 +4553,8 @@ const dashboardHTML = `
       return;
     }
 
-    const matchMethod = document.querySelector('input[name="matchMethod"]:checked')?.value || 'style_customer';
+    const matchMethod850 = document.querySelector('input[name="matchMethod850"]:checked')?.value || 'style_customer';
+    const matchMethod860 = document.querySelector('input[name="matchMethod860"]:checked')?.value || 'style_customer';
     const actionOnMatch = document.querySelector('input[name="actionOnMatch"]:checked')?.value || 'update_bulk';
     const edi860Action = document.querySelector('input[name="edi860Action"]:checked')?.value || 'update_existing';
 
@@ -4521,10 +4564,13 @@ const dashboardHTML = `
       bulk_order_status: document.getElementById('ruleBulkStatus')?.value || 'draft',
       bulk_order_category: document.getElementById('ruleBulkCategory')?.value || 'unconfirmed',
       bulk_po_field_pattern: document.getElementById('rulePOPattern')?.value || 'EDI',
-      match_by_customer_po: matchMethod === 'customer_po',
-      match_by_contract_ref: matchMethod === 'contract_ref',
+      match_by_customer_po: matchMethod850 === 'customer_po',
+      match_by_contract_ref: matchMethod850 === 'contract_ref',
       contract_ref_field: document.getElementById('ruleContractRefField')?.value || 'po_rel_num',
-      match_by_style_customer: matchMethod === 'style_customer',
+      match_by_style_customer: matchMethod850 === 'style_customer',
+      match_860_by_customer_po: matchMethod860 === 'customer_po',
+      match_860_by_contract_ref: matchMethod860 === 'contract_ref',
+      contract_ref_field_860: document.getElementById('ruleContractRefField860')?.value || 'po_rel_num',
       match_style: document.getElementById('ruleMatchStyle')?.checked !== false,
       match_color: document.getElementById('ruleMatchColor')?.checked !== false,
       match_units: document.getElementById('ruleMatchUnits')?.checked || false,
