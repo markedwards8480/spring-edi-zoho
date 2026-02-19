@@ -176,13 +176,6 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_edi_orders_partial ON edi_orders(is_partial) WHERE is_partial = TRUE;
     `);
 
-    // Add 860/850R matching columns to customer_matching_rules (migration for existing tables)
-    await client.query(`
-      ALTER TABLE customer_matching_rules ADD COLUMN IF NOT EXISTS match_860_by_customer_po BOOLEAN DEFAULT FALSE;
-      ALTER TABLE customer_matching_rules ADD COLUMN IF NOT EXISTS match_860_by_contract_ref BOOLEAN DEFAULT FALSE;
-      ALTER TABLE customer_matching_rules ADD COLUMN IF NOT EXISTS contract_ref_field_860 VARCHAR(100) DEFAULT 'po_rel_num';
-    `);
-
     // Create discrepancies table for tracking EDI vs Zoho mismatches
     await client.query(`
       CREATE TABLE IF NOT EXISTS discrepancies (
@@ -236,7 +229,7 @@ async function initDatabase() {
         -- How to match EDI 860/850R to bulk order
         match_860_by_customer_po BOOLEAN DEFAULT FALSE,
         match_860_by_contract_ref BOOLEAN DEFAULT FALSE,
-        contract_ref_field_860 VARCHAR(100) DEFAULT 'po_rel_num'
+        contract_ref_field_860 VARCHAR(100) DEFAULT 'po_rel_num',
 
         -- Matching criteria toggles
         match_style BOOLEAN DEFAULT TRUE,
@@ -263,6 +256,13 @@ async function initDatabase() {
 
       CREATE INDEX IF NOT EXISTS idx_customer_rules_name ON customer_matching_rules(customer_name);
       CREATE INDEX IF NOT EXISTS idx_customer_rules_default ON customer_matching_rules(is_default);
+    `);
+
+    // Add 860/850R matching columns to customer_matching_rules (migration for existing tables)
+    await client.query(`
+      ALTER TABLE customer_matching_rules ADD COLUMN IF NOT EXISTS match_860_by_customer_po BOOLEAN DEFAULT FALSE;
+      ALTER TABLE customer_matching_rules ADD COLUMN IF NOT EXISTS match_860_by_contract_ref BOOLEAN DEFAULT FALSE;
+      ALTER TABLE customer_matching_rules ADD COLUMN IF NOT EXISTS contract_ref_field_860 VARCHAR(100) DEFAULT 'po_rel_num';
     `);
 
     // Insert default rule if not exists (separate query to handle NULL properly)
