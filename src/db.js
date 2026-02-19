@@ -176,6 +176,13 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_edi_orders_partial ON edi_orders(is_partial) WHERE is_partial = TRUE;
     `);
 
+    // Add 860/850R matching columns to customer_matching_rules (migration for existing tables)
+    await client.query(`
+      ALTER TABLE customer_matching_rules ADD COLUMN IF NOT EXISTS match_860_by_customer_po BOOLEAN DEFAULT FALSE;
+      ALTER TABLE customer_matching_rules ADD COLUMN IF NOT EXISTS match_860_by_contract_ref BOOLEAN DEFAULT FALSE;
+      ALTER TABLE customer_matching_rules ADD COLUMN IF NOT EXISTS contract_ref_field_860 VARCHAR(100) DEFAULT 'po_rel_num';
+    `);
+
     // Create discrepancies table for tracking EDI vs Zoho mismatches
     await client.query(`
       CREATE TABLE IF NOT EXISTS discrepancies (
@@ -220,11 +227,16 @@ async function initDatabase() {
         bulk_order_category VARCHAR(50) DEFAULT 'unconfirmed',   -- unconfirmed, confirmed
         bulk_po_field_pattern VARCHAR(100) DEFAULT 'EDI',        -- Pattern to match in PO field
 
-        -- How to match EDI to bulk order
+        -- How to match EDI 850 to bulk order
         match_by_customer_po BOOLEAN DEFAULT FALSE,              -- Match by Customer PO number (Kohls)
         match_by_contract_ref BOOLEAN DEFAULT FALSE,             -- Match by contract reference field (JCP)
         contract_ref_field VARCHAR(100) DEFAULT 'po_rel_num',    -- Field name for contract reference
         match_by_style_customer BOOLEAN DEFAULT TRUE,            -- Match by style + customer (default)
+
+        -- How to match EDI 860/850R to bulk order
+        match_860_by_customer_po BOOLEAN DEFAULT FALSE,
+        match_860_by_contract_ref BOOLEAN DEFAULT FALSE,
+        contract_ref_field_860 VARCHAR(100) DEFAULT 'po_rel_num'
 
         -- Matching criteria toggles
         match_style BOOLEAN DEFAULT TRUE,
