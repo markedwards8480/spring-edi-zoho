@@ -4546,7 +4546,7 @@ const dashboardHTML = `
   }
 
   async function saveCustomerRule(editId = null, isDefault = false) {
-    const customerName = isDefault ? null : document.getElementById('ruleCustomerName')?.value.trim();
+    const customerName = isDefault ? '__default__' : document.getElementById('ruleCustomerName')?.value.trim();
 
     if (!isDefault && !customerName) {
       toast('Please enter a customer name');

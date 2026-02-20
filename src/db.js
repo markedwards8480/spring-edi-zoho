@@ -265,7 +265,27 @@ async function initDatabase() {
       ALTER TABLE customer_matching_rules ADD COLUMN IF NOT EXISTS contract_ref_field_860 VARCHAR(100) DEFAULT 'po_rel_num';
     `);
 
-    // Insert default rule if not exists (separate query to handle NULL properly)
+    // Migration: Clean up duplicate default rules (caused by NULL customer_name not triggering UNIQUE constraint)
+    // Keep only the most recently updated default rule and delete the rest
+    const duplicateDefaults = await client.query(
+      'SELECT id FROM customer_matching_rules WHERE is_default = TRUE ORDER BY updated_at DESC NULLS LAST, id DESC'
+    );
+    if (duplicateDefaults.rows.length > 1) {
+      const keepId = duplicateDefaults.rows[0].id;
+      const deleteIds = duplicateDefaults.rows.slice(1).map(r => r.id);
+      await client.query(
+        'DELETE FROM customer_matching_rules WHERE id = ANY($1)',
+        [deleteIds]
+      );
+      logger.info(`Cleaned up ${deleteIds.length} duplicate default rules, kept id=${keepId}`);
+    }
+
+    // Migration: Update any NULL customer_name default rules to use '__default__' sentinel
+    await client.query(
+      "UPDATE customer_matching_rules SET customer_name = '__default__' WHERE is_default = TRUE AND (customer_name IS NULL OR customer_name = '')"
+    );
+
+    // Insert default rule if not exists
     const defaultExists = await client.query(
       'SELECT id FROM customer_matching_rules WHERE is_default = TRUE LIMIT 1'
     );
@@ -275,7 +295,7 @@ async function initDatabase() {
           customer_name, is_default, bulk_order_status, bulk_order_category,
           match_by_style_customer, action_on_match, notes
         ) VALUES (
-          NULL, TRUE, 'draft', 'unconfirmed',
+          '__default__', TRUE, 'draft', 'unconfirmed',
           TRUE, 'update_bulk', 'Default rule for all customers without specific rules'
         )
       `);
