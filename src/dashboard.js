@@ -4333,20 +4333,16 @@ const dashboardHTML = `
     const modalHtml = \`
       <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onclick="closeModal(event)">
         <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
-          <div class="px-6 py-4 border-b border-me-border sticky top-0 bg-white">
+          <div class="px-6 py-4 border-b border-me-border sticky top-0 bg-white z-10 shadow-sm rounded-t-xl">
             <h3 class="text-lg font-semibold text-me-text-primary">\${isEdit ? 'Edit' : 'Add'} Customer Matching Rule</h3>
+            <div class="mt-2">
+              \${isDefault ?
+                '<div class="flex items-center gap-2"><span class="text-sm text-me-text-secondary">Customer:</span><span class="text-sm font-medium text-me-text-primary bg-me-bg px-3 py-1 rounded-full">Default Rule (All Customers)</span></div>' :
+                '<div class="flex items-center gap-2"><span class="text-sm text-me-text-secondary">Customer:</span><input type="text" id="ruleCustomerName" value="' + (rule?.customer_name || '') + '" placeholder="e.g., Kohls, JC Penney, Burlington Coat Factory" class="flex-1 px-3 py-1.5 border border-me-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-me-dark"></div>'
+              }
+            </div>
           </div>
           <div class="p-6 space-y-6">
-
-            <!-- Customer Name -->
-            <div>
-              <label class="block text-sm font-medium text-me-text-primary mb-2">Customer Name</label>
-              \${isDefault ?
-                '<input type="text" value="Default Rule (All Customers)" disabled class="w-full px-4 py-2 border border-me-border rounded-lg bg-me-bg text-me-text-muted">' :
-                '<input type="text" id="ruleCustomerName" value="' + (rule?.customer_name || '') + '" placeholder="e.g., Kohls, JC Penney, Burlington Coat Factory" class="w-full px-4 py-2 border border-me-border rounded-lg focus:outline-none focus:ring-2 focus:ring-me-dark">'
-              }
-              <p class="text-xs text-me-text-muted mt-1">Enter customer name exactly as it appears in EDI orders, or leave blank for default rule</p>
-            </div>
 
             <!-- Bulk Order Identification -->
             <div class="p-4 bg-me-bg rounded-lg">
