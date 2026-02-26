@@ -235,6 +235,7 @@ async function initDatabase() {
         match_style BOOLEAN DEFAULT TRUE,
         match_color BOOLEAN DEFAULT TRUE,
         match_units BOOLEAN DEFAULT FALSE,
+        match_upc BOOLEAN DEFAULT FALSE,
         match_delivery_date BOOLEAN DEFAULT TRUE,
 
         -- What happens on match
@@ -263,6 +264,11 @@ async function initDatabase() {
       ALTER TABLE customer_matching_rules ADD COLUMN IF NOT EXISTS match_860_by_customer_po BOOLEAN DEFAULT FALSE;
       ALTER TABLE customer_matching_rules ADD COLUMN IF NOT EXISTS match_860_by_contract_ref BOOLEAN DEFAULT FALSE;
       ALTER TABLE customer_matching_rules ADD COLUMN IF NOT EXISTS contract_ref_field_860 VARCHAR(100) DEFAULT 'po_rel_num';
+    `);
+
+    // Migration: Add match_upc column
+    await client.query(`
+      ALTER TABLE customer_matching_rules ADD COLUMN IF NOT EXISTS match_upc BOOLEAN DEFAULT FALSE;
     `);
 
     // Migration: Clean up duplicate default rules (caused by NULL customer_name not triggering UNIQUE constraint)
