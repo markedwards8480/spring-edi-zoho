@@ -4370,75 +4370,9 @@ const dashboardHTML = `
               </div>
             </div>
 
-            <!-- Matching Method - 850 -->
-            <div class="p-4 bg-blue-50 rounded-lg">
-              <h4 class="font-medium text-me-text-primary mb-1">🔗 How to Match EDI 850 to Bulk Order</h4>
-              <p class="text-xs text-me-text-muted mb-3">Applies to new Purchase Orders (EDI 850)</p>
-              <div class="space-y-3">
-                <label class="flex items-start gap-3 cursor-pointer">
-                  <input type="radio" name="matchMethod850" value="style_customer" \${!rule?.match_by_customer_po && !rule?.match_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
-                  <div>
-                    <span class="font-medium text-me-text-primary">Match by Style + Customer</span>
-                    <p class="text-xs text-me-text-muted">Match using customer name, style, color, and delivery date</p>
-                  </div>
-                </label>
-                <label class="flex items-start gap-3 cursor-pointer">
-                  <input type="radio" name="matchMethod850" value="customer_po" \${rule?.match_by_customer_po ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
-                  <div>
-                    <span class="font-medium text-me-text-primary">Match by Customer PO Number</span>
-                    <p class="text-xs text-me-text-muted">EDI and bulk order share the same Customer PO number (e.g., Kohls)</p>
-                  </div>
-                </label>
-                <label class="flex items-start gap-3 cursor-pointer">
-                  <input type="radio" name="matchMethod850" value="contract_ref" \${rule?.match_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
-                  <div>
-                    <span class="font-medium text-me-text-primary">Match by Contract Reference Field</span>
-                    <p class="text-xs text-me-text-muted">EDI has a reference to the contract order number (e.g., JCP uses po_rel_num)</p>
-                  </div>
-                </label>
-                <div id="contractRefFieldContainer" class="ml-6 \${rule?.match_by_contract_ref ? '' : 'hidden'}">
-                  <label class="block text-sm text-me-text-secondary mb-1">Contract Reference Field Name</label>
-                  <input type="text" id="ruleContractRefField" value="\${rule?.contract_ref_field || 'po_rel_num'}" placeholder="e.g., po_rel_num" class="w-full px-3 py-2 border border-me-border rounded-lg text-sm">
-                </div>
-              </div>
-            </div>
-
-            <!-- Matching Method - 860 / 850R -->
-            <div class="p-4 bg-indigo-50 rounded-lg">
-              <h4 class="font-medium text-me-text-primary mb-1">🔗 How to Match EDI 860 / 850R to Bulk Order</h4>
-              <p class="text-xs text-me-text-muted mb-3">Applies to Change Orders and Revised Purchase Orders (EDI 860 / 850R)</p>
-              <div class="space-y-3">
-                <label class="flex items-start gap-3 cursor-pointer">
-                  <input type="radio" name="matchMethod860" value="style_customer" \${!rule?.match_860_by_customer_po && !rule?.match_860_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField860()" class="mt-1">
-                  <div>
-                    <span class="font-medium text-me-text-primary">Match by Style + Customer</span>
-                    <p class="text-xs text-me-text-muted">Match using customer name, style, color, and delivery date</p>
-                  </div>
-                </label>
-                <label class="flex items-start gap-3 cursor-pointer">
-                  <input type="radio" name="matchMethod860" value="customer_po" \${rule?.match_860_by_customer_po ? 'checked' : ''} onchange="toggleContractRefField860()" class="mt-1">
-                  <div>
-                    <span class="font-medium text-me-text-primary">Match by Customer PO Number</span>
-                    <p class="text-xs text-me-text-muted">860 and bulk order share the same Customer PO number</p>
-                  </div>
-                </label>
-                <label class="flex items-start gap-3 cursor-pointer">
-                  <input type="radio" name="matchMethod860" value="contract_ref" \${rule?.match_860_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField860()" class="mt-1">
-                  <div>
-                    <span class="font-medium text-me-text-primary">Match by Contract Reference Field</span>
-                    <p class="text-xs text-me-text-muted">860 has a reference to the contract order number</p>
-                  </div>
-                </label>
-                <div id="contractRefFieldContainer860" class="ml-6 \${rule?.match_860_by_contract_ref ? '' : 'hidden'}">
-                  <label class="block text-sm text-me-text-secondary mb-1">Contract Reference Field Name</label>
-                  <input type="text" id="ruleContractRefField860" value="\${rule?.contract_ref_field_860 || 'po_rel_num'}" placeholder="e.g., po_rel_num" class="w-full px-3 py-2 border border-me-border rounded-lg text-sm">
-                </div>
-              </div>
-            </div>
-
-            <!-- Matching Criteria -->
-            <div class="p-4 bg-green-50 rounded-lg">
-              <h4 class="font-medium text-me-text-primary mb-3">✅ Matching Criteria</h4>
+            <!-- Detail Matching Criteria -->
+            <div class="p-4 bg-gray-50 rounded-lg">
+              <h4 class="font-medium text-me-text-primary mb-3">✅ Detail Matching Criteria</h4>
               <div class="grid grid-cols-2 gap-3">
                 <label class="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" id="ruleMatchStyle" \${rule?.match_style !== false ? 'checked' : ''} class="w-4 h-4 rounded">
@@ -4453,51 +4387,127 @@ const dashboardHTML = `
                   <span class="text-sm text-me-text-primary">Match Units</span>
                 </label>
                 <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="ruleMatchUpc" \${rule?.match_upc ? 'checked' : ''} class="w-4 h-4 rounded">
+                  <span class="text-sm text-me-text-primary">Match UPC</span>
+                </label>
+                <label class="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" id="ruleMatchDelivery" \${rule?.match_delivery_date !== false ? 'checked' : ''} class="w-4 h-4 rounded">
                   <span class="text-sm text-me-text-primary">Match Delivery Date</span>
                 </label>
               </div>
             </div>
 
-            <!-- Action on Match -->
-            <div class="p-4 bg-amber-50 rounded-lg">
-              <h4 class="font-medium text-me-text-primary mb-3">⚡ Action When Match Found</h4>
-              <div class="space-y-3">
-                <label class="flex items-start gap-3 cursor-pointer">
-                  <input type="radio" name="actionOnMatch" value="update_bulk" \${rule?.action_on_match !== 'create_new_drawdown' ? 'checked' : ''} class="mt-1">
-                  <div>
-                    <span class="font-medium text-me-text-primary">Update Bulk Order</span>
-                    <p class="text-xs text-me-text-muted">EDI data updates the bulk order directly (current behavior)</p>
+            <!-- EDI 850 Group (blue) -->
+            <div class="p-4 bg-blue-50 rounded-lg space-y-4">
+              <!-- 850 Matching Method -->
+              <div>
+                <h4 class="font-medium text-me-text-primary mb-1">🔗 How to Match EDI 850 to Bulk Order</h4>
+                <p class="text-xs text-me-text-muted mb-3">Applies to new Purchase Orders (EDI 850)</p>
+                <div class="space-y-3">
+                  <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="radio" name="matchMethod850" value="style_customer" \${!rule?.match_by_customer_po && !rule?.match_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
+                    <div>
+                      <span class="font-medium text-me-text-primary">Match by Style + Customer</span>
+                      <p class="text-xs text-me-text-muted">Match using customer name, style, color, and delivery date</p>
+                    </div>
+                  </label>
+                  <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="radio" name="matchMethod850" value="customer_po" \${rule?.match_by_customer_po ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
+                    <div>
+                      <span class="font-medium text-me-text-primary">Match by Customer PO Number</span>
+                      <p class="text-xs text-me-text-muted">EDI and bulk order share the same Customer PO number (e.g., Kohls)</p>
+                    </div>
+                  </label>
+                  <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="radio" name="matchMethod850" value="contract_ref" \${rule?.match_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField()" class="mt-1">
+                    <div>
+                      <span class="font-medium text-me-text-primary">Match by Contract Reference Field</span>
+                      <p class="text-xs text-me-text-muted">EDI has a reference to the contract order number (e.g., JCP uses po_rel_num)</p>
+                    </div>
+                  </label>
+                  <div id="contractRefFieldContainer" class="ml-6 \${rule?.match_by_contract_ref ? '' : 'hidden'}">
+                    <label class="block text-sm text-me-text-secondary mb-1">Contract Reference Field Name</label>
+                    <input type="text" id="ruleContractRefField" value="\${rule?.contract_ref_field || 'po_rel_num'}" placeholder="e.g., po_rel_num" class="w-full px-3 py-2 border border-me-border rounded-lg text-sm">
                   </div>
-                </label>
-                <label class="flex items-start gap-3 cursor-pointer">
-                  <input type="radio" name="actionOnMatch" value="create_new_drawdown" \${rule?.action_on_match === 'create_new_drawdown' ? 'checked' : ''} class="mt-1">
-                  <div>
-                    <span class="font-medium text-me-text-primary">Create New Order + Draw Down Bulk</span>
-                    <p class="text-xs text-me-text-muted">Create new Zoho order from EDI, reduce quantities from bulk order (contract matching)</p>
-                  </div>
-                </label>
+                </div>
+              </div>
+              <!-- 850 Handling -->
+              <hr class="border-blue-200">
+              <div>
+                <h4 class="font-medium text-me-text-primary mb-3">⚡ EDI 850 Handling</h4>
+                <div class="space-y-3">
+                  <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="radio" name="actionOnMatch" value="update_bulk" \${rule?.action_on_match !== 'create_new_drawdown' ? 'checked' : ''} class="mt-1">
+                    <div>
+                      <span class="font-medium text-me-text-primary">Update Bulk Order</span>
+                      <p class="text-xs text-me-text-muted">EDI data updates the bulk order directly (current behavior)</p>
+                    </div>
+                  </label>
+                  <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="radio" name="actionOnMatch" value="create_new_drawdown" \${rule?.action_on_match === 'create_new_drawdown' ? 'checked' : ''} class="mt-1">
+                    <div>
+                      <span class="font-medium text-me-text-primary">Create New Order + Draw Down Bulk</span>
+                      <p class="text-xs text-me-text-muted">Create new Zoho order from EDI, reduce quantities from bulk order (contract matching)</p>
+                    </div>
+                  </label>
+                </div>
               </div>
             </div>
 
-            <!-- 860 Handling -->
-            <div class="p-4 bg-purple-50 rounded-lg">
-              <h4 class="font-medium text-me-text-primary mb-3">🔄 EDI 860 & 850R (Change Order) Handling</h4>
-              <div class="space-y-3">
-                <label class="flex items-start gap-3 cursor-pointer">
-                  <input type="radio" name="edi860Action" value="update_existing" \${rule?.edi_860_action !== 'create_amendment' ? 'checked' : ''} class="mt-1">
-                  <div>
-                    <span class="font-medium text-me-text-primary">Update Existing Order</span>
-                    <p class="text-xs text-me-text-muted">Find and update the Zoho order created from the original EDI</p>
+            <!-- EDI 860 / 850R Group (green) -->
+            <div class="p-4 bg-green-50 rounded-lg space-y-4">
+              <!-- 860 Matching Method -->
+              <div>
+                <h4 class="font-medium text-me-text-primary mb-1">🔗 How to Match EDI 860 / 850R to Bulk Order</h4>
+                <p class="text-xs text-me-text-muted mb-3">Applies to Change Orders and Revised Purchase Orders (EDI 860 / 850R)</p>
+                <div class="space-y-3">
+                  <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="radio" name="matchMethod860" value="style_customer" \${!rule?.match_860_by_customer_po && !rule?.match_860_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField860()" class="mt-1">
+                    <div>
+                      <span class="font-medium text-me-text-primary">Match by Style + Customer</span>
+                      <p class="text-xs text-me-text-muted">Match using customer name, style, color, and delivery date</p>
+                    </div>
+                  </label>
+                  <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="radio" name="matchMethod860" value="customer_po" \${rule?.match_860_by_customer_po ? 'checked' : ''} onchange="toggleContractRefField860()" class="mt-1">
+                    <div>
+                      <span class="font-medium text-me-text-primary">Match by Customer PO Number</span>
+                      <p class="text-xs text-me-text-muted">860 and bulk order share the same Customer PO number</p>
+                    </div>
+                  </label>
+                  <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="radio" name="matchMethod860" value="contract_ref" \${rule?.match_860_by_contract_ref ? 'checked' : ''} onchange="toggleContractRefField860()" class="mt-1">
+                    <div>
+                      <span class="font-medium text-me-text-primary">Match by Contract Reference Field</span>
+                      <p class="text-xs text-me-text-muted">860 has a reference to the contract order number</p>
+                    </div>
+                  </label>
+                  <div id="contractRefFieldContainer860" class="ml-6 \${rule?.match_860_by_contract_ref ? '' : 'hidden'}">
+                    <label class="block text-sm text-me-text-secondary mb-1">Contract Reference Field Name</label>
+                    <input type="text" id="ruleContractRefField860" value="\${rule?.contract_ref_field_860 || 'po_rel_num'}" placeholder="e.g., po_rel_num" class="w-full px-3 py-2 border border-me-border rounded-lg text-sm">
                   </div>
-                </label>
-                <label class="flex items-start gap-3 cursor-pointer">
-                  <input type="radio" name="edi860Action" value="create_amendment" \${rule?.edi_860_action === 'create_amendment' ? 'checked' : ''} class="mt-1">
-                  <div>
-                    <span class="font-medium text-me-text-primary">Create New Order & Draw Down Bulk</span>
-                    <p class="text-xs text-me-text-muted">Create a new Zoho order from the 860 and reduce quantities from the bulk order</p>
-                  </div>
-                </label>
+                </div>
+              </div>
+              <!-- 860 Handling -->
+              <hr class="border-green-200">
+              <div>
+                <h4 class="font-medium text-me-text-primary mb-3">🔄 EDI 860 & 850R (Change Order) Handling</h4>
+                <div class="space-y-3">
+                  <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="radio" name="edi860Action" value="update_existing" \${rule?.edi_860_action !== 'create_amendment' ? 'checked' : ''} class="mt-1">
+                    <div>
+                      <span class="font-medium text-me-text-primary">Update Existing Order</span>
+                      <p class="text-xs text-me-text-muted">Find and update the Zoho order created from the original EDI</p>
+                    </div>
+                  </label>
+                  <label class="flex items-start gap-3 cursor-pointer">
+                    <input type="radio" name="edi860Action" value="create_amendment" \${rule?.edi_860_action === 'create_amendment' ? 'checked' : ''} class="mt-1">
+                    <div>
+                      <span class="font-medium text-me-text-primary">Create New Order & Draw Down Bulk</span>
+                      <p class="text-xs text-me-text-muted">Create a new Zoho order from the 860 and reduce quantities from the bulk order</p>
+                    </div>
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -4570,6 +4580,7 @@ const dashboardHTML = `
       match_style: document.getElementById('ruleMatchStyle')?.checked !== false,
       match_color: document.getElementById('ruleMatchColor')?.checked !== false,
       match_units: document.getElementById('ruleMatchUnits')?.checked || false,
+      match_upc: document.getElementById('ruleMatchUpc')?.checked || false,
       match_delivery_date: document.getElementById('ruleMatchDelivery')?.checked !== false,
       action_on_match: actionOnMatch,
       edi_860_action: edi860Action,
