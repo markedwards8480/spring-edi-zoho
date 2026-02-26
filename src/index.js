@@ -1832,6 +1832,7 @@ app.post('/customer-rules', async (req, res) => {
       match_style,
       match_color,
       match_units,
+      match_upc,
       match_delivery_date,
       action_on_match,
       edi_860_action,
@@ -1845,8 +1846,8 @@ app.post('/customer-rules', async (req, res) => {
         contract_ref_field, match_by_style_customer,
         match_860_by_customer_po, match_860_by_contract_ref, contract_ref_field_860,
         match_style, match_color,
-        match_units, match_delivery_date, action_on_match, edi_860_action, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        match_units, match_upc, match_delivery_date, action_on_match, edi_860_action, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       ON CONFLICT (customer_name) DO UPDATE SET
         is_default = EXCLUDED.is_default,
         bulk_order_status = EXCLUDED.bulk_order_status,
@@ -1862,6 +1863,7 @@ app.post('/customer-rules', async (req, res) => {
         match_style = EXCLUDED.match_style,
         match_color = EXCLUDED.match_color,
         match_units = EXCLUDED.match_units,
+        match_upc = EXCLUDED.match_upc,
         match_delivery_date = EXCLUDED.match_delivery_date,
         action_on_match = EXCLUDED.action_on_match,
         edi_860_action = EXCLUDED.edi_860_action,
@@ -1876,6 +1878,7 @@ app.post('/customer-rules', async (req, res) => {
       match_860_by_customer_po || false, match_860_by_contract_ref || false,
       contract_ref_field_860 || 'po_rel_num',
       match_style !== false, match_color !== false, match_units || false,
+      match_upc || false,
       match_delivery_date !== false, action_on_match || 'update_bulk',
       edi_860_action || 'update_existing', notes || null
     ]);
