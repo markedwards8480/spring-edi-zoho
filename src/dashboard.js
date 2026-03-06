@@ -3156,14 +3156,25 @@ const dashboardHTML = `
         '<div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">' +
           '<div class="font-medium text-amber-800 mb-2">❌ Why no match was found:</div>' +
           '<div class="text-sm text-me-warning space-y-2">' +
-            '<div class="flex items-start gap-2">' +
-              '<span class="text-me-error">✗</span>' +
-              '<span>No Zoho draft has PO/Reference = <strong>"' + (edi?.poNumber || '') + '"</strong></span>' +
-            '</div>' +
-            '<div class="flex items-start gap-2">' +
-              '<span class="text-me-error">✗</span>' +
-              '<span>No Zoho draft for <strong>' + (edi?.customer || 'this customer') + '</strong> with base style <strong>' + (ediStyles[0] || 'N/A') + '</strong></span>' +
-            '</div>' +
+            (noMatchRuleInfo && noMatchRuleInfo.matchMethod === 'customer_po' ? 
+              '<div class="flex items-start gap-2">' +
+                '<span class="text-me-error">✗</span>' +
+                '<span>No Zoho order has PO/Reference = <strong>"' + (edi?.poNumber || '') + '"</strong> for this customer</span>' +
+              '</div>'
+            : noMatchRuleInfo && noMatchRuleInfo.matchMethod === 'contract_ref' ?
+              '<div class="flex items-start gap-2">' +
+                '<span class="text-me-error">✗</span>' +
+                '<span>No Zoho order has contract reference matching this EDI order</span>' +
+              '</div>'
+            :
+              '<div class="flex items-start gap-2">' +
+                '<span class="text-me-error">✗</span>' +
+                '<span>No Zoho order for customer <strong>' + (edi?.customer || 'unknown') + '</strong> with base style <strong>' + (ediStyles[0] || 'N/A') + '</strong></span>' +
+              '</div>' +
+              '<div class="flex items-start gap-2 text-xs text-me-text-muted ml-5">' +
+                '<span>The system searched for a Zoho order where both the customer AND at least one style number match. Check that: (1) the customer mapping points to the correct Zoho customer, (2) the Zoho order contains matching style numbers, and (3) the Zoho order status matches the rule (e.g., Draft/Unconfirmed).</span>' +
+              '</div>'
+            ) +
           '</div>' +
         '</div>' +
 
@@ -4000,6 +4011,7 @@ const dashboardHTML = `
             <thead class="bg-me-bg">
               <tr>
                 <th class="text-left px-4 py-3 text-me-text-secondary font-medium">EDI Customer Name</th>
+                <th class="text-left px-4 py-3 text-me-text-secondary font-medium">Vendor ISA ID</th>
                 <th class="text-left px-4 py-3 text-me-text-secondary font-medium">Zoho Customer</th>
                 <th class="text-right px-4 py-3 text-me-text-secondary font-medium w-24">Actions</th>
               </tr>
@@ -4009,11 +4021,14 @@ const dashboardHTML = `
                 <tr class="border-t border-gray-100 hover:bg-me-bg">
                   <td class="px-4 py-3 font-medium">\${m.edi_customer_name}</td>
                   <td class="px-4 py-3">
+                    \${m.vendor_isa_id ? '<span class="font-mono text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded">' + m.vendor_isa_id + '</span>' : '<span class="text-me-text-muted text-xs">—</span>'}
+                  </td>
+                  <td class="px-4 py-3">
                     <span class="text-me-text-primary">\${m.zoho_customer_name || m.zoho_account_name || '-'}</span>
                     \${m.zoho_customer_id ? '<span class="text-xs text-me-text-muted ml-2">ID: ' + m.zoho_customer_id + '</span>' : ''}
                   </td>
                   <td class="px-4 py-3 text-right">
-                    <button onclick="editMapping(\${m.id}, '\${escapeQuotes(m.edi_customer_name)}', '\${m.zoho_customer_id || ''}')"
+                    <button onclick="editMapping(\${m.id}, '\${escapeQuotes(m.edi_customer_name)}', '\${m.zoho_customer_id || ''}', '\${escapeQuotes(m.vendor_isa_id || '')}')"
                       class="text-me-accent hover:text-me-dark text-sm mr-3">Edit</button>
                     <button onclick="deleteMapping(\${m.id}, '\${escapeQuotes(m.edi_customer_name)}')"
                       class="text-me-error hover:text-red-800 text-sm">Delete</button>
@@ -4050,7 +4065,7 @@ const dashboardHTML = `
     }
   }
 
-  async function showAddMappingModal(editId = null, editEdiName = '', editZohoId = '') {
+  async function showAddMappingModal(editId = null, editEdiName = '', editZohoId = '', editVendorIsaId = '') {
     const customers = await loadZohoCustomers();
     const isEdit = editId !== null;
 
@@ -4068,6 +4083,13 @@ const dashboardHTML = `
                 class="w-full px-4 py-2 border border-me-border rounded-lg focus:outline-none focus:ring-2 focus:ring-me-dark \${isEdit ? 'bg-me-bg' : ''}"
                 \${isEdit ? 'readonly' : ''}>
               <p class="text-xs text-me-text-muted mt-1">Enter the customer name exactly as it appears in EDI orders</p>
+            </div>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-me-text-primary mb-2">Vendor ISA ID <span class="text-me-text-muted font-normal">(optional)</span></label>
+              <input type="text" id="mappingVendorIsaId" value="\${editVendorIsaId}"
+                placeholder="e.g., 6112390050"
+                class="w-full px-4 py-2 border border-me-border rounded-lg focus:outline-none focus:ring-2 focus:ring-me-dark font-mono">
+              <p class="text-xs text-me-text-muted mt-1">Used to differentiate retailers with multiple entities (e.g., Burlington Forever 21 vs Burlington Coat). Spring is adding this field to the report.</p>
             </div>
             <div class="mb-4">
               <label class="block text-sm font-medium text-me-text-primary mb-2">Zoho Customer</label>
@@ -4095,8 +4117,8 @@ const dashboardHTML = `
     document.getElementById('modalContainer').innerHTML = modalHtml;
   }
 
-  function editMapping(id, ediName, zohoId) {
-    showAddMappingModal(id, ediName, zohoId);
+  function editMapping(id, ediName, zohoId, vendorIsaId) {
+    showAddMappingModal(id, ediName, zohoId, vendorIsaId || '');
   }
 
   async function saveMapping(editId = null) {
@@ -4104,6 +4126,7 @@ const dashboardHTML = `
     const zohoSelect = document.getElementById('mappingZohoCustomer');
     const zohoId = zohoSelect.value;
     const zohoName = zohoSelect.options[zohoSelect.selectedIndex]?.dataset?.name || '';
+    const vendorIsaId = (document.getElementById('mappingVendorIsaId')?.value || '').trim();
 
     if (!ediName) {
       toast('Please enter the EDI customer name');
@@ -4121,7 +4144,8 @@ const dashboardHTML = `
         body: JSON.stringify({
           ediCustomerName: ediName,
           zohoCustomerId: zohoId,
-          zohoCustomerName: zohoName
+          zohoCustomerName: zohoName,
+          vendorIsaId: vendorIsaId || null
         })
       });
       const data = await res.json();
