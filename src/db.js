@@ -87,6 +87,18 @@ async function initDatabase() {
       CREATE INDEX IF NOT EXISTS idx_customer_mappings_edi_name ON customer_mappings(edi_customer_name);
     `);
 
+    // Migration: Add vendor_isa_id support to customer_mappings
+    // Burlington has separate ISA IDs for Forever 21 and Coat - need to map by ISA ID
+    await client.query(`
+      ALTER TABLE customer_mappings ADD COLUMN IF NOT EXISTS vendor_isa_id VARCHAR(100);
+      CREATE INDEX IF NOT EXISTS idx_customer_mappings_isa_id ON customer_mappings(vendor_isa_id);
+    `);
+
+    // Migration: Add vendor_isa_id to edi_orders for tracking
+    await client.query(`
+      ALTER TABLE edi_orders ADD COLUMN IF NOT EXISTS vendor_isa_id VARCHAR(100);
+    `);
+
     // Create processing_logs table for audit trail
     await client.query(`
       CREATE TABLE IF NOT EXISTS processing_logs (
@@ -269,6 +281,12 @@ async function initDatabase() {
     // Migration: Add match_upc column
     await client.query(`
       ALTER TABLE customer_matching_rules ADD COLUMN IF NOT EXISTS match_upc BOOLEAN DEFAULT FALSE;
+    `);
+
+    // Migration: Add vendor_isa_id to customer_matching_rules
+    // Allows rules to be associated with specific ISA IDs (e.g., different Burlington entities)
+    await client.query(`
+      ALTER TABLE customer_matching_rules ADD COLUMN IF NOT EXISTS vendor_isa_id VARCHAR(100);
     `);
 
     // Migration: Clean up duplicate default rules (caused by NULL customer_name not triggering UNIQUE constraint)
@@ -475,14 +493,15 @@ async function saveEDIOrder(order) {
 
   // New order - insert it
   const result = await pool.query(
-    `INSERT INTO edi_orders (filename, edi_order_number, customer_po, status, raw_edi, parsed_data, edi_customer_name, transaction_type)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO edi_orders (filename, edi_order_number, customer_po, status, raw_edi, parsed_data, edi_customer_name, transaction_type, vendor_isa_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      ON CONFLICT (filename, edi_order_number) DO UPDATE SET
        parsed_data = $6,
        edi_customer_name = $7,
+       vendor_isa_id = $9,
        updated_at = NOW()
      RETURNING id, status`,
-    [order.filename, order.ediOrderNumber, order.customerPO, 'pending', order.rawEDI, order.parsedData, order.ediCustomerName || null, transactionType]
+    [order.filename, order.ediOrderNumber, order.customerPO, 'pending', order.rawEDI, order.parsedData, order.ediCustomerName || null, transactionType, order.vendorIsaId || null]
   );
   return { ...result.rows[0], wasAmended: false, isNew: true };
 }
@@ -513,7 +532,7 @@ async function updateOrderMapping(id, zohoAccountId, zohoAccountName, confirmed 
 
 async function getPendingOrders() {
   const result = await pool.query(
-    `SELECT id, filename, edi_order_number, parsed_data, edi_customer_name,
+    `SELECT id, filename, edi_order_number, parsed_data, edi_customer_name, vendor_isa_id,
             suggested_zoho_account_id, suggested_zoho_account_name, mapping_confirmed
      FROM edi_orders
      WHERE status = 'pending'
