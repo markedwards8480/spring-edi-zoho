@@ -132,6 +132,9 @@ function parseSpringCSV(content, filename) {
       shipCloseDate: formatDate(getField(firstRow, 'po_po_ship_close_date', 'po.po_ship_close_date')),
       vendorName: getField(firstRow, 'vendor_tp_name', 'vendor.tp_name') || '',
       retailerName: getField(firstRow, 'retailer_tp_name', 'retailer.tp_name') || '',
+      // Vendor ISA ID - used to differentiate Burlington Forever 21 vs Burlington Coat etc.
+      // Spring Systems is adding this column - try multiple possible field names
+      vendorIsaId: getField(firstRow, 'vendor_isa_id', 'vendor.isa_id', 'vendor_tp_isa_id', 'vendor.tp_isa_id', 'isa_sender_id', 'isa.sender_id') || '',
       transactionType: transactionType,
       changeReasonCode: changeReasonCode
     },
