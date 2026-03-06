@@ -332,7 +332,7 @@ app.get('/orders', async (req, res) => {
     const result = await pool.query(`
       SELECT id, filename, edi_order_number, edi_customer_name, status, 
              zoho_so_id, zoho_so_number, error_message, created_at, processed_at,
-             parsed_data, matched_draft_id, raw_edi
+             parsed_data, matched_draft_id, raw_edi, vendor_isa_id
       FROM edi_orders 
       ORDER BY created_at DESC 
       LIMIT 200
@@ -537,7 +537,7 @@ app.post('/sftp/refetch-from-archive', async (req, res) => {
       logger.info('Re-fetched order updated', orderInfo);
     } else {
       // New order - insert it
-      const customerName = parsed.parties?.buyingParty?.name || 
+      const customerName = parsed.parties?.buyer?.name || parsed.parties?.buyingParty?.name || 
                           parsed.parties?.shipTo?.name || 
                           'Unknown';
       
@@ -582,7 +582,7 @@ app.post('/sftp/refetch-from-archive', async (req, res) => {
       order: orderInfo,
       parsed: {
         poNumber: parsed.header.purchaseOrderNumber,
-        customer: parsed.parties?.buyingParty?.name,
+        customer: parsed.parties?.buyer?.name || parsed.parties?.buyingParty?.name,
         itemCount: parsed.items?.length || 0,
         documentType: parsed.header.transactionSetCode || '850'
       }
@@ -672,7 +672,7 @@ app.post('/sftp/refetch-from-incoming', async (req, res) => {
       logger.info('Re-fetched order updated', orderInfo);
     } else {
       // New order - insert it
-      const customerName = parsed.parties?.buyingParty?.name || 
+      const customerName = parsed.parties?.buyer?.name || parsed.parties?.buyingParty?.name || 
                           parsed.parties?.shipTo?.name || 
                           'Unknown';
       
@@ -717,7 +717,7 @@ app.post('/sftp/refetch-from-incoming', async (req, res) => {
       order: orderInfo,
       parsed: {
         poNumber: parsed.header.purchaseOrderNumber,
-        customer: parsed.parties?.buyingParty?.name,
+        customer: parsed.parties?.buyer?.name || parsed.parties?.buyingParty?.name,
         itemCount: parsed.items?.length || 0,
         documentType: parsed.header.transactionSetCode || '850'
       }
@@ -796,7 +796,7 @@ app.post('/sftp/bulk-refetch', async (req, res) => {
           });
         } else {
           // Create new
-          const customerName = parsed.parties?.buyingParty?.name || 'Unknown';
+          const customerName = parsed.parties?.buyer?.name || parsed.parties?.buyingParty?.name || 'Unknown';
           const insertResult = await pool.query(`
             INSERT INTO edi_orders (filename, raw_edi, edi_order_number, edi_customer_name, parsed_data, status)
             VALUES ($1, $2, $3, $4, $5, 'pending')
@@ -2018,12 +2018,13 @@ app.get('/customer-mappings', async (req, res) => {
 
 app.post('/customer-mappings', async (req, res) => {
   try {
-    const { ediCustomerName, zohoCustomerId, zohoCustomerName } = req.body;
+    const { ediCustomerName, zohoCustomerId, zohoCustomerName, vendorIsaId } = req.body;
     await pool.query(`
-      INSERT INTO customer_mappings (edi_customer_name, zoho_customer_id, zoho_customer_name)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (edi_customer_name) DO UPDATE SET zoho_customer_id = $2, zoho_customer_name = $3, updated_at = NOW()
-    `, [ediCustomerName, zohoCustomerId, zohoCustomerName]);
+      INSERT INTO customer_mappings (edi_customer_name, zoho_customer_id, zoho_customer_name, vendor_isa_id)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (edi_customer_name) DO UPDATE SET 
+        zoho_customer_id = $2, zoho_customer_name = $3, vendor_isa_id = $4, updated_at = NOW()
+    `, [ediCustomerName, zohoCustomerId, zohoCustomerName, vendorIsaId || null]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
