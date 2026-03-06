@@ -45,6 +45,7 @@ async function processEDIOrders() {
           rawEDI: content,
           parsedData: parsedOrder,
           ediCustomerName: parsedOrder.parties?.buyer?.name || parsedOrder.header?.retailerName || null,
+          vendorIsaId: parsedOrder.header?.vendorIsaId || null,
           transactionType: parsedOrder.header?.transactionType || '850'
         });
 
