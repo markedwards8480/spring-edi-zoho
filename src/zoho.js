@@ -399,18 +399,36 @@ class ZohoClient {
     });
 
     // Build lookup map for customer mappings (EDI name -> Zoho customer ID)
+    // Also build ISA ID lookup for retailers like Burlington with multiple ISA IDs
     const customerMappingLookup = new Map();
+    const isaIdMappingLookup = new Map();
     customerMappings.forEach(m => {
       if (m.edi_customer_name && m.zoho_customer_id) {
         customerMappingLookup.set(m.edi_customer_name.toLowerCase().trim(), m.zoho_customer_id);
       }
+      // ISA ID mapping takes priority when available
+      if (m.vendor_isa_id && m.zoho_customer_id) {
+        isaIdMappingLookup.set(m.vendor_isa_id.trim(), m.zoho_customer_id);
+      }
     });
 
     // Helper function to find the applicable rule for a customer
-    const findRuleForCustomer = (customerName) => {
-      if (!customerName) return customerRules.find(r => r.is_default) || null;
-      const customerLower = customerName.toLowerCase().trim();
-      // First try exact match
+    // Supports lookup by vendor ISA ID (for Burlington etc.) and customer name
+    const findRuleForCustomer = (customerName, vendorIsaId = '') => {
+      if (!customerName && !vendorIsaId) return customerRules.find(r => r.is_default) || null;
+      
+      // First try ISA ID match if available (most specific)
+      if (vendorIsaId) {
+        const isaMatch = customerRules.find(r =>
+          !r.is_default && r.vendor_isa_id && r.vendor_isa_id.trim() === vendorIsaId.trim()
+        );
+        if (isaMatch) return isaMatch;
+      }
+      
+      const customerLower = (customerName || '').toLowerCase().trim();
+      if (!customerLower) return customerRules.find(r => r.is_default) || null;
+      
+      // Then try exact name match
       const exactMatch = customerRules.find(r =>
         !r.is_default && r.customer_name?.toLowerCase().trim() === customerLower
       );
@@ -437,7 +455,8 @@ class ZohoClient {
       const ediShipDate = parsed.dates?.shipNotBefore || '';
 
       // Find the applicable matching rule for this customer
-      const rule = findRuleForCustomer(ediCustomer);
+      const ediVendorIsaId = (ediOrder.vendor_isa_id || parsed.header?.vendorIsaId || '').trim();
+      const rule = findRuleForCustomer(ediCustomer, ediVendorIsaId);
       const ruleInfo = rule ? {
         id: rule.id,
         customerName: rule.customer_name,
@@ -477,7 +496,7 @@ class ZohoClient {
           po_rel_num: draft.po_rel_num || draft.custom_field_hash?.cf_po_rel_num || ''
         };
 
-        const score = this.scoreMatch(ediOrder, draftForScoring, customerMappingLookup, rule);
+        const score = this.scoreMatch(ediOrder, draftForScoring, customerMappingLookup, rule, isaIdMappingLookup);
 
         // MATCHING RULES - Now based on customer-specific rules if available
         let shouldInclude = false;
@@ -602,7 +621,7 @@ class ZohoClient {
    *
    * Now supports customer-specific rules for customized scoring
    */
-  scoreMatch(ediOrder, zohoDraft, customerMappingLookup = new Map(), rule = null) {
+  scoreMatch(ediOrder, zohoDraft, customerMappingLookup = new Map(), rule = null, isaIdMappingLookup = new Map()) {
     const score = {
       total: 0,
       details: {
@@ -666,24 +685,36 @@ class ZohoClient {
     // ============================================================
     const zohoCustomerId = zohoDraft.customer_id || '';
 
-    // First check: Does the EDI customer have a mapping to this Zoho customer?
-    const mappedZohoId = customerMappingLookup.get(ediCustomer);
-    if (mappedZohoId && mappedZohoId === zohoCustomerId) {
-      // Perfect match via customer mapping - highest confidence
+    // First check: Does the EDI order have a vendor ISA ID that maps to this Zoho customer?
+    const ediVendorIsaId = (ediOrder.vendor_isa_id || ediOrder.parsed_data?.header?.vendorIsaId || '').trim();
+    const isaIdMappedZohoId = ediVendorIsaId ? isaIdMappingLookup.get(ediVendorIsaId) : null;
+    
+    if (isaIdMappedZohoId && isaIdMappedZohoId === zohoCustomerId) {
+      // Perfect match via ISA ID mapping - highest confidence
       score.total += 15;
       score.details.customer = true;
       score.details.customerMapped = true;
-      logger.debug('Customer matched via mapping', { ediCustomer, zohoCustomerId, mappedZohoId });
-    } else if (ediCustomer && zohoCustomer) {
-      // Fallback: Fuzzy text matching
-      const ediParts = ediCustomer.split(/[\s,]+/).filter(p => p.length > 2);
-      const zohoParts = zohoCustomer.split(/[\s,]+/).filter(p => p.length > 2);
-      const matchingParts = ediParts.filter(ep =>
-        zohoParts.some(zp => zp.includes(ep) || ep.includes(zp))
-      );
-      if (matchingParts.length > 0 || ediCustomer.includes(zohoCustomer) || zohoCustomer.includes(ediCustomer)) {
+      logger.debug('Customer matched via ISA ID mapping', { ediVendorIsaId, zohoCustomerId, isaIdMappedZohoId });
+    } else {
+      // Second check: Does the EDI customer name have a mapping to this Zoho customer?
+      const mappedZohoId = customerMappingLookup.get(ediCustomer);
+      if (mappedZohoId && mappedZohoId === zohoCustomerId) {
+        // Match via customer name mapping
         score.total += 15;
         score.details.customer = true;
+        score.details.customerMapped = true;
+        logger.debug('Customer matched via name mapping', { ediCustomer, zohoCustomerId, mappedZohoId });
+      } else if (ediCustomer && zohoCustomer) {
+        // Fallback: Fuzzy text matching
+        const ediParts = ediCustomer.split(/[\s,]+/).filter(p => p.length > 2);
+        const zohoParts = zohoCustomer.split(/[\s,]+/).filter(p => p.length > 2);
+        const matchingParts = ediParts.filter(ep =>
+          zohoParts.some(zp => zp.includes(ep) || ep.includes(zp))
+        );
+        if (matchingParts.length > 0 || ediCustomer.includes(zohoCustomer) || zohoCustomer.includes(ediCustomer)) {
+          score.total += 15;
+          score.details.customer = true;
+        }
       }
     }
 
