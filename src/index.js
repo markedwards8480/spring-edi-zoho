@@ -941,6 +941,7 @@ app.post('/find-matches', async (req, res) => {
       success: true,
       matches: matchResults.matches,
       noMatches: matchResults.noMatches,
+      draftsChecked: drafts.length,
       sessionId: session.sessionId,
       cacheRefreshed: didAutoRefresh,
       cacheAge: cacheStatus.minutesSinceRefresh
@@ -2622,6 +2623,187 @@ async function startServer() {
     });
     logger.info('Zoho cache refresh cron scheduled: daily at 1am (use Refresh Zoho Data button for manual sync)');
     
+    // ============================================================
+    // DEBUG MATCH ENDPOINT - Traces exactly why an EDI order matches or doesn't match
+    // Usage: GET /debug-match/:orderId or GET /debug-match/:orderId?zoho=0618058
+    // ============================================================
+    app.get('/debug-match/:orderId', async (req, res) => {
+      try {
+        const orderId = req.params.orderId;
+        const zohoFilter = req.query.zoho || ''; // Optional: filter to specific Zoho order number
+
+        // 1. Load the EDI order
+        const ediResult = await pool.query('SELECT * FROM edi_orders WHERE id = $1', [orderId]);
+        if (ediResult.rows.length === 0) {
+          return res.json({ error: 'EDI order not found', orderId });
+        }
+        const ediOrder = ediResult.rows[0];
+        const parsed = ediOrder.parsed_data || {};
+        const ediItems = parsed.items || [];
+
+        // 2. Extract EDI details
+        const ediCustomer = (ediOrder.edi_customer_name || '').toLowerCase().trim();
+        const ediVendorIsaId = (ediOrder.vendor_isa_id || parsed.header?.vendorIsaId || '').trim();
+        const ediStyles = [];
+        ediItems.forEach(i => {
+          const sku = (i.productIds?.sku || i.productIds?.vendorItemNumber || '').trim();
+          if (sku) ediStyles.push(sku);
+        });
+        const ediBaseStyles = [...new Set(ediStyles.map(s => {
+          const m = s.toLowerCase().match(/^(\d{4,6}[a-z]?)/i);
+          return m ? m[1] : s.split('-')[0];
+        }))];
+
+        // 3. Load customer mappings
+        const mappingsResult = await pool.query('SELECT * FROM customer_mappings');
+        const customerMappings = mappingsResult.rows || [];
+        const mappingForCustomer = customerMappings.find(m =>
+          m.edi_customer_name?.toLowerCase().trim() === ediCustomer
+        );
+
+        // 4. Load matching rules
+        const rulesResult = await pool.query('SELECT * FROM customer_matching_rules ORDER BY is_default ASC, customer_name ASC');
+        const customerRules = rulesResult.rows || [];
+        const ruleForCustomer = customerRules.find(r =>
+          !r.is_default && r.customer_name?.toLowerCase().trim() === ediCustomer
+        ) || customerRules.find(r => r.is_default);
+
+        // 5. Load cached Zoho drafts
+        const drafts = await zohoDraftsCache.getCachedDrafts();
+        
+        // 6. Filter/find relevant Zoho orders
+        let relevantDrafts = drafts;
+        if (zohoFilter) {
+          relevantDrafts = drafts.filter(d =>
+            d.salesorder_number?.includes(zohoFilter) || 
+            d.reference_number?.includes(zohoFilter)
+          );
+        } else {
+          // Auto-filter: show orders from the same customer (by mapping) + any with matching styles
+          const mappedId = mappingForCustomer?.zoho_customer_id;
+          const customerKeyword = ediCustomer.split(/[\s,]+/).find(p => p.length > 3) || '';
+          
+          relevantDrafts = drafts.filter(d => {
+            // Customer ID match via mapping
+            if (mappedId && d.customer_id === mappedId) return true;
+            // Customer name fuzzy match
+            if (customerKeyword && d.customer_name?.toLowerCase().includes(customerKeyword)) return true;
+            // Style match - check if any EDI base styles appear in this draft's line items
+            if (ediBaseStyles.length > 0 && d.line_items?.length > 0) {
+              const draftStyles = d.line_items.map(i => {
+                const m = (i.name || '').toLowerCase().match(/^(\d{4,6}[a-z]?)/i);
+                return m ? m[1] : '';
+              }).filter(Boolean);
+              if (ediBaseStyles.some(e => draftStyles.includes(e))) return true;
+            }
+            return false;
+          });
+        }
+
+        // 7. Trace matching for each relevant draft
+        const traceResults = [];
+        for (const draft of relevantDrafts.slice(0, 50)) {
+          const trace = {
+            zohoOrder: draft.salesorder_number,
+            zohoCustomer: draft.customer_name,
+            zohoCustomerId: draft.customer_id,
+            zohoStatus: draft.status,
+            zohoRef: draft.reference_number,
+            zohoLineItemCount: (draft.line_items || []).length,
+            checks: {}
+          };
+
+          // Check 1: Status filter
+          if (ruleForCustomer && ruleForCustomer.bulk_order_status) {
+            const draftStatus = (draft.status || '').toLowerCase();
+            const ruleStatus = ruleForCustomer.bulk_order_status.toLowerCase();
+            trace.checks.statusFilter = {
+              draftStatus,
+              ruleStatus,
+              passes: draftStatus === ruleStatus
+            };
+            if (draftStatus !== ruleStatus) {
+              trace.checks.result = 'SKIPPED - status mismatch';
+              traceResults.push(trace);
+              continue;
+            }
+          }
+
+          // Check 2: Customer match
+          const mappedZohoId = mappingForCustomer?.zoho_customer_id;
+          trace.checks.customerMatch = {
+            ediCustomer,
+            mappedZohoId: mappedZohoId || 'NO MAPPING',
+            draftCustomerId: draft.customer_id,
+            mappingMatches: mappedZohoId ? mappedZohoId === draft.customer_id : false,
+            fuzzyCheck: draft.customer_name?.toLowerCase().includes('burlington') || false
+          };
+
+          // Check 3: Style match
+          const zohoLineItems = draft.line_items || [];
+          const zohoStyles = [];
+          zohoLineItems.forEach(i => {
+            const name = (i.name || '').trim();
+            if (name) {
+              const m = name.toLowerCase().match(/^(\d{4,6}[a-z]?)/i);
+              if (m) zohoStyles.push({ full: name, base: m[1] });
+            }
+          });
+          const zohoBaseStyles = [...new Set(zohoStyles.map(s => s.base))];
+          const matchingStyles = ediBaseStyles.filter(e => zohoBaseStyles.includes(e));
+
+          trace.checks.styleMatch = {
+            ediBaseStyles,
+            zohoBaseStyles: zohoBaseStyles.slice(0, 10),
+            zohoStylesFull: zohoStyles.slice(0, 5).map(s => s.full),
+            matchingStyles,
+            hasMatch: matchingStyles.length > 0
+          };
+
+          // Overall result
+          const customerPasses = trace.checks.customerMatch.mappingMatches || trace.checks.customerMatch.fuzzyCheck;
+          const stylePasses = matchingStyles.length > 0;
+          trace.checks.wouldMatch = customerPasses && stylePasses;
+          trace.checks.result = trace.checks.wouldMatch ? 'WOULD MATCH' : 
+            !customerPasses && !stylePasses ? 'FAIL - customer AND style' :
+            !customerPasses ? 'FAIL - customer mismatch' : 'FAIL - style mismatch';
+
+          traceResults.push(trace);
+        }
+
+        res.json({
+          ediOrder: {
+            id: ediOrder.id,
+            poNumber: ediOrder.edi_order_number,
+            customer: ediOrder.edi_customer_name,
+            vendorIsaId: ediVendorIsaId,
+            itemCount: ediItems.length,
+            baseStyles: ediBaseStyles,
+            rawStyles: ediStyles.slice(0, 10)
+          },
+          customerMapping: mappingForCustomer ? {
+            ediName: mappingForCustomer.edi_customer_name,
+            zohoCustomerId: mappingForCustomer.zoho_customer_id,
+            zohoCustomerName: mappingForCustomer.zoho_customer_name,
+            vendorIsaId: mappingForCustomer.vendor_isa_id
+          } : 'NO MAPPING FOUND',
+          matchingRule: ruleForCustomer ? {
+            customerName: ruleForCustomer.customer_name,
+            isDefault: ruleForCustomer.is_default,
+            matchMethod: ruleForCustomer.match_by_customer_po ? 'customer_po' :
+                         ruleForCustomer.match_by_contract_ref ? 'contract_ref' : 'style_customer',
+            bulkOrderStatus: ruleForCustomer.bulk_order_status,
+            bulkOrderCategory: ruleForCustomer.bulk_order_category
+          } : 'NO RULE FOUND',
+          totalCachedDrafts: drafts.length,
+          relevantDraftsChecked: relevantDrafts.length,
+          traceResults
+        });
+      } catch (error) {
+        res.status(500).json({ error: error.message, stack: error.stack });
+      }
+    });
+
     const port = process.env.PORT || 3000;
     app.listen(port, () => {
       logger.info('Server running on port ' + port);
