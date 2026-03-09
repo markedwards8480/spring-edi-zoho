@@ -126,48 +126,64 @@ class ZohoClient {
   // ============================================================
 
   async getDraftSalesOrders() {
-    const token = await this.ensureValidToken();
-    
-    try {
-      const response = await axios({
-        method: 'GET',
-        url: `${this.baseUrl}/books/v3/salesorders`,
-        headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
-        params: {
-          organization_id: this.orgId,
-          status: 'draft',
-          per_page: 200
-        }
-      });
-
-      return response.data?.salesorders || [];
-    } catch (error) {
-      logger.error('Failed to get draft sales orders', { error: error.message });
-      throw error;
-    }
+    return this._fetchAllSalesOrders('draft');
   }
 
-  // Get confirmed sales orders (for matching revised EDI 850s)
-  async getConfirmedSalesOrders() {
+  /**
+   * Fetch ALL sales orders for a given status, handling pagination
+   * Zoho Books API returns max 200 per page — if there are more, we need to paginate
+   */
+  async _fetchAllSalesOrders(status) {
     const token = await this.ensureValidToken();
-    
-    try {
-      const response = await axios({
-        method: 'GET',
-        url: `${this.baseUrl}/books/v3/salesorders`,
-        headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
-        params: {
-          organization_id: this.orgId,
-          status: 'confirmed',
-          per_page: 200
-        }
-      });
+    const allOrders = [];
+    let page = 1;
+    let hasMore = true;
 
-      return response.data?.salesorders || [];
-    } catch (error) {
-      logger.error('Failed to get confirmed sales orders', { error: error.message });
-      throw error;
+    while (hasMore) {
+      try {
+        const response = await axios({
+          method: 'GET',
+          url: `${this.baseUrl}/books/v3/salesorders`,
+          headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
+          params: {
+            organization_id: this.orgId,
+            status: status,
+            per_page: 200,
+            page: page
+          }
+        });
+
+        const orders = response.data?.salesorders || [];
+        allOrders.push(...orders);
+
+        // Check if there are more pages
+        const pageContext = response.data?.page_context;
+        hasMore = pageContext?.has_more_page === true;
+        page++;
+
+        logger.info(`Fetched ${status} orders page ${page - 1}`, { 
+          pageOrders: orders.length, 
+          totalSoFar: allOrders.length, 
+          hasMore 
+        });
+
+        // Safety limit to avoid infinite loops
+        if (page > 20) {
+          logger.warn('Hit pagination safety limit (20 pages)', { status, totalOrders: allOrders.length });
+          break;
+        }
+      } catch (error) {
+        logger.error(`Failed to get ${status} sales orders page ${page}`, { error: error.message });
+        throw error;
+      }
     }
+
+    logger.info(`Fetched all ${status} sales orders`, { total: allOrders.length, pages: page - 1 });
+    return allOrders;
+  }
+
+  async getConfirmedSalesOrders() {
+    return this._fetchAllSalesOrders('confirmed');
   }
 
   async getSalesOrderDetails(salesorderId) {
