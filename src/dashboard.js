@@ -3136,6 +3136,7 @@ const dashboardHTML = `
           '<div class="text-5xl mb-4">🔴</div>' +
           '<div class="text-xl font-semibold text-me-error mb-2">No Zoho Match Found</div>' +
           '<div class="text-me-text-muted mb-4">This EDI order does not have a matching draft in Zoho.</div>' +
+          '<div class="text-xs text-me-text-muted">Searched ' + zohoCount + ' cached Zoho orders</div>' +
         '</div>' +
 
         // Rule info (if available)
@@ -3176,6 +3177,14 @@ const dashboardHTML = `
               '</div>'
             ) +
           '</div>' +
+        '</div>' +
+
+        // Diagnostics button
+        '<div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">' +
+          '<div class="font-medium text-purple-800 mb-2">🔬 Detailed Diagnostics</div>' +
+          '<div class="text-sm text-purple-700 mb-3">Run a detailed trace to see exactly why each Zoho order was skipped.</div>' +
+          '<button onclick="runMatchDiagnostics(' + orderId + ')" class="px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors">Run Diagnostics</button>' +
+          '<div id="diagnostics-' + orderId + '" class="mt-3 hidden"></div>' +
         '</div>' +
 
         // What to do
@@ -3511,6 +3520,96 @@ const dashboardHTML = `
   }
 
   // Modal-specific field selection toggle
+  // Run detailed match diagnostics for a specific order
+  async function runMatchDiagnostics(orderId) {
+    const container = document.getElementById('diagnostics-' + orderId);
+    if (!container) return;
+    container.classList.remove('hidden');
+    container.innerHTML = '<div class="text-sm text-purple-600">Running diagnostics...</div>';
+
+    try {
+      const res = await fetch('/debug-match/' + orderId);
+      const data = await res.json();
+
+      if (data.error) {
+        container.innerHTML = '<div class="text-sm text-red-600">Error: ' + data.error + '</div>';
+        return;
+      }
+
+      let html = '<div class="space-y-3 text-xs">';
+
+      // EDI order info
+      html += '<div class="bg-white rounded p-2 border border-purple-200">' +
+        '<div class="font-semibold text-purple-800 mb-1">EDI Order</div>' +
+        '<div>Customer: <strong>' + (data.ediOrder?.customer || 'N/A') + '</strong></div>' +
+        '<div>Base Styles: <strong>' + (data.ediOrder?.baseStyles?.join(', ') || 'None') + '</strong></div>' +
+        '<div>Raw Styles: ' + (data.ediOrder?.rawStyles?.join(', ') || 'None') + '</div>' +
+      '</div>';
+
+      // Customer mapping
+      const mapping = data.customerMapping;
+      html += '<div class="bg-white rounded p-2 border border-purple-200">' +
+        '<div class="font-semibold text-purple-800 mb-1">Customer Mapping</div>';
+      if (typeof mapping === 'string') {
+        html += '<div class="text-red-600 font-bold">' + mapping + '</div>';
+      } else {
+        html += '<div>EDI Name: ' + mapping.ediName + ' → Zoho: <strong>' + mapping.zohoCustomerName + '</strong></div>' +
+          '<div>Zoho Customer ID: <code class="bg-gray-100 px-1">' + mapping.zohoCustomerId + '</code></div>';
+      }
+      html += '</div>';
+
+      // Matching rule
+      html += '<div class="bg-white rounded p-2 border border-purple-200">' +
+        '<div class="font-semibold text-purple-800 mb-1">Matching Rule</div>';
+      if (typeof data.matchingRule === 'string') {
+        html += '<div class="text-red-600">' + data.matchingRule + '</div>';
+      } else {
+        html += '<div>Rule: ' + data.matchingRule.customerName + ' (' + data.matchingRule.matchMethod + ')</div>' +
+          '<div>Status Filter: ' + (data.matchingRule.bulkOrderStatus || 'any') + '</div>';
+      }
+      html += '</div>';
+
+      // Cache info
+      html += '<div class="bg-white rounded p-2 border border-purple-200">' +
+        '<div class="font-semibold text-purple-800 mb-1">Cache: ' + data.totalCachedDrafts + ' orders, checked ' + data.relevantDraftsChecked + '</div>' +
+      '</div>';
+
+      // Trace results
+      if (data.traceResults?.length > 0) {
+        html += '<div class="font-semibold text-purple-800 mt-2">Order-by-Order Trace:</div>';
+        data.traceResults.forEach(t => {
+          const resultColor = t.checks.result?.includes('MATCH') ? 'bg-green-50 border-green-300' :
+                              t.checks.result?.includes('SKIP') ? 'bg-gray-50 border-gray-300' : 'bg-red-50 border-red-300';
+          html += '<div class="rounded p-2 border ' + resultColor + ' mb-1">' +
+            '<div class="font-semibold">' + t.zohoOrder + ' — ' + t.zohoCustomer + '</div>' +
+            '<div>Status: ' + t.zohoStatus + ' | Customer ID: <code class="bg-gray-100 px-1 text-xs">' + (t.zohoCustomerId || 'N/A') + '</code></div>' +
+            '<div class="font-bold mt-1">Result: ' + (t.checks.result || 'unknown') + '</div>';
+
+          if (t.checks.statusFilter) {
+            html += '<div>Status filter: draft=' + t.checks.statusFilter.draftStatus + ' rule=' + t.checks.statusFilter.ruleStatus + ' → ' + (t.checks.statusFilter.passes ? '✅' : '❌') + '</div>';
+          }
+          if (t.checks.customerMatch) {
+            const cm = t.checks.customerMatch;
+            html += '<div>Customer: mapped ID=' + cm.mappedZohoId + ' vs draft ID=' + cm.draftCustomerId + ' → ' + (cm.mappingMatches ? '✅ ID match' : '❌ ID mismatch') + (cm.fuzzyCheck ? ' (fuzzy ✅)' : '') + '</div>';
+          }
+          if (t.checks.styleMatch) {
+            const sm = t.checks.styleMatch;
+            html += '<div>Styles: EDI [' + sm.ediBaseStyles?.join(',') + '] vs Zoho [' + sm.zohoBaseStyles?.join(',') + '] → ' + (sm.hasMatch ? '✅ ' + sm.matchingStyles?.join(',') : '❌ no overlap') + '</div>';
+          }
+          html += '</div>';
+        });
+      } else {
+        html += '<div class="text-amber-600">No relevant Zoho orders found in cache to trace against.</div>';
+        html += '<div class="text-xs text-me-text-muted mt-1">Try: Refresh Zoho Data, then re-run diagnostics. If the order exists in Zoho, it may not be cached yet.</div>';
+      }
+
+      html += '</div>';
+      container.innerHTML = html;
+    } catch (err) {
+      container.innerHTML = '<div class="text-sm text-red-600">Diagnostics failed: ' + err.message + '</div>';
+    }
+  }
+
   function toggleModalFieldSelection(orderId, fieldKey) {
     toggleFieldSelection(orderId, fieldKey);
     const cached = modalMatchCache.get(orderId);
