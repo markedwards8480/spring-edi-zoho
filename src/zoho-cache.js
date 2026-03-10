@@ -86,16 +86,18 @@ class ZohoDraftsCache {
 
   // Refresh the cache from Zoho
   // Now fetches BOTH draft AND confirmed orders for matching revised EDI 850s
+  // Phase 1: Cache list data (fast - just pagination, no detail calls)
+  // Phase 2: Fetch line item details in batches with rate limiting
   async refreshCache(zohoClient) {
     const startTime = Date.now();
     logger.info('Starting Zoho orders cache refresh (drafts + confirmed)');
 
     try {
-      // Get draft orders from Zoho
+      // Get draft orders from Zoho (paginated)
       const drafts = await zohoClient.getDraftSalesOrders();
       logger.info('Fetched draft orders from Zoho', { count: drafts.length });
 
-      // Get confirmed orders from Zoho (for matching revised 850s)
+      // Get confirmed orders from Zoho (paginated)
       const confirmed = await zohoClient.getConfirmedSalesOrders();
       logger.info('Fetched confirmed orders from Zoho', { count: confirmed.length });
 
@@ -107,35 +109,86 @@ class ZohoDraftsCache {
         total: allOrders.length 
       });
 
-      // Get details for each order (includes line items)
+      // Phase 2: Fetch details (line items) in batches with rate limiting
+      // Zoho API rate limit is ~100 requests/minute, so we batch with delays
+      // For large order counts, we prioritize getting all orders cached with list data,
+      // then backfill line items for orders that need them
+      const BATCH_SIZE = 40;  // Fetch 40 details at a time
+      const BATCH_DELAY_MS = 30000; // Wait 30 seconds between batches (stay under rate limit)
+      const MAX_DETAIL_FETCHES = 600; // Cap at 600 detail fetches per refresh (~15 min)
+
       const orderDetails = [];
-      for (const order of allOrders) {
-        try {
-          const details = await zohoClient.getSalesOrderDetails(order.salesorder_id);
-          orderDetails.push(details);
-        } catch (error) {
-          logger.warn('Failed to get order details', { 
-            orderId: order.salesorder_id, 
-            status: order.status,
-            error: error.message 
-          });
+      const ordersNeedingDetails = allOrders.slice(0, MAX_DETAIL_FETCHES);
+      const ordersWithoutDetails = allOrders.slice(MAX_DETAIL_FETCHES);
+
+      logger.info('Fetching order details', {
+        total: allOrders.length,
+        fetchingDetails: ordersNeedingDetails.length,
+        skippingDetails: ordersWithoutDetails.length
+      });
+
+      for (let i = 0; i < ordersNeedingDetails.length; i += BATCH_SIZE) {
+        const batch = ordersNeedingDetails.slice(i, i + BATCH_SIZE);
+        const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+        const totalBatches = Math.ceil(ordersNeedingDetails.length / BATCH_SIZE);
+
+        logger.info(`Fetching detail batch ${batchNum}/${totalBatches}`, {
+          batchSize: batch.length,
+          progress: `${orderDetails.length}/${ordersNeedingDetails.length}`
+        });
+
+        // Fetch this batch in parallel (within the batch)
+        const batchResults = await Promise.allSettled(
+          batch.map(order => zohoClient.getSalesOrderDetails(order.salesorder_id))
+        );
+
+        batchResults.forEach((result, idx) => {
+          if (result.status === 'fulfilled' && result.value) {
+            orderDetails.push(result.value);
+          } else {
+            // Use list data as fallback (no line items, but at least cached)
+            const listOrder = batch[idx];
+            logger.warn('Failed to get order details, using list data', {
+              orderId: listOrder.salesorder_id,
+              error: result.reason?.message || 'unknown'
+            });
+            orderDetails.push({
+              ...listOrder,
+              line_items: [],  // No line items from list endpoint
+              _listDataOnly: true
+            });
+          }
+        });
+
+        // Rate limit delay between batches (skip delay on last batch)
+        if (i + BATCH_SIZE < ordersNeedingDetails.length) {
+          logger.info(`Rate limit pause: waiting ${BATCH_DELAY_MS / 1000}s before next batch`);
+          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
         }
       }
 
-      // Log custom fields from first order to help debug cancel date field name
-      if (orderDetails.length > 0) {
-        const sampleOrder = orderDetails[0];
-        const customFieldKeys = Object.keys(sampleOrder).filter(k => k.startsWith('cf_') || k.includes('custom'));
+      // For orders that exceeded MAX_DETAIL_FETCHES, cache list data without line items
+      for (const order of ordersWithoutDetails) {
+        orderDetails.push({
+          ...order,
+          line_items: [],
+          _listDataOnly: true
+        });
+      }
+
+      // Log custom fields from first detailed order
+      const firstDetailedOrder = orderDetails.find(o => !o._listDataOnly);
+      if (firstDetailedOrder) {
+        const customFieldKeys = Object.keys(firstDetailedOrder).filter(k => k.startsWith('cf_') || k.includes('custom'));
         logger.info('Zoho order custom field keys found', {
-          sampleOrderId: sampleOrder.salesorder_id,
+          sampleOrderId: firstDetailedOrder.salesorder_id,
           customFieldKeys,
-          cf_cancel_date: sampleOrder.cf_cancel_date,
-          custom_field_hash: sampleOrder.custom_field_hash,
-          custom_fields: sampleOrder.custom_fields
+          cf_cancel_date: firstDetailedOrder.cf_cancel_date,
+          custom_field_hash: firstDetailedOrder.custom_field_hash,
+          custom_fields: firstDetailedOrder.custom_fields
         });
 
-        // Log line item fields to identify UPC field name
-        const sampleLineItem = sampleOrder.line_items?.[0];
+        const sampleLineItem = firstDetailedOrder.line_items?.[0];
         if (sampleLineItem) {
           logger.info('Zoho line item fields found', {
             sampleLineItemKeys: Object.keys(sampleLineItem),
