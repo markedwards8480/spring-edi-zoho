@@ -187,20 +187,35 @@ class ZohoClient {
   }
 
   async getSalesOrderDetails(salesorderId) {
-    const token = await this.ensureValidToken();
-    
-    try {
-      const response = await axios({
-        method: 'GET',
-        url: `${this.baseUrl}/books/v3/salesorders/${salesorderId}`,
-        headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
-        params: { organization_id: this.orgId }
-      });
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const token = await this.ensureValidToken();
+      
+      try {
+        const response = await axios({
+          method: 'GET',
+          url: `${this.baseUrl}/books/v3/salesorders/${salesorderId}`,
+          headers: { 'Authorization': `Zoho-oauthtoken ${token}` },
+          params: { organization_id: this.orgId },
+          timeout: 30000
+        });
 
-      return response.data?.salesorder;
-    } catch (error) {
-      logger.error('Failed to get sales order details', { error: error.message, salesorderId });
-      throw error;
+        return response.data?.salesorder;
+      } catch (error) {
+        const isHtmlError = typeof error.response?.data === 'string' && error.response.data.includes('<!DOCTYPE');
+        const isRateLimit = error.response?.status === 429 || isHtmlError;
+        
+        if (isRateLimit && attempt < maxRetries) {
+          const waitMs = attempt * 10000;
+          logger.warn(`Zoho rate limit on getSalesOrderDetails, retrying in ${waitMs/1000}s`, { salesorderId, attempt });
+          await new Promise(resolve => setTimeout(resolve, waitMs));
+          this.accessToken = null;
+          continue;
+        }
+        
+        logger.error('Failed to get sales order details', { error: error.message, salesorderId, attempt });
+        throw error;
+      }
     }
   }
 
@@ -251,25 +266,47 @@ class ZohoClient {
   }
 
   async updateSalesOrder(salesorderId, updateData) {
-    const token = await this.ensureValidToken();
-    
-    try {
-      const response = await axios({
-        method: 'PUT',
-        url: `${this.baseUrl}/books/v3/salesorders/${salesorderId}`,
-        headers: { 
-          'Authorization': `Zoho-oauthtoken ${token}`,
-          'Content-Type': 'application/json'
-        },
-        params: { organization_id: this.orgId },
-        data: updateData
-      });
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const token = await this.ensureValidToken();
+      
+      try {
+        const response = await axios({
+          method: 'PUT',
+          url: `${this.baseUrl}/books/v3/salesorders/${salesorderId}`,
+          headers: { 
+            'Authorization': `Zoho-oauthtoken ${token}`,
+            'Content-Type': 'application/json'
+          },
+          params: { organization_id: this.orgId },
+          data: updateData,
+          timeout: 30000 // 30 second timeout
+        });
 
-      logger.info('Sales order updated', { salesorderId });
-      return response.data?.salesorder;
-    } catch (error) {
-      logger.error('Failed to update sales order', { error: error.message, salesorderId });
-      throw error;
+        logger.info('Sales order updated', { salesorderId });
+        return response.data?.salesorder;
+      } catch (error) {
+        // Check if Zoho returned HTML (rate limit or server error)
+        const responseData = error.response?.data;
+        const isHtmlError = typeof responseData === 'string' && responseData.includes('<!DOCTYPE');
+        const isRateLimit = error.response?.status === 429 || isHtmlError;
+        
+        if (isRateLimit && attempt < maxRetries) {
+          const waitMs = attempt * 10000; // 10s, 20s, 30s
+          logger.warn(`Zoho rate limit hit, retrying in ${waitMs/1000}s`, { salesorderId, attempt });
+          await new Promise(resolve => setTimeout(resolve, waitMs));
+          // Force token refresh in case it expired
+          this.accessToken = null;
+          continue;
+        }
+        
+        logger.error('Failed to update sales order', { 
+          error: error.message, salesorderId, attempt,
+          status: error.response?.status,
+          isHtmlError
+        });
+        throw new Error(`Zoho API error (attempt ${attempt}/${maxRetries}): ${error.message}${isHtmlError ? ' (HTML response - possible rate limit)' : ''}`);
+      }
     }
   }
 
