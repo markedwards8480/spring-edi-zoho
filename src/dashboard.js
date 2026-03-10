@@ -1194,13 +1194,29 @@ const dashboardHTML = `
   }
 
   async function refreshZohoCache() {
-    toast('Refreshing Zoho data...');
+    toast('Starting Zoho data refresh — this may take several minutes for large order counts...');
     try {
       const res = await fetch('/cache/refresh', { method: 'POST' });
       const data = await res.json();
       if (data.success) {
-        toast('Refreshed ' + data.draftsCount + ' Zoho drafts');
-        loadCacheStatus();
+        toast('Cache refresh started in background. Checking progress...');
+        // Poll cache status every 10 seconds to detect completion
+        let pollCount = 0;
+        const pollInterval = setInterval(async () => {
+          pollCount++;
+          try {
+            await loadCacheStatus();
+            const statusRes = await fetch('/cache/status');
+            const status = await statusRes.json();
+            if (!status.isStale && status.minutesSinceRefresh < 2) {
+              clearInterval(pollInterval);
+              toast('Zoho cache refreshed: ' + status.draftsCount + ' orders cached');
+            } else if (pollCount >= 60) { // Stop after 10 minutes
+              clearInterval(pollInterval);
+              toast('Cache refresh is still running. Check back shortly.');
+            }
+          } catch (e) {}
+        }, 10000);
       } else {
         toast('Error: ' + (data.error || 'Unknown'));
       }
@@ -1227,15 +1243,7 @@ const dashboardHTML = `
     btn.innerHTML = '<span class="spinner"></span> Checking Zoho cache...';
 
     try {
-      // Check if cache is stale - if so, show "Refreshing Zoho..." message
-      const cacheRes = await fetch('/cache/status');
-      const cacheStatus = await cacheRes.json();
-
-      if (cacheStatus.isStale || cacheStatus.draftsCount === 0) {
-        btn.innerHTML = '<span class="spinner"></span> Refreshing Zoho data...';
-      } else {
-        btn.innerHTML = '<span class="spinner"></span> Finding matches...';
-      }
+      btn.innerHTML = '<span class="spinner"></span> Finding matches...';
 
       const res = await fetch('/find-matches', {
         method: 'POST',
