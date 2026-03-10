@@ -877,19 +877,73 @@ app.post('/find-matches', async (req, res) => {
     const ZohoClient = require('./zoho');
     const zoho = new ZohoClient();
     
-    // Use cached drafts if available, otherwise fetch fresh
+    // Use cached drafts - ALWAYS use existing cache for matching
+    // Cache refresh is a separate operation (Refresh Zoho Data button) because
+    // with 5000+ orders it takes too long to do inline
     let drafts;
     const cacheStatus = await zohoDraftsCache.getCacheStatus();
     
-    if (!forceRefresh && !cacheStatus.isStale && cacheStatus.draftsCount > 0) {
-      // Use cache
-      logger.info('Using cached Zoho drafts', { draftsCount: cacheStatus.draftsCount, minutesOld: cacheStatus.minutesSinceRefresh });
+    if (cacheStatus.draftsCount > 0) {
+      // Use whatever cache we have (even if stale)
+      logger.info('Using cached Zoho drafts', { 
+        draftsCount: cacheStatus.draftsCount, 
+        minutesOld: cacheStatus.minutesSinceRefresh,
+        isStale: cacheStatus.isStale 
+      });
       drafts = await zohoDraftsCache.getCachedDrafts();
     } else {
-      // Fetch fresh and update cache
-      logger.info('Fetching fresh Zoho drafts', { reason: cacheStatus.isStale ? 'cache stale' : 'no cache', forceRefresh });
-      await zohoDraftsCache.refreshCache(zoho);
-      drafts = await zohoDraftsCache.getCachedDrafts();
+      // No cache at all - need to build it first
+      // But DON'T do a full detail fetch - just get list data quickly
+      logger.info('No cache exists, fetching Zoho order list (without details)');
+      try {
+        const ZohoClientForList = require('./zoho');
+        const zohoForList = new ZohoClientForList();
+        const draftList = await zohoForList.getDraftSalesOrders();
+        const confirmedList = await zohoForList.getConfirmedSalesOrders();
+        const allList = [...draftList, ...confirmedList];
+        
+        // Quick-cache list data without line items
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+          await client.query('DELETE FROM zoho_drafts_cache');
+          for (const order of allList) {
+            await client.query(`
+              INSERT INTO zoho_drafts_cache (
+                zoho_salesorder_id, salesorder_number,
+                customer_id, customer_name,
+                reference_number, status, total, shipment_date, order_date,
+                line_items, item_count, total_units,
+                raw_data, fetched_at
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+              ON CONFLICT (zoho_salesorder_id) DO UPDATE SET
+                customer_name = $4, reference_number = $5, status = $6, 
+                total = $7, updated_at = NOW()
+            `, [
+              order.salesorder_id, order.salesorder_number,
+              order.customer_id, order.customer_name,
+              order.reference_number || null, order.status,
+              parseFloat(order.total) || 0, order.shipment_date || null,
+              order.date || null, JSON.stringify([]), 0, 0,
+              JSON.stringify(order)
+            ]);
+          }
+          await client.query(`
+            UPDATE zoho_cache_metadata SET last_refresh = NOW(), 
+              drafts_count = $1, updated_at = NOW() WHERE cache_type = 'drafts'
+          `, [allList.length]);
+          await client.query('COMMIT');
+        } finally {
+          client.release();
+        }
+        
+        drafts = await zohoDraftsCache.getCachedDrafts();
+        logger.info('Quick-cached Zoho order list', { count: drafts.length });
+      } catch (listError) {
+        logger.error('Failed to quick-cache Zoho orders', { error: listError.message });
+        return res.json({ success: true, matches: [], noMatches: [], draftsChecked: 0, 
+          error: 'No Zoho cache available. Click Refresh Zoho Data first.' });
+      }
     }
     
     // Load customer mappings for enhanced matching
@@ -935,7 +989,7 @@ app.post('/find-matches', async (req, res) => {
       });
     }
     
-    const didAutoRefresh = forceRefresh || cacheStatus.isStale || cacheStatus.draftsCount === 0;
+    const cacheIsStale = cacheStatus.isStale;
 
     res.json({
       success: true,
@@ -943,7 +997,7 @@ app.post('/find-matches', async (req, res) => {
       noMatches: matchResults.noMatches,
       draftsChecked: drafts.length,
       sessionId: session.sessionId,
-      cacheRefreshed: didAutoRefresh,
+      cacheIsStale: cacheIsStale,
       cacheAge: cacheStatus.minutesSinceRefresh
     });
     
@@ -1734,23 +1788,42 @@ app.post('/cache/refresh', async (req, res) => {
     const zoho = new ZohoClient();
     
     logger.info('Manual cache refresh triggered');
-    const result = await zohoDraftsCache.refreshCache(zoho);
     
-    await auditLogger.log('cache_refreshed', {
-      severity: SEVERITY.INFO,
-      details: {
-        draftsCount: result.draftsCount,
-        durationMs: result.durationMs,
-        trigger: 'manual'
-      }
-    });
-    
+    // Return immediately - refresh runs in background
+    // This prevents timeouts with 5000+ orders
     res.json({
       success: true,
-      message: 'Cache refreshed',
-      draftsCount: result.draftsCount,
-      durationMs: result.durationMs
+      message: 'Cache refresh started. This may take several minutes for large order counts. Refresh this page to check progress.',
+      status: 'refreshing'
     });
+
+    // Run refresh in background
+    try {
+      const result = await zohoDraftsCache.refreshCache(zoho);
+      
+      await auditLogger.log('cache_refreshed', {
+        severity: SEVERITY.INFO,
+        details: {
+          draftsCount: result.draftsCount,
+          durationMs: result.durationMs,
+          trigger: 'manual'
+        }
+      });
+      
+      logger.info('Background cache refresh completed', { 
+        draftsCount: result.draftsCount, 
+        durationMs: result.durationMs 
+      });
+    } catch (bgError) {
+      logger.error('Background cache refresh failed', { error: bgError.message });
+      // Update metadata with error
+      try {
+        await pool.query(`
+          UPDATE zoho_cache_metadata SET last_error = $1, updated_at = NOW()
+          WHERE cache_type = 'drafts'
+        `, [bgError.message]);
+      } catch (e) { /* ignore */ }
+    }
   } catch (error) {
     logger.error('Manual cache refresh failed', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
