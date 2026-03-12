@@ -607,14 +607,21 @@ class ZohoClient {
       
       // ON-DEMAND DETAIL FETCH: For orders that matched customer but had empty line_items,
       // fetch details from Zoho and re-score. This handles orders beyond the 600-detail cache cap.
-      // Limit to 10 fetches per EDI order to avoid API overload.
+      // Sort by score descending so highest-scoring candidates get fetched first.
+      // Limit to 25 fetches per EDI order to balance API usage with match coverage.
       if (needsDetailFetch.length > 0) {
-        const fetchLimit = Math.min(needsDetailFetch.length, 10);
+        // Sort by score descending - highest scoring candidates first
+        needsDetailFetch.sort((a, b) => b.score.total - a.score.total);
+        
+        const fetchLimit = Math.min(needsDetailFetch.length, 25);
         logger.info('On-demand detail fetch for customer-matched orders with empty line_items', {
           ediOrder: ediPoNumber,
           candidateCount: needsDetailFetch.length,
           fetchingCount: fetchLimit,
-          existingMatches: potentialMatches.length
+          existingMatches: potentialMatches.length,
+          topCandidates: needsDetailFetch.slice(0, 5).map(n => ({ 
+            number: n.draft.salesorder_number, score: n.score.total 
+          }))
         });
         
         for (let f = 0; f < fetchLimit; f++) {
