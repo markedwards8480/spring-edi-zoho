@@ -329,13 +329,24 @@ app.delete('/session', async (req, res) => {
 
 app.get('/orders', async (req, res) => {
   try {
+    // Return ALL pending/review/matched/failed orders (the working set)
+    // plus the most recent 50 processed orders for reference
     const result = await pool.query(`
-      SELECT id, filename, edi_order_number, edi_customer_name, status, 
+      (SELECT id, filename, edi_order_number, edi_customer_name, status, 
              zoho_so_id, zoho_so_number, error_message, created_at, processed_at,
              parsed_data, matched_draft_id, raw_edi, vendor_isa_id
       FROM edi_orders 
-      ORDER BY created_at DESC 
-      LIMIT 200
+      WHERE status IN ('pending', 'review', 'matched', 'failed')
+      ORDER BY created_at DESC)
+      UNION ALL
+      (SELECT id, filename, edi_order_number, edi_customer_name, status, 
+             zoho_so_id, zoho_so_number, error_message, created_at, processed_at,
+             parsed_data, matched_draft_id, raw_edi, vendor_isa_id
+      FROM edi_orders 
+      WHERE status = 'processed'
+      ORDER BY processed_at DESC
+      LIMIT 50)
+      ORDER BY created_at DESC
     `);
     res.json(result.rows);
   } catch (error) {
@@ -861,7 +872,7 @@ app.post('/find-matches', async (req, res) => {
       const result = await pool.query('SELECT * FROM edi_orders WHERE id = ANY($1)', [orderIds]);
       orders = result.rows;
     } else {
-      const result = await pool.query("SELECT * FROM edi_orders WHERE status = 'pending' ORDER BY created_at DESC LIMIT 100");
+      const result = await pool.query("SELECT * FROM edi_orders WHERE status = 'pending' ORDER BY created_at DESC LIMIT 500");
       orders = result.rows;
     }
     
