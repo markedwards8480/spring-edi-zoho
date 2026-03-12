@@ -2737,6 +2737,62 @@ app.get('/diag/match/:poNumber', async (req, res) => {
   }
 });
 
+// Live test: Actually run Find Matches for a single PO and show detailed results
+// Usage: /diag/test-match/280655101
+app.get('/diag/test-match/:poNumber', async (req, res) => {
+  try {
+    const poNumber = req.params.poNumber;
+    
+    // Find the EDI order
+    const ediResult = await pool.query(
+      'SELECT * FROM edi_orders WHERE edi_order_number = $1 ORDER BY created_at DESC LIMIT 1',
+      [poNumber]
+    );
+    if (ediResult.rows.length === 0) {
+      return res.json({ error: 'EDI order not found for PO#' + poNumber });
+    }
+    const ediOrder = ediResult.rows[0];
+    
+    // Load everything needed for matching
+    const mappingsResult = await pool.query('SELECT * FROM customer_mappings');
+    const rulesResult = await pool.query('SELECT * FROM customer_matching_rules ORDER BY is_default ASC');
+    
+    // Get cached drafts
+    const drafts = await zohoDraftsCache.getCachedDrafts();
+    
+    // Run the actual matching
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
+    const matchResults = await zoho.findMatchingDraftsFromCache(
+      [ediOrder], drafts, mappingsResult.rows, rulesResult.rows
+    );
+    
+    res.json({
+      poNumber,
+      ediOrderId: ediOrder.id,
+      draftsSearched: drafts.length,
+      matchesFound: matchResults.matches?.length || 0,
+      noMatchesFound: matchResults.noMatches?.length || 0,
+      matches: (matchResults.matches || []).map(m => ({
+        zohoOrderNumber: m.zohoDraft?.number,
+        zohoCustomer: m.zohoDraft?.customer,
+        confidence: m.confidence,
+        score: m.score?.total,
+        scoreDetails: m.score?.details,
+        lineItemCount: m.zohoDraft?.itemCount
+      })),
+      noMatchReason: (matchResults.noMatches || []).map(nm => ({
+        poNumber: nm.ediOrder?.poNumber,
+        customer: nm.ediOrder?.customer,
+        reason: nm.reason
+      })),
+      zohoJsVersion: 'check for needsDetailFetch in logs'
+    });
+  } catch (error) {
+    res.json({ error: error.message, stack: error.stack?.split('\n').slice(0, 5) });
+  }
+});
+
 // ============================================================
 // SERVER STARTUP
 // ============================================================
