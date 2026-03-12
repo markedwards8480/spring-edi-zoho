@@ -3752,10 +3752,58 @@ const dashboardHTML = `
       const data = await res.json();
 
       if (data.success) {
-        toast('✓ Order processed successfully!');
+        // Close the match modal
         closeModal();
         loadOrders();
         modalMatchCache.delete(orderId);
+        
+        // Show success confirmation modal with details and Zoho link
+        const result = (data.results || []).find(r => r.success);
+        const zohoSoNumber = result?.zohoSoNumber || '';
+        const zohoSoId = result?.zohoId || zohoId;
+        const poNumber = result?.poNumber || '';
+        const customerName = result?.zohoCustomerName || '';
+        const changesApplied = result?.changesApplied || [];
+        const wasNew = result?.wasNewOrder || false;
+        const zohoUrl = 'https://books.zoho.com/app/677681121#/salesorders/' + zohoSoId;
+        
+        const changesHtml = changesApplied.length > 0 
+          ? '<div class="mt-3 text-sm"><div class="font-medium text-me-text-secondary mb-1">Changes applied:</div>' +
+            changesApplied.map(c => '<div class="flex justify-between py-1 border-b border-gray-100"><span class="text-me-text-muted">' + c.field + '</span><span>' + (c.from || '—') + ' → ' + (c.to || '—') + '</span></div>').join('') +
+            '</div>'
+          : '';
+        
+        const successModal = document.createElement('div');
+        successModal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        successModal.id = 'successConfirmModal';
+        successModal.onclick = (e) => { if (e.target === successModal) successModal.remove(); };
+        successModal.innerHTML = \`
+          <div class="bg-white rounded-2xl shadow-xl max-w-md w-full mx-4 overflow-hidden">
+            <div class="bg-gradient-to-r from-green-500 to-emerald-600 px-6 py-4">
+              <div class="flex items-center gap-3 text-white">
+                <div class="w-10 h-10 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-xl">✓</div>
+                <div>
+                  <div class="font-semibold text-lg">\${wasNew ? 'Order Created' : 'Zoho Order Updated'}</div>
+                  <div class="text-green-100 text-sm">Successfully processed</div>
+                </div>
+              </div>
+            </div>
+            <div class="px-6 py-4">
+              <div class="space-y-3">
+                \${poNumber ? '<div class="flex justify-between items-center"><span class="text-me-text-muted text-sm">PO Number</span><span class="font-medium">' + poNumber + '</span></div>' : ''}
+                \${customerName ? '<div class="flex justify-between items-center"><span class="text-me-text-muted text-sm">Customer</span><span class="font-medium">' + customerName + '</span></div>' : ''}
+                \${zohoSoNumber ? '<div class="flex justify-between items-center"><span class="text-me-text-muted text-sm">Zoho Sales Order</span><a href="' + zohoUrl + '" target="_blank" class="font-semibold text-me-accent hover:underline">' + zohoSoNumber + ' ↗</a></div>' : ''}
+              </div>
+              \${changesHtml}
+              <div class="mt-4 text-xs text-me-text-muted">This action has been recorded in the audit trail.</div>
+            </div>
+            <div class="px-6 py-4 bg-gray-50 flex gap-3 justify-end">
+              \${zohoSoNumber ? '<a href="' + zohoUrl + '" target="_blank" class="px-4 py-2 bg-me-dark text-white rounded-lg hover:bg-me-hover transition font-medium text-sm">Open in Zoho Books ↗</a>' : ''}
+              <button onclick="document.getElementById('successConfirmModal').remove()" class="px-4 py-2 bg-white border border-me-border rounded-lg hover:bg-me-bg transition text-me-text-secondary font-medium text-sm">Close</button>
+            </div>
+          </div>
+        \`;
+        document.body.appendChild(successModal);
       } else {
         toast('Error: ' + (data.error || 'Processing failed'));
         if (btn) { btn.disabled = false; btn.innerHTML = '✓ Process Match'; }
