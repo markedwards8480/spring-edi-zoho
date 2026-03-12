@@ -525,6 +525,8 @@ class ZohoClient {
 
       // Collect ALL potential matches, not just the best one
       const potentialMatches = [];
+      // Track orders that matched customer but had no line items (need on-demand detail fetch)
+      const needsDetailFetch = [];
 
       for (const draft of cachedDrafts) {
         // If rule specifies bulk order status filter, apply it
@@ -557,11 +559,9 @@ class ZohoClient {
 
         if (rule && rule.match_by_customer_po) {
           // RULE: Match by Customer PO (e.g., Kohls)
-          // EDI PO number should match Zoho reference_number
           shouldInclude = meetsThreshold && score.details.po;
         } else if (rule && rule.match_by_contract_ref) {
           // RULE: Match by Contract Reference field (e.g., JCP uses po_rel_num)
-          // Check if contract ref field matches
           const contractRef = rule.contract_ref_field || 'po_rel_num';
           const ediContractRef = parsed[contractRef] || parsed.header?.[contractRef] || ediPoNumber;
           const zohoContractRef = draft[contractRef] || draft.custom_field_hash?.[`cf_${contractRef}`] || draft.reference_number || '';
@@ -574,6 +574,14 @@ class ZohoClient {
           const poMatches = score.details.po;
           const customerAndStyleMatch = score.details.customer && score.details.baseStyle;
           shouldInclude = meetsThreshold && (poMatches || customerAndStyleMatch);
+          
+          // ON-DEMAND DETAIL FETCH: If customer matched but style couldn't be checked
+          // because line_items were empty (order was cached without details due to 
+          // MAX_DETAIL_FETCHES cap), flag for on-demand fetch
+          if (!shouldInclude && score.details.customer && !score.details.baseStyle 
+              && (draft.line_items || []).length === 0) {
+            needsDetailFetch.push({ draft, score });
+          }
         }
 
         if (shouldInclude) {
@@ -594,6 +602,73 @@ class ZohoClient {
               items: draft.line_items || []
             }
           });
+        }
+      }
+      
+      // ON-DEMAND DETAIL FETCH: For orders that matched customer but had empty line_items,
+      // fetch details from Zoho and re-score. This handles orders beyond the 600-detail cache cap.
+      // Limit to 10 fetches per EDI order to avoid API overload.
+      if (potentialMatches.length === 0 && needsDetailFetch.length > 0) {
+        const fetchLimit = Math.min(needsDetailFetch.length, 10);
+        logger.info('On-demand detail fetch for customer-matched orders with empty line_items', {
+          ediOrder: ediPoNumber,
+          candidateCount: needsDetailFetch.length,
+          fetchingCount: fetchLimit
+        });
+        
+        for (let f = 0; f < fetchLimit; f++) {
+          const { draft } = needsDetailFetch[f];
+          try {
+            const details = await this.getSalesOrderDetails(draft.salesorder_id);
+            if (details && details.line_items && details.line_items.length > 0) {
+              // Re-score with line items
+              const draftWithDetails = {
+                salesorder_id: draft.salesorder_id,
+                salesorder_number: draft.salesorder_number,
+                customer_id: draft.customer_id,
+                customer_name: draft.customer_name,
+                reference_number: draft.reference_number,
+                status: draft.status,
+                total: draft.total,
+                shipment_date: draft.shipment_date,
+                line_items: details.line_items,
+                po_rel_num: draft.po_rel_num || draft.custom_field_hash?.cf_po_rel_num || ''
+              };
+              
+              const newScore = this.scoreMatch(ediOrder, draftWithDetails, customerMappingLookup, rule, isaIdMappingLookup);
+              const customerAndStyleMatch = newScore.details.customer && newScore.details.baseStyle;
+              const poMatches = newScore.details.po;
+              
+              if (newScore.total >= 25 && (poMatches || customerAndStyleMatch)) {
+                logger.info('On-demand fetch found match!', {
+                  ediOrder: ediPoNumber,
+                  zohoOrder: draft.salesorder_number,
+                  score: newScore.total
+                });
+                potentialMatches.push({
+                  draft: { ...draft, line_items: details.line_items },
+                  score: newScore,
+                  zohoDraft: {
+                    id: draft.salesorder_id,
+                    number: draft.salesorder_number,
+                    reference: draft.reference_number || '',
+                    customer: draft.customer_name,
+                    shipDate: draft.shipment_date || '',
+                    cancelDate: details.cf_cancel_date || '',
+                    status: draft.status,
+                    itemCount: details.line_items.length,
+                    totalUnits: details.line_items.reduce((s, i) => s + (i.quantity || 0), 0),
+                    totalAmount: parseFloat(draft.total) || 0,
+                    items: details.line_items
+                  }
+                });
+              }
+            }
+          } catch (fetchErr) {
+            logger.warn('On-demand detail fetch failed', { 
+              orderId: draft.salesorder_id, error: fetchErr.message 
+            });
+          }
         }
       }
 
