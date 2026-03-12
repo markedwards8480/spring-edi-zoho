@@ -2784,9 +2784,10 @@ app.get('/diag/test-match/:poNumber', async (req, res) => {
       noMatchReason: (matchResults.noMatches || []).map(nm => ({
         poNumber: nm.ediOrder?.poNumber,
         customer: nm.ediOrder?.customer,
-        reason: nm.reason
+        reason: nm.reason,
+        debug: nm._debug
       })),
-      zohoJsVersion: 'check for needsDetailFetch in logs'
+      zohoJsVersion: 'v1.0.12-debug'
     });
   } catch (error) {
     res.json({ error: error.message, stack: error.stack?.split('\n').slice(0, 5) });
