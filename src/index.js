@@ -2857,6 +2857,84 @@ app.get('/diag/score/:poNumber/:zohoNumber', async (req, res) => {
   }
 });
 
+// Test on-demand fetch: Actually fetch details for a Zoho order and re-score
+// Usage: /diag/fetch-and-score/280655101/0618058
+app.get('/diag/fetch-and-score/:poNumber/:zohoNumber', async (req, res) => {
+  try {
+    const { poNumber, zohoNumber } = req.params;
+    
+    const ediResult = await pool.query(
+      'SELECT * FROM edi_orders WHERE edi_order_number = $1 ORDER BY created_at DESC LIMIT 1', [poNumber]
+    );
+    if (ediResult.rows.length === 0) return res.json({ error: 'EDI order not found' });
+    const ediOrder = ediResult.rows[0];
+    
+    const zohoResult = await pool.query(
+      `SELECT zoho_salesorder_id as salesorder_id, salesorder_number, customer_id, customer_name,
+        reference_number, status, total, shipment_date, line_items
+      FROM zoho_drafts_cache WHERE salesorder_number LIKE $1 LIMIT 1`, ['%' + zohoNumber + '%']
+    );
+    if (zohoResult.rows.length === 0) return res.json({ error: 'Zoho order not found in cache' });
+    const zc = zohoResult.rows[0];
+    
+    // Actually fetch details from Zoho API
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
+    
+    let fetchResult = null;
+    let fetchError = null;
+    try {
+      fetchResult = await zoho.getSalesOrderDetails(zc.salesorder_id);
+    } catch (e) {
+      fetchError = e.message;
+    }
+    
+    if (fetchError) {
+      return res.json({ error: 'Zoho API fetch failed', fetchError, zohoOrderId: zc.salesorder_id });
+    }
+    
+    const lineItems = fetchResult?.line_items || [];
+    const lineItemNames = lineItems.map(i => i.name || i.item_name || i.description || 'unknown');
+    
+    // Build mapping lookups
+    const mappingsResult = await pool.query('SELECT * FROM customer_mappings');
+    const customerMappingLookup = new Map();
+    const isaIdMappingLookup = new Map();
+    mappingsResult.rows.forEach(m => {
+      if (m.edi_customer_name && m.zoho_customer_id)
+        customerMappingLookup.set(m.edi_customer_name.toLowerCase().trim(), m.zoho_customer_id);
+      if (m.vendor_isa_id && m.zoho_customer_id)
+        isaIdMappingLookup.set(m.vendor_isa_id.trim(), m.zoho_customer_id);
+    });
+    const rulesResult = await pool.query('SELECT * FROM customer_matching_rules ORDER BY is_default ASC');
+    const ediCustomer = (ediOrder.edi_customer_name || '').toLowerCase().trim();
+    const rule = rulesResult.rows.find(r => !r.is_default && r.customer_name?.toLowerCase().trim() === ediCustomer)
+      || rulesResult.rows.find(r => r.is_default);
+    
+    // Score WITH the fetched line items
+    const draftWithDetails = {
+      salesorder_id: zc.salesorder_id, salesorder_number: zc.salesorder_number,
+      customer_id: zc.customer_id, customer_name: zc.customer_name,
+      reference_number: zc.reference_number, status: zc.status,
+      total: zc.total, shipment_date: zc.shipment_date,
+      line_items: lineItems, po_rel_num: ''
+    };
+    
+    const newScore = zoho.scoreMatch(ediOrder, draftWithDetails, customerMappingLookup, rule, isaIdMappingLookup);
+    const wouldMatch = newScore.total >= 25 && (newScore.details.po || (newScore.details.customer && newScore.details.baseStyle));
+    
+    res.json({
+      fetchedLineItems: lineItems.length,
+      lineItemNames,
+      scoreWithDetails: newScore,
+      wouldMatch,
+      message: wouldMatch ? 'YES - This would match after on-demand fetch!' : 'NO - Still no match even with line items'
+    });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
 // ============================================================
 // SERVER STARTUP
 // ============================================================
