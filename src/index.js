@@ -2793,6 +2793,70 @@ app.get('/diag/test-match/:poNumber', async (req, res) => {
   }
 });
 
+// Direct score: Score a specific EDI order against a specific Zoho cached order
+// Usage: /diag/score/280655101/0618058
+app.get('/diag/score/:poNumber/:zohoNumber', async (req, res) => {
+  try {
+    const { poNumber, zohoNumber } = req.params;
+    
+    const ediResult = await pool.query(
+      'SELECT * FROM edi_orders WHERE edi_order_number = $1 ORDER BY created_at DESC LIMIT 1', [poNumber]
+    );
+    if (ediResult.rows.length === 0) return res.json({ error: 'EDI order not found' });
+    const ediOrder = ediResult.rows[0];
+    
+    const zohoResult = await pool.query(
+      `SELECT zoho_salesorder_id as salesorder_id, salesorder_number, customer_id, customer_name,
+        reference_number, status, total, shipment_date, line_items
+      FROM zoho_drafts_cache WHERE salesorder_number LIKE $1 LIMIT 1`, ['%' + zohoNumber + '%']
+    );
+    if (zohoResult.rows.length === 0) return res.json({ error: 'Zoho order not found in cache' });
+    const zc = zohoResult.rows[0];
+    
+    const mappingsResult = await pool.query('SELECT * FROM customer_mappings');
+    const customerMappingLookup = new Map();
+    const isaIdMappingLookup = new Map();
+    mappingsResult.rows.forEach(m => {
+      if (m.edi_customer_name && m.zoho_customer_id)
+        customerMappingLookup.set(m.edi_customer_name.toLowerCase().trim(), m.zoho_customer_id);
+      if (m.vendor_isa_id && m.zoho_customer_id)
+        isaIdMappingLookup.set(m.vendor_isa_id.trim(), m.zoho_customer_id);
+    });
+    
+    const rulesResult = await pool.query('SELECT * FROM customer_matching_rules ORDER BY is_default ASC');
+    const ediCustomer = (ediOrder.edi_customer_name || '').toLowerCase().trim();
+    const rule = rulesResult.rows.find(r => !r.is_default && r.customer_name?.toLowerCase().trim() === ediCustomer)
+      || rulesResult.rows.find(r => r.is_default);
+    
+    const draftForScoring = {
+      salesorder_id: zc.salesorder_id, salesorder_number: zc.salesorder_number,
+      customer_id: zc.customer_id, customer_name: zc.customer_name,
+      reference_number: zc.reference_number, status: zc.status,
+      total: zc.total, shipment_date: zc.shipment_date,
+      line_items: zc.line_items || [], po_rel_num: ''
+    };
+    
+    const ZohoClient = require('./zoho');
+    const zoho = new ZohoClient();
+    const score = zoho.scoreMatch(ediOrder, draftForScoring, customerMappingLookup, rule, isaIdMappingLookup);
+    
+    const mappedZohoId = customerMappingLookup.get(ediCustomer);
+    const statusOk = !rule?.bulk_order_status || (zc.status || '').toLowerCase() === rule.bulk_order_status.toLowerCase();
+    const wouldFetchOnDemand = !score.details.baseStyle && score.details.customer && (zc.line_items || []).length === 0;
+    
+    res.json({
+      edi: { po: ediOrder.edi_order_number, customer: ediCustomer, vendorIsaId: ediOrder.vendor_isa_id },
+      zoho: { number: zc.salesorder_number, customerId: zc.customer_id, status: zc.status, lineItems: (zc.line_items||[]).length, ref: zc.reference_number },
+      mapping: { mappedZohoId: mappedZohoId || 'NOT FOUND', zohoCustomerId: zc.customer_id, match: mappedZohoId === zc.customer_id },
+      statusFilter: { ruleStatus: rule?.bulk_order_status, draftStatus: zc.status, passes: statusOk },
+      score,
+      wouldFetchOnDemand
+    });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
 // ============================================================
 // SERVER STARTUP
 // ============================================================
