@@ -1,6 +1,6 @@
 {
   "name": "spring-edi-zoho",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "Spring Systems EDI to Zoho CRM Integration",
   "main": "src/index.js",
   "scripts": {
