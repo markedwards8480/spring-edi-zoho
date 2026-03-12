@@ -3736,13 +3736,19 @@ const dashboardHTML = `
     }
 
     try {
-      const res = await fetch('/process-matches', {
+      const res = await fetch('/confirm-matches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           matches: [{ ediOrderId: orderId, zohoDraftId: zohoId }]
         })
       });
+      // Handle non-JSON responses (e.g. HTML error pages from Zoho timeouts)
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        const text = await res.text();
+        throw new Error('Server returned non-JSON response (possible timeout). Please try again.');
+      }
       const data = await res.json();
 
       if (data.success) {
