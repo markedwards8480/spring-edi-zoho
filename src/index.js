@@ -1111,7 +1111,15 @@ app.post('/confirm-matches', async (req, res) => {
         });
         
         processed++;
-        results.push({ ediOrderId: match.ediOrderId, success: true, zohoId: updated.salesorder_id });
+        results.push({ 
+          ediOrderId: match.ediOrderId, 
+          success: true, 
+          zohoId: updated.salesorder_id,
+          zohoSoNumber: updated.salesorder_number,
+          zohoCustomerName: updated.customer_name,
+          poNumber: ediOrder.edi_order_number,
+          changesApplied: changesApplied
+        });
         logger.info('Match confirmed', { ediOrderId: match.ediOrderId, zohoSoNumber: updated.salesorder_number });
         
       } catch (error) {
@@ -1197,7 +1205,15 @@ app.post('/confirm-matches', async (req, res) => {
         });
         
         processed++;
-        results.push({ ediOrderId: newOrder.ediOrderId, success: true, zohoId: created.salesorder_id });
+        results.push({ 
+          ediOrderId: newOrder.ediOrderId, 
+          success: true, 
+          zohoId: created.salesorder_id,
+          zohoSoNumber: created.salesorder_number,
+          zohoCustomerName: customerMapping.zoho_customer_name,
+          poNumber: ediOrder.edi_order_number,
+          wasNewOrder: true
+        });
         
       } catch (error) {
         failed++;
