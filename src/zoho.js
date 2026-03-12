@@ -720,7 +720,20 @@ class ZohoClient {
             items: ediItems
           },
           // Include rule info even for no-matches (to show what rule was applied)
-          matchingRule: ruleInfo
+          matchingRule: ruleInfo,
+          // Debug info for on-demand fetch
+          _debug: {
+            needsDetailFetchCount: needsDetailFetch.length,
+            potentialMatchesCount: potentialMatches.length,
+            needsDetailFetchOrders: needsDetailFetch.slice(0, 5).map(n => ({
+              number: n.draft.salesorder_number,
+              customerId: n.draft.customer_id,
+              lineItems: (n.draft.line_items || []).length,
+              scoreTotal: n.score.total,
+              customerMatch: n.score.details.customer,
+              baseStyleMatch: n.score.details.baseStyle
+            }))
+          }
         });
       }
     }
