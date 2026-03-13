@@ -1302,14 +1302,28 @@ class ZohoClient {
 
     // Apply selected fields (only include if selected or not specified = default to include)
     if (selectedFields.shipDate !== false) {
-      updateData.shipment_date = overrides.shipDate || parsed.dates?.shipNotBefore || undefined;
+      const shipDate = overrides.shipDate || parsed.dates?.shipNotBefore || parsed.dates?.shipDate;
+      if (shipDate) {
+        // Ensure YYYY-MM-DD format for Zoho Books API
+        updateData.shipment_date = shipDate;
+        logger.info('Setting ship date', { salesorderId, shipDate });
+      }
     }
 
-    // Cancel date goes to custom field (if your Zoho has one) - check if selected
-    if (selectedFields.cancelDate !== false && (overrides.cancelDate || parsed.dates?.cancelDate)) {
-      // Note: Zoho Books doesn't have a native cancel date field
-      // You may need to use a custom field - adjust field name as needed
-      // updateData.cf_cancel_date = overrides.cancelDate || parsed.dates?.cancelDate;
+    // Cancel date goes to custom field cf_cancel_date
+    if (selectedFields.cancelDate !== false) {
+      const cancelDate = overrides.cancelDate || parsed.dates?.cancelDate || parsed.dates?.shipNotAfter;
+      if (cancelDate) {
+        // Zoho Books custom field for cancel date
+        updateData.custom_fields = updateData.custom_fields || [];
+        updateData.custom_fields.push({
+          label: 'Cancel Date',
+          value: cancelDate
+        });
+        // Also try the cf_ prefix format (Zoho accepts both depending on setup)
+        updateData.cf_cancel_date = cancelDate;
+        logger.info('Setting cancel date', { salesorderId, cancelDate });
+      }
     }
 
     // Handle line items - preserve Zoho items by default
